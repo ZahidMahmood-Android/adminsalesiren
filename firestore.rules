@@ -1,0 +1,63 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Admin document: only created via Firebase Console or backend
+    match /admins/{adminId} {
+      allow read: if isSignedIn() && request.auth.uid == adminId;
+      allow write: if false; // Admins must be created via Firebase Console
+    }
+
+    // Cities: public read, admin write
+    match /cities/{cityId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Categories: public read, admin write
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Brands: public read, admin write
+    match /brands/{brandId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Offers: public read (published only), admin read/write all
+    match /offers/{offerId} {
+      allow read: if resource.data.isPublished == true || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // Offer Reports: any user can report, only admins can manage
+    match /offer_reports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Notification Campaigns: admin only
+    match /notification_campaigns/{campaignId} {
+      allow read, write: if isAdmin();
+    }
+
+    // User profiles: user can manage own, admin can delete
+    match /users/{userId} {
+      allow create, read, update: if isSignedIn()
+        && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+  }
+}

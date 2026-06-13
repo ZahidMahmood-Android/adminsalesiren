@@ -1,0 +1,95 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Flutter: Run Web Dev Server",
+      "type": "shell",
+      "command": "flutter",
+      "args": ["run", "-d", "web-server", "--verbose"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*Launching lib/main.dart.*$",
+          "endsPattern": "^.*Application finished.*$|^.*error.*$"
+        }
+      }
+    },
+    {
+      "label": "Flutter: Run Web Chrome",
+      "type": "shell",
+      "command": "flutter",
+      "args": ["run", "-d", "chrome", "--verbose"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Build Web Release",
+      "type": "shell",
+      "command": "flutter",
+      "args": ["build", "web", "--release", "--verbose"],
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "message": 1
+        }
+      }
+    },
+    {
+      "label": "Flutter: Build Web Debug",
+      "type": "shell",
+      "command": "flutter",
+      "args": ["build", "web", "--debug", "--verbose"],
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "message": 1
+        }
+      }
+    },
+    {
+      "label": "Flutter: Clean",
+      "type": "shell",
+      "command": "flutter",
+      "args": ["clean"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Pub Get",
+      "type": "shell",
+      "command": "flutter",
+      "args": ["pub", "get"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flutter: Analyze",
+      "type": "shell",
+      "command": "flutter",
+      "args": ["analyze"],
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+)\\s+(.*):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    },
+    {
+      "label": "Dart: Format Code",
+      "type": "shell",
+      "command": "dart",
+      "args": ["format", "lib", "--set-exit-if-changed"],
+      "problemMatcher": []
+    }
+  ]
+}

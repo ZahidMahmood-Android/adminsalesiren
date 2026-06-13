@@ -1,0 +1,28 @@
+{
+  "dart.flutterWebDeviceEnabled": true,
+  "dart.enableSdkFormatter": true,
+  "dart.previewFlutterUiGuides": true,
+  "[dart]": {
+    "editor.defaultFormatter": "Dart-Code.dart-code",
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true
+  },
+  "[yaml]": {
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
+  "search.exclude": {
+    "**/.dart_tool": true,
+    "**/build": true
+  },
+  "files.exclude": {
+    "**/.dart_tool": true,
+    "**/build": true,
+    "**/.firebase": true,
+    "**/.firebaserc": true
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit"
+  }
+}

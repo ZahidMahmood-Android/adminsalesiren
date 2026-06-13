@@ -1,0 +1,252 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../../core/extensions/date_time_extensions.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/app_badge.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_error_view.dart';
+import '../../../../core/widgets/app_loading_view.dart';
+import '../providers/offer_providers.dart';
+
+class OfferDetailsScreen extends ConsumerWidget {
+  const OfferDetailsScreen({required this.offerId, super.key});
+
+  final String offerId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final offerAsync = ref.watch(offerProvider(offerId));
+    final actionState = ref.watch(offerActionsProvider);
+
+    return offerAsync.when(
+      data: (offer) {
+        if (offer == null) {
+          return const AppErrorView(message: 'Offer not found.');
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1080),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          offer.title,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => context.go('/offers/$offerId/edit'),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Edit'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  AppCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (offer.imageUrl.isNotEmpty)
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(8),
+                            ),
+                            child: AspectRatio(
+                              aspectRatio: 16 / 5,
+                              child: Image.network(
+                                offer.imageUrl,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  AppBadge(
+                                    label: offer.isPublished
+                                        ? 'Published'
+                                        : 'Draft',
+                                    color: offer.isPublished
+                                        ? AppTheme.deepGreen
+                                        : Colors.black45,
+                                  ),
+                                  AppBadge(
+                                    label: offer.isVerified
+                                        ? 'Verified'
+                                        : 'Unverified',
+                                    color: offer.isVerified
+                                        ? AppTheme.freshGreen
+                                        : AppTheme.saffron,
+                                  ),
+                                  if (offer.isFeatured)
+                                    const AppBadge(
+                                      label: 'Featured',
+                                      color: AppTheme.coral,
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 18),
+                              _InfoGrid(
+                                entries: {
+                                  'Brand': offer.brandName,
+                                  'Category': offer.categoryName,
+                                  'City': offer.cityName,
+                                  'Discount': offer.discountText,
+                                  'Dates':
+                                      '${offer.startDate.shortDate} - ${offer.endDate.shortDate}',
+                                  'Created': offer.createdAt.compactDateTime,
+                                },
+                              ),
+                              const SizedBox(height: 18),
+                              Text(
+                                offer.description.isEmpty
+                                    ? 'No description provided.'
+                                    : offer.description,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                              const SizedBox(height: 22),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  FilledButton.icon(
+                                    onPressed: actionState.isLoading
+                                        ? null
+                                        : () => ref
+                                              .read(
+                                                offerActionsProvider.notifier,
+                                              )
+                                              .publish(
+                                                offer.id,
+                                                !offer.isPublished,
+                                              ),
+                                    icon: Icon(
+                                      offer.isPublished
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                    ),
+                                    label: Text(
+                                      offer.isPublished
+                                          ? 'Unpublish'
+                                          : 'Publish',
+                                    ),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: actionState.isLoading
+                                        ? null
+                                        : () => ref
+                                              .read(
+                                                offerActionsProvider.notifier,
+                                              )
+                                              .verify(
+                                                offer.id,
+                                                !offer.isVerified,
+                                              ),
+                                    icon: const Icon(Icons.verified_outlined),
+                                    label: Text(
+                                      offer.isVerified
+                                          ? 'Mark unverified'
+                                          : 'Mark verified',
+                                    ),
+                                  ),
+                                  OutlinedButton.icon(
+                                    onPressed: actionState.isLoading
+                                        ? null
+                                        : () => ref
+                                              .read(
+                                                offerActionsProvider.notifier,
+                                              )
+                                              .feature(
+                                                offer.id,
+                                                !offer.isFeatured,
+                                              ),
+                                    icon: const Icon(Icons.star_outline),
+                                    label: Text(
+                                      offer.isFeatured
+                                          ? 'Remove featured'
+                                          : 'Feature',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      loading: () => const AppLoadingView(label: 'Loading offer'),
+      error: (error, _) => AppErrorView(message: error.toString()),
+    );
+  }
+}
+
+class _InfoGrid extends StatelessWidget {
+  const _InfoGrid({required this.entries});
+
+  final Map<String, String> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 14,
+      runSpacing: 14,
+      children: entries.entries.map((entry) {
+        return SizedBox(
+          width: 240,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AppTheme.paper,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppTheme.line),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.key,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    entry.value,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}

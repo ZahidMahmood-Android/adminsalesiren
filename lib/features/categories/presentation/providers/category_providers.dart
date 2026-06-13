@@ -1,0 +1,76 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/services/app_logger.dart';
+import '../../../../core/services/firebase_providers.dart';
+import '../../data/repositories/firebase_categories_repository.dart';
+import '../../domain/entities/category.dart';
+import '../../domain/repositories/categories_repository.dart';
+
+final categoriesRepositoryProvider = Provider<CategoriesRepository>((ref) {
+  return FirebaseCategoriesRepository(ref.watch(firestoreProvider));
+});
+
+final categoriesProvider = StreamProvider.autoDispose<List<Category>>((
+  ref,
+) async* {
+  yield const <Category>[];
+  yield* ref.watch(categoriesRepositoryProvider).watchCategories();
+});
+
+final activeCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
+  ref,
+) async* {
+  yield const <Category>[];
+  yield* ref
+      .watch(categoriesRepositoryProvider)
+      .watchCategories()
+      .map((items) => items.where((category) => category.isActive).toList());
+});
+
+final categoryProvider = FutureProvider.autoDispose.family<Category?, String>(
+  (ref, id) => ref.watch(categoriesRepositoryProvider).getCategory(id),
+);
+
+final categoryActionsProvider =
+    AsyncNotifierProvider.autoDispose<CategoryActionsController, void>(
+      CategoryActionsController.new,
+    );
+
+class CategoryActionsController extends AsyncNotifier<void> {
+  final _log = AppLogger.get('CategoryActionsController');
+
+  @override
+  FutureOr<void> build() {}
+
+  Future<void> save(Category category) async {
+    final creating = category.id.isEmpty;
+    _log.info('${creating ? 'Create' : 'Update'} category action started');
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() {
+      if (creating) {
+        return ref.read(categoriesRepositoryProvider).createCategory(category);
+      }
+      return ref.read(categoriesRepositoryProvider).updateCategory(category);
+    });
+    _logResult('${creating ? 'Create' : 'Update'} category action');
+  }
+
+  Future<void> delete(String id) async {
+    _log.warning('Delete category action started id=$id');
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(categoriesRepositoryProvider).deleteCategory(id),
+    );
+    _logResult('Delete category action');
+  }
+
+  void _logResult(String label) {
+    if (state.hasError) {
+      _log.severe('$label failed', state.error, state.stackTrace);
+    } else {
+      _log.info('$label completed');
+    }
+  }
+}
