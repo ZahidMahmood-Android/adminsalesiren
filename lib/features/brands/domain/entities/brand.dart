@@ -11,6 +11,7 @@ class Brand {
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
+    this.userId = '',
   });
 
   final String id;
@@ -24,6 +25,7 @@ class Brand {
   final bool isActive;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String userId;
 
   Brand copyWith({
     String? id,
@@ -37,6 +39,7 @@ class Brand {
     bool? isActive,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? userId,
   }) {
     return Brand(
       id: id ?? this.id,
@@ -50,6 +53,7 @@ class Brand {
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      userId: userId ?? this.userId,
     );
   }
 }

@@ -9,7 +9,10 @@ import '../../domain/entities/category.dart';
 import '../../domain/repositories/categories_repository.dart';
 
 final categoriesRepositoryProvider = Provider<CategoriesRepository>((ref) {
-  return FirebaseCategoriesRepository(ref.watch(firestoreProvider));
+  return FirebaseCategoriesRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+  );
 });
 
 final categoriesProvider = StreamProvider.autoDispose<List<Category>>((
@@ -44,8 +47,8 @@ class CategoryActionsController extends AsyncNotifier<void> {
   @override
   FutureOr<void> build() {}
 
-  Future<void> save(Category category) async {
-    final creating = category.id.isEmpty;
+  Future<void> save(Category category, {required bool isEditing}) async {
+    final creating = !isEditing;
     _log.info('${creating ? 'Create' : 'Update'} category action started');
     state = const AsyncLoading();
     state = await AsyncValue.guard(() {

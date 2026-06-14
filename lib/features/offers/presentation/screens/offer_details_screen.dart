@@ -8,7 +8,9 @@ import '../../../../core/widgets/app_badge.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../providers/offer_providers.dart';
+import '../widgets/info_grid.dart';
 
 class OfferDetailsScreen extends ConsumerWidget {
   const OfferDetailsScreen({required this.offerId, super.key});
@@ -47,6 +49,32 @@ class OfferDetailsScreen extends ConsumerWidget {
                         onPressed: () => context.go('/offers/$offerId/edit'),
                         icon: const Icon(Icons.edit_outlined),
                         label: const Text('Edit'),
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        tooltip: 'Delete offer',
+                        onPressed: actionState.isLoading
+                            ? null
+                            : () async {
+                                final confirmed =
+                                    await showSweetConfirmationDialog(
+                                  context: context,
+                                  title: 'Delete offer?',
+                                  message:
+                                      'This will remove ${offer.title} permanently.',
+                                  confirmLabel: 'Delete',
+                                );
+                                if (!confirmed || !context.mounted) {
+                                  return;
+                                }
+                                await ref
+                                    .read(offerActionsProvider.notifier)
+                                    .delete(offer.id);
+                                if (context.mounted) {
+                                  context.go('/offers');
+                                }
+                              },
+                        icon: const Icon(Icons.delete_outline),
                       ),
                     ],
                   ),
@@ -102,7 +130,7 @@ class OfferDetailsScreen extends ConsumerWidget {
                                 ],
                               ),
                               const SizedBox(height: 18),
-                              _InfoGrid(
+                              InfoGrid(
                                 entries: {
                                   'Brand': offer.brandName,
                                   'Category': offer.categoryName,
@@ -199,54 +227,6 @@ class OfferDetailsScreen extends ConsumerWidget {
       },
       loading: () => const AppLoadingView(label: 'Loading offer'),
       error: (error, _) => AppErrorView(message: error.toString()),
-    );
-  }
-}
-
-class _InfoGrid extends StatelessWidget {
-  const _InfoGrid({required this.entries});
-
-  final Map<String, String> entries;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 14,
-      runSpacing: 14,
-      children: entries.entries.map((entry) {
-        return SizedBox(
-          width: 240,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: AppTheme.paper,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppTheme.line),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.key,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Colors.black54,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    entry.value,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 }

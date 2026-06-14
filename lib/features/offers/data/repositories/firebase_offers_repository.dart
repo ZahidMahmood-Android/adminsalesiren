@@ -7,9 +7,10 @@ import '../../domain/repositories/offers_repository.dart';
 import '../models/offer_model.dart';
 
 class FirebaseOffersRepository implements OffersRepository {
-  FirebaseOffersRepository(this._firestore);
+  FirebaseOffersRepository(this._firestore, this._currentUserId);
 
   final FirebaseFirestore _firestore;
+  final String _currentUserId;
   final _log = AppLogger.get('FirebaseOffersRepository');
 
   CollectionReference<Map<String, dynamic>> get _offers =>
@@ -17,26 +18,18 @@ class FirebaseOffersRepository implements OffersRepository {
 
   @override
   Stream<List<Offer>> watchOffers(OfferFilters filters) {
-    Query<Map<String, dynamic>> query = _offers;
-
-    if (filters.cityId != null) {
-      query = query.where('cityId', isEqualTo: filters.cityId);
-    }
-    if (filters.categoryId != null) {
-      query = query.where('categoryId', isEqualTo: filters.categoryId);
-    }
-    if (filters.brandId != null) {
-      query = query.where('brandId', isEqualTo: filters.brandId);
-    }
-    if (filters.isPublished != null) {
-      query = query.where('isPublished', isEqualTo: filters.isPublished);
-    }
-    if (filters.isVerified != null) {
-      query = query.where('isVerified', isEqualTo: filters.isVerified);
+    if (_currentUserId.isEmpty) {
+      return Stream.value(const <Offer>[]);
     }
 
-    return query.snapshots().map((snapshot) {
-      final offers = snapshot.docs.map(OfferModel.fromSnapshot).toList()
+    return _offers
+        .where('createdBy', isEqualTo: _currentUserId)
+        .snapshots()
+        .map((snapshot) {
+      final offers = snapshot.docs
+          .map(OfferModel.fromSnapshot)
+          .where((offer) => _matchesFilters(offer, filters))
+          .toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return offers;
     });
@@ -44,11 +37,15 @@ class FirebaseOffersRepository implements OffersRepository {
 
   @override
   Future<Offer?> getOffer(String id) async {
-    final snapshot = await _offers.doc(id).get();
+    if (_currentUserId.isEmpty) {
+      return null;
+    }
+     final snapshot = await _offers.doc(id).get();
     if (!snapshot.exists) {
       return null;
     }
-    return OfferModel.fromSnapshot(snapshot);
+    final offer = OfferModel.fromSnapshot(snapshot);
+    return offer.createdBy == _currentUserId ? offer : null;
   }
 
   @override
@@ -56,7 +53,12 @@ class FirebaseOffersRepository implements OffersRepository {
     final doc = offer.id.isEmpty ? _offers.doc() : _offers.doc(offer.id);
     final now = DateTime.now();
     final model = OfferModel.fromEntity(
-      offer.copyWith(id: doc.id, createdAt: now, updatedAt: now),
+      offer.copyWith(
+        id: doc.id,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: _currentUserId,
+      ),
     );
     _log.info('Creating offer id=${doc.id} title=${offer.title}');
     await doc.set(model.toFirestore());
@@ -67,7 +69,7 @@ class FirebaseOffersRepository implements OffersRepository {
   @override
   Future<void> updateOffer(Offer offer) {
     final model = OfferModel.fromEntity(
-      offer.copyWith(updatedAt: DateTime.now()),
+      offer.copyWith(updatedAt: DateTime.now(), createdBy: _currentUserId),
     );
     _log.info('Updating offer id=${offer.id} title=${offer.title}');
     return _offers
@@ -106,5 +108,25 @@ class FirebaseOffersRepository implements OffersRepository {
       'isFeatured': isFeatured,
       'updatedAt': Timestamp.now(),
     });
+  }
+
+  bool _matchesFilters(Offer offer, OfferFilters filters) {
+    if (filters.cityId != null && offer.cityId != filters.cityId) {
+      return false;
+    }
+    if (filters.categoryId != null && offer.categoryId != filters.categoryId) {
+      return false;
+    }
+    if (filters.brandId != null && offer.brandId != filters.brandId) {
+      return false;
+    }
+    if (filters.isPublished != null &&
+        offer.isPublished != filters.isPublished) {
+      return false;
+    }
+    if (filters.isVerified != null && offer.isVerified != filters.isVerified) {
+      return false;
+    }
+    return true;
   }
 }

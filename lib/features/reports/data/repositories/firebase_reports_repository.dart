@@ -33,4 +33,10 @@ class FirebaseReportsRepository implements ReportsRepository {
       'updatedAt': Timestamp.now(),
     });
   }
+
+  @override
+  Future<void> deleteReport(String id) {
+    _log.warning('Deleting report id=$id');
+    return _reports.doc(id).delete();
+  }
 }

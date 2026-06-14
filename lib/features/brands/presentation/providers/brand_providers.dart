@@ -12,7 +12,10 @@ import '../../domain/usecases/delete_brand.dart';
 import '../../domain/usecases/update_brand.dart';
 
 final brandsRepositoryProvider = Provider<BrandsRepository>((ref) {
-  return FirebaseBrandsRepository(ref.watch(firestoreProvider));
+  return FirebaseBrandsRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+  );
 });
 
 final createBrandProvider = Provider<CreateBrand>((ref) {
@@ -57,8 +60,8 @@ class BrandActionsController extends AsyncNotifier<void> {
   @override
   FutureOr<void> build() {}
 
-  Future<void> save(Brand brand) async {
-    final creating = brand.id.isEmpty;
+  Future<void> save(Brand brand, {required bool isEditing}) async {
+    final creating = !isEditing;
     _log.info('${creating ? 'Create' : 'Update'} brand action started');
     state = const AsyncLoading();
     state = await AsyncValue.guard(() {

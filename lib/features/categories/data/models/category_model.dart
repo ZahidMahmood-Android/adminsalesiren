@@ -11,6 +11,7 @@ class CategoryModel extends Category {
     required super.sortOrder,
     required super.createdAt,
     required super.updatedAt,
+    super.userId,
   });
 
   factory CategoryModel.fromEntity(Category category) {
@@ -22,6 +23,7 @@ class CategoryModel extends Category {
       sortOrder: category.sortOrder,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,
+      userId: category.userId,
     );
   }
 
@@ -37,6 +39,7 @@ class CategoryModel extends Category {
       sortOrder: data['sortOrder'] as int? ?? 0,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
+      userId: data['userId'] as String? ?? data['createdBy'] as String? ?? '',
     );
   }
 
@@ -57,6 +60,7 @@ class CategoryModel extends Category {
       'iconName': iconName,
       'isActive': isActive,
       'sortOrder': sortOrder,
+      'userId': userId,
       if (includeCreatedAt) 'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };

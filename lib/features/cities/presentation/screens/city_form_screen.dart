@@ -6,6 +6,7 @@ import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../domain/entities/city.dart';
 import '../providers/city_providers.dart';
 
@@ -60,7 +61,9 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
       createdAt: now,
       updatedAt: now,
     );
-    await ref.read(cityActionsProvider.notifier).save(city);
+    await ref
+        .read(cityActionsProvider.notifier)
+        .save(city, isEditing: _isEditing);
     final actionState = ref.read(cityActionsProvider);
     if (actionState.hasError && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,24 +81,13 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
     if (id == null) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSweetConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete city?'),
-        content: const Text('This removes the city document from Firestore.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      title: 'Delete city?',
+      message: 'This city record will be removed permanently.',
+      confirmLabel: 'Delete',
     );
-    if (confirmed != true) {
+    if (!confirmed) {
       return;
     }
     await ref.read(cityActionsProvider.notifier).delete(id);
@@ -168,6 +160,9 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
                           labelText: 'City ID',
                           prefixIcon: Icon(Icons.key_outlined),
                         ),
+                        validator: (value) => (value ?? '').trim().isEmpty
+                            ? 'City ID is required'
+                            : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(

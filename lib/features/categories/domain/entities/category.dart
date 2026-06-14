@@ -7,6 +7,7 @@ class Category {
     required this.sortOrder,
     required this.createdAt,
     required this.updatedAt,
+    this.userId = '',
   });
 
   final String id;
@@ -16,6 +17,7 @@ class Category {
   final int sortOrder;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String userId;
 
   Category copyWith({
     String? id,
@@ -25,6 +27,7 @@ class Category {
     int? sortOrder,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? userId,
   }) {
     return Category(
       id: id ?? this.id,
@@ -34,6 +37,7 @@ class Category {
       sortOrder: sortOrder ?? this.sortOrder,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      userId: userId ?? this.userId,
     );
   }
 }

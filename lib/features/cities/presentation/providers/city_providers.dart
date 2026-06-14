@@ -9,7 +9,10 @@ import '../../domain/entities/city.dart';
 import '../../domain/repositories/cities_repository.dart';
 
 final citiesRepositoryProvider = Provider<CitiesRepository>((ref) {
-  return FirebaseCitiesRepository(ref.watch(firestoreProvider));
+  return FirebaseCitiesRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+  );
 });
 
 final citiesProvider = StreamProvider.autoDispose<List<City>>((ref) async* {
@@ -42,8 +45,8 @@ class CityActionsController extends AsyncNotifier<void> {
   @override
   FutureOr<void> build() {}
 
-  Future<void> save(City city) async {
-    final creating = city.id.isEmpty;
+  Future<void> save(City city, {required bool isEditing}) async {
+    final creating = !isEditing;
     _log.info('${creating ? 'Create' : 'Update'} city action started');
     state = const AsyncLoading();
     state = await AsyncValue.guard(() {

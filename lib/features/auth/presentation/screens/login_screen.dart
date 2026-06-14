@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/constants/app_constants.dart';
 import '../../../../core/errors/error_messages.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../providers/auth_providers.dart';
+import '../widgets/login_brand_panel.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -50,7 +49,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       body: Row(
         children: [
-          if (size.width >= 900) const Expanded(child: _LoginBrandPanel()),
+          if (size.width >= 900) const Expanded(child: LoginBrandPanel()),
           Expanded(
             child: Center(
               child: SingleChildScrollView(
@@ -148,73 +147,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LoginBrandPanel extends StatelessWidget {
-  const _LoginBrandPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(color: AppTheme.ink),
-      child: Stack(
-        children: [
-          Positioned(
-            left: 52,
-            top: 52,
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppTheme.freshGreen,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.local_offer, color: Colors.white),
-                ),
-                const SizedBox(width: 14),
-                Text(
-                  AppConstants.appName,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(56),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Verified sale intelligence for your markets.',
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      height: 1.06,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'A focused control room for brands, offers, reports, and publishing workflows.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Colors.white70,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
               ),
             ),
           ),

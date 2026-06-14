@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../providers/brand_providers.dart';
 
 class BrandsListScreen extends ConsumerWidget {
@@ -102,6 +103,26 @@ class BrandsListScreen extends ConsumerWidget {
                               onPressed: () =>
                                   context.go('/brands/${brand.id}'),
                               icon: const Icon(Icons.edit_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete brand',
+                              onPressed: () async {
+                                final confirmed =
+                                    await showSweetConfirmationDialog(
+                                  context: context,
+                                  title: 'Delete brand?',
+                                  message:
+                                      'This will remove ${brand.name} permanently.',
+                                  confirmLabel: 'Delete',
+                                );
+                                if (!confirmed || !context.mounted) {
+                                  return;
+                                }
+                                await ref
+                                    .read(brandActionsProvider.notifier)
+                                    .delete(brand.id);
+                              },
+                              icon: const Icon(Icons.delete_outline),
                             ),
                           ],
                         ),

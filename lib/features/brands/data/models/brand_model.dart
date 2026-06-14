@@ -15,6 +15,7 @@ class BrandModel extends Brand {
     required super.isActive,
     required super.createdAt,
     required super.updatedAt,
+    super.userId,
   });
 
   factory BrandModel.fromEntity(Brand brand) {
@@ -30,6 +31,7 @@ class BrandModel extends Brand {
       isActive: brand.isActive,
       createdAt: brand.createdAt,
       updatedAt: brand.updatedAt,
+      userId: brand.userId,
     );
   }
 
@@ -47,6 +49,7 @@ class BrandModel extends Brand {
       isActive: data['isActive'] as bool? ?? true,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
+      userId: data['userId'] as String? ?? data['createdBy'] as String? ?? '',
     );
   }
 
@@ -61,6 +64,7 @@ class BrandModel extends Brand {
       'categoryIds': categoryIds,
       'cityIds': cityIds,
       'isActive': isActive,
+      'userId': userId,
       if (includeCreatedAt) 'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };

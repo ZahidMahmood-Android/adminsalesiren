@@ -17,6 +17,7 @@ import '../../../cities/domain/entities/city.dart';
 import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/offer.dart';
 import '../providers/offer_providers.dart';
+import '../widgets/offer_form_controls.dart';
 
 class OfferFormScreen extends ConsumerStatefulWidget {
   const OfferFormScreen({super.key, this.offerId});
@@ -287,7 +288,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                           spacing: 16,
                           runSpacing: 16,
                           children: [
-                            _DropdownBox(
+                            DropdownBox(
                               child: DropdownButtonFormField<String>(
                                 initialValue: _brandId,
                                 decoration: const InputDecoration(
@@ -307,7 +308,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                                     value == null ? 'Brand required' : null,
                               ),
                             ),
-                            _DropdownBox(
+                            DropdownBox(
                               child: DropdownButtonFormField<String>(
                                 initialValue: _categoryId,
                                 decoration: const InputDecoration(
@@ -327,7 +328,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                                     value == null ? 'Category required' : null,
                               ),
                             ),
-                            _DropdownBox(
+                            DropdownBox(
                               child: DropdownButtonFormField<String>(
                                 initialValue: _cityId,
                                 decoration: const InputDecoration(
@@ -354,7 +355,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                         spacing: 16,
                         runSpacing: 16,
                         children: [
-                          _DropdownBox(
+                          DropdownBox(
                             child: TextFormField(
                               controller: _discountTextController,
                               decoration: const InputDecoration(
@@ -366,7 +367,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                                   : null,
                             ),
                           ),
-                          _DropdownBox(
+                          DropdownBox(
                             child: DropdownButtonFormField<String>(
                               initialValue: _discountType,
                               decoration: const InputDecoration(
@@ -395,7 +396,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                               ),
                             ),
                           ),
-                          _DropdownBox(
+                          DropdownBox(
                             child: TextFormField(
                               controller: _discountValueController,
                               keyboardType: TextInputType.number,
@@ -412,12 +413,12 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                         spacing: 16,
                         runSpacing: 16,
                         children: [
-                          _DateButton(
+                          DateButton(
                             label: 'Start date',
                             value: _startDate?.shortDate,
                             onPressed: () => _pickDate(start: true),
                           ),
-                          _DateButton(
+                          DateButton(
                             label: 'End date',
                             value: _endDate?.shortDate,
                             onPressed: () => _pickDate(start: false),
@@ -429,7 +430,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                         spacing: 16,
                         runSpacing: 16,
                         children: [
-                          _DropdownBox(
+                          DropdownBox(
                             child: TextFormField(
                               controller: _sourceUrlController,
                               decoration: const InputDecoration(
@@ -438,7 +439,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                               ),
                             ),
                           ),
-                          _DropdownBox(
+                          DropdownBox(
                             child: TextFormField(
                               controller: _onlineUrlController,
                               decoration: const InputDecoration(
@@ -450,7 +451,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      _ImagePickerPanel(
+                      ImagePickerPanel(
                         imageUrl: _imageUrl,
                         pickedImageName: _pickedImage?.name,
                         onPick: _pickImage,
@@ -520,104 +521,6 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       },
       loading: () => const AppLoadingView(label: 'Loading offer'),
       error: (error, _) => AppErrorView(message: error.toString()),
-    );
-  }
-}
-
-class _DropdownBox extends StatelessWidget {
-  const _DropdownBox({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(width: 300, child: child);
-  }
-}
-
-class _DateButton extends StatelessWidget {
-  const _DateButton({
-    required this.label,
-    required this.value,
-    required this.onPressed,
-  });
-
-  final String label;
-  final String? value;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 300,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.calendar_month_outlined),
-        label: Align(
-          alignment: Alignment.centerLeft,
-          child: Text('$label: ${value ?? 'Select'}'),
-        ),
-      ),
-    );
-  }
-}
-
-class _ImagePickerPanel extends StatelessWidget {
-  const _ImagePickerPanel({
-    required this.imageUrl,
-    required this.pickedImageName,
-    required this.onPick,
-  });
-
-  final String imageUrl;
-  final String? pickedImageName;
-  final VoidCallback onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).colorScheme.outline),
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.white,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 84,
-                height: 64,
-                child: imageUrl.isEmpty
-                    ? ColoredBox(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHighest,
-                        child: const Icon(Icons.image_outlined),
-                      )
-                    : Image.network(imageUrl, fit: BoxFit.cover),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                pickedImageName ??
-                    (imageUrl.isEmpty ? 'No image selected' : 'Current image'),
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: onPick,
-              icon: const Icon(Icons.upload_file_outlined),
-              label: const Text('Upload'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

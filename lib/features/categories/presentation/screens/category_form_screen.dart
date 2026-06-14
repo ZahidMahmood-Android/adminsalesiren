@@ -6,6 +6,7 @@ import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../domain/entities/category.dart';
 import '../providers/category_providers.dart';
 
@@ -64,7 +65,9 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
       createdAt: now,
       updatedAt: now,
     );
-    await ref.read(categoryActionsProvider.notifier).save(category);
+    await ref
+        .read(categoryActionsProvider.notifier)
+        .save(category, isEditing: _isEditing);
     final actionState = ref.read(categoryActionsProvider);
     if (actionState.hasError && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -82,26 +85,13 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
     if (id == null) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSweetConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete category?'),
-        content: const Text(
-          'This removes the category document from Firestore.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      title: 'Delete category?',
+      message: 'This category record will be removed permanently.',
+      confirmLabel: 'Delete',
     );
-    if (confirmed != true) {
+    if (!confirmed) {
       return;
     }
     await ref.read(categoryActionsProvider.notifier).delete(id);
@@ -174,6 +164,9 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
                           labelText: 'Category ID',
                           prefixIcon: Icon(Icons.key_outlined),
                         ),
+                        validator: (value) => (value ?? '').trim().isEmpty
+                            ? 'Category ID is required'
+                            : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(

@@ -67,6 +67,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const CitiesListScreen(),
             routes: [
               GoRoute(
+                path: 'new',
+                builder: (context, state) => const CityFormScreen(),
+              ),
+              GoRoute(
                 path: ':cityId',
                 builder: (context, state) =>
                     CityFormScreen(cityId: state.pathParameters['cityId']),

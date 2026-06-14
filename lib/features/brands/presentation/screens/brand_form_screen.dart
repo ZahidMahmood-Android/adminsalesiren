@@ -6,12 +6,14 @@ import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../categories/domain/entities/category.dart' as app_category;
 import '../../../categories/presentation/providers/category_providers.dart';
 import '../../../cities/domain/entities/city.dart';
 import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/brand.dart';
 import '../providers/brand_providers.dart';
+import '../widgets/selection_block.dart';
 
 class BrandFormScreen extends ConsumerStatefulWidget {
   const BrandFormScreen({super.key, this.brandId});
@@ -91,7 +93,9 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
       updatedAt: now,
     );
 
-    await ref.read(brandActionsProvider.notifier).save(brand);
+    await ref
+        .read(brandActionsProvider.notifier)
+        .save(brand, isEditing: _isEditing);
     final actionState = ref.read(brandActionsProvider);
     if (actionState.hasError && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -109,24 +113,13 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     if (id == null) {
       return;
     }
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showSweetConfirmationDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete brand?'),
-        content: const Text('This removes the brand document from Firestore.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      title: 'Delete brand?',
+      message: 'This brand record will be removed permanently.',
+      confirmLabel: 'Delete',
     );
-    if (confirmed != true) {
+    if (!confirmed) {
       return;
     }
     await ref.read(brandActionsProvider.notifier).delete(id);
@@ -247,7 +240,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                         onChanged: (value) => setState(() => _isActive = value),
                       ),
                       const SizedBox(height: 12),
-                      _SelectionBlock<City>(
+                      SelectionBlock<City>(
                         title: 'Cities',
                         items: cities,
                         selectedIds: _selectedCityIds,
@@ -256,7 +249,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                         onChanged: () => setState(() {}),
                       ),
                       const SizedBox(height: 18),
-                      _SelectionBlock<app_category.Category>(
+                      SelectionBlock<app_category.Category>(
                         title: 'Categories',
                         items: categories,
                         selectedIds: _selectedCategoryIds,
@@ -298,69 +291,6 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
       },
       loading: () => const AppLoadingView(label: 'Loading brand'),
       error: (error, _) => AppErrorView(message: error.toString()),
-    );
-  }
-}
-
-class _SelectionBlock<T> extends StatelessWidget {
-  const _SelectionBlock({
-    required this.title,
-    required this.items,
-    required this.selectedIds,
-    required this.idOf,
-    required this.labelOf,
-    required this.onChanged,
-  });
-
-  final String title;
-  final AsyncValue<List<T>> items;
-  final Set<String> selectedIds;
-  final String Function(T item) idOf;
-  final String Function(T item) labelOf;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 10),
-        items.when(
-          data: (values) {
-            if (values.isEmpty) {
-              return const Text('No active records found.');
-            }
-            return Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: values.map((item) {
-                final id = idOf(item);
-                final selected = selectedIds.contains(id);
-                return FilterChip(
-                  label: Text(labelOf(item)),
-                  selected: selected,
-                  onSelected: (value) {
-                    if (value) {
-                      selectedIds.add(id);
-                    } else {
-                      selectedIds.remove(id);
-                    }
-                    onChanged();
-                  },
-                );
-              }).toList(),
-            );
-          },
-          loading: () => const LinearProgressIndicator(),
-          error: (error, _) => Text(error.toString()),
-        ),
-      ],
     );
   }
 }

@@ -10,6 +10,7 @@ import '../utils/copy_utils.dart';
 import 'app_card.dart';
 import 'app_error_view.dart';
 import 'app_loading_view.dart';
+import 'sweet_confirmation_dialog.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({required this.child, super.key});
@@ -83,6 +84,20 @@ class AppShell extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+  final confirmed = await showSweetConfirmationDialog(
+    context: context,
+    title: 'Logout?',
+    message: 'You will need to sign in again to continue.',
+    confirmLabel: 'Logout',
+    icon: Icons.logout,
+    color: AppTheme.saffron,
+  );
+  if (confirmed) {
+    await ref.read(authRepositoryProvider).signOut();
   }
 }
 
@@ -215,7 +230,7 @@ class _MissingAdminAccessView extends ConsumerWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => ref.read(authRepositoryProvider).signOut(),
+                  onPressed: () => _confirmLogout(context, ref),
                   icon: const Icon(Icons.logout),
                   label: const Text('Logout'),
                 ),
@@ -280,7 +295,7 @@ class _DesktopHeader extends ConsumerWidget {
             ),
           IconButton.filledTonal(
             tooltip: 'Logout',
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
+            onPressed: () => _confirmLogout(context, ref),
             icon: const Icon(Icons.logout),
           ),
         ],
@@ -340,7 +355,7 @@ class _TopBar extends ConsumerWidget implements PreferredSizeWidget {
           padding: const EdgeInsets.only(right: 20),
           child: IconButton.filledTonal(
             tooltip: 'Logout',
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
+            onPressed: () => _confirmLogout(context, ref),
             icon: const Icon(Icons.logout),
           ),
         ),

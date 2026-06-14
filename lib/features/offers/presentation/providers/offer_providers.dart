@@ -13,9 +13,14 @@ import '../../domain/repositories/offers_repository.dart';
 import '../../domain/usecases/create_offer.dart';
 import '../../domain/usecases/delete_offer.dart';
 import '../../domain/usecases/update_offer.dart';
+import '../../../notifications/domain/entities/notification_request.dart';
+import '../../../notifications/presentation/providers/notification_providers.dart';
 
 final offersRepositoryProvider = Provider<OffersRepository>((ref) {
-  return FirebaseOffersRepository(ref.watch(firestoreProvider));
+  return FirebaseOffersRepository(
+    ref.watch(firestoreProvider),
+    ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+  );
 });
 
 final offerImageRepositoryProvider = Provider<OfferImageRepository>((ref) {
@@ -85,6 +90,23 @@ class OfferActionsController extends AsyncNotifier<void> {
     String? id;
     state = await AsyncValue.guard(() async {
       id = await ref.read(createOfferProvider).call(offer);
+      await ref.read(createNotificationRequestProvider).call(
+            NotificationRequest(
+              id: '',
+              title: 'New offer available',
+              body: '${offer.brandName}: ${offer.discountText}',
+              topic: 'all_users',
+              type: 'new_offer',
+              data: {
+                'offerId': id ?? '',
+                'brandId': offer.brandId,
+                'categoryId': offer.categoryId,
+                'cityId': offer.cityId,
+              },
+              status: 'pending',
+              createdAt: DateTime.now(),
+            ),
+          );
     });
     _logActionResult('Create offer action', id: id);
     return id;

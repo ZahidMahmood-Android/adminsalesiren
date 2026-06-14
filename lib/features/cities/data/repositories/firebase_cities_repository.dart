@@ -6,9 +6,10 @@ import '../../domain/repositories/cities_repository.dart';
 import '../models/city_model.dart';
 
 class FirebaseCitiesRepository implements CitiesRepository {
-  FirebaseCitiesRepository(this._firestore);
+  FirebaseCitiesRepository(this._firestore, this._currentUserId);
 
   final FirebaseFirestore _firestore;
+  final String _currentUserId;
   final _log = AppLogger.get('FirebaseCitiesRepository');
 
   CollectionReference<Map<String, dynamic>> get _cities =>
@@ -16,7 +17,10 @@ class FirebaseCitiesRepository implements CitiesRepository {
 
   @override
   Stream<List<City>> watchCities() {
-    return _cities.snapshots().map((snapshot) {
+    if (_currentUserId.isEmpty) {
+      return Stream.value(const <City>[]);
+    }
+    return _cities.where('userId', isEqualTo: _currentUserId).snapshots().map((snapshot) {
       final cities = snapshot.docs.map(CityModel.fromSnapshot).toList()
         ..sort((a, b) => a.name.compareTo(b.name));
       return cities;
@@ -25,18 +29,25 @@ class FirebaseCitiesRepository implements CitiesRepository {
 
   @override
   Future<List<City>> getCities() async {
-    final snapshot = await _cities.get();
+    if (_currentUserId.isEmpty) {
+      return const <City>[];
+    }
+    final snapshot = await _cities.where('userId', isEqualTo: _currentUserId).get();
     return snapshot.docs.map(CityModel.fromSnapshot).toList()
       ..sort((a, b) => a.name.compareTo(b.name));
   }
 
   @override
   Future<City?> getCity(String id) async {
+    if (_currentUserId.isEmpty) {
+      return null;
+    }
     final snapshot = await _cities.doc(id).get();
     if (!snapshot.exists) {
       return null;
     }
-    return CityModel.fromSnapshot(snapshot);
+    final city = CityModel.fromSnapshot(snapshot);
+    return city.userId == _currentUserId ? city : null;
   }
 
   @override
@@ -45,7 +56,12 @@ class FirebaseCitiesRepository implements CitiesRepository {
     final doc = _cities.doc(safeId);
     final now = DateTime.now();
     final model = CityModel.fromEntity(
-      city.copyWith(id: safeId, createdAt: now, updatedAt: now),
+      city.copyWith(
+        id: safeId,
+        createdAt: now,
+        updatedAt: now,
+        userId: _currentUserId,
+      ),
     );
     _log.info('Creating city id=$safeId name=${city.name}');
     await doc.set(model.toFirestore());
@@ -55,7 +71,7 @@ class FirebaseCitiesRepository implements CitiesRepository {
   @override
   Future<void> updateCity(City city) {
     final model = CityModel.fromEntity(
-      city.copyWith(updatedAt: DateTime.now()),
+      city.copyWith(updatedAt: DateTime.now(), userId: _currentUserId),
     );
     _log.info('Updating city id=${city.id} name=${city.name}');
     return _cities

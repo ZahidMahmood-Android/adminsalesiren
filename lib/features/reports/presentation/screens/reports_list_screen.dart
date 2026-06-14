@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../providers/report_providers.dart';
 
 class ReportsListScreen extends ConsumerWidget {
@@ -112,6 +113,26 @@ class ReportsListScreen extends ConsumerWidget {
                                     .read(reportActionsProvider.notifier)
                                     .updateStatus(report.id, value);
                               },
+                            ),
+                            IconButton(
+                              tooltip: 'Delete report',
+                              onPressed: () async {
+                                final confirmed =
+                                    await showSweetConfirmationDialog(
+                                  context: context,
+                                  title: 'Delete report?',
+                                  message:
+                                      'This report record will be removed permanently.',
+                                  confirmLabel: 'Delete',
+                                );
+                                if (!confirmed || !context.mounted) {
+                                  return;
+                                }
+                                await ref
+                                    .read(reportActionsProvider.notifier)
+                                    .delete(report.id);
+                              },
+                              icon: const Icon(Icons.delete_outline),
                             ),
                           ],
                         ),

@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../providers/city_providers.dart';
 
 class CitiesListScreen extends ConsumerWidget {
@@ -32,6 +33,11 @@ class CitiesListScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              FilledButton.icon(
+                onPressed: () => context.go('/cities/new'),
+                icon: const Icon(Icons.add),
+                label: const Text('New city'),
+              ),
             ],
           ),
           const SizedBox(height: 18),
@@ -44,6 +50,11 @@ class CitiesListScreen extends ConsumerWidget {
                     icon: Icons.location_city_outlined,
                     title: 'No cities yet',
                     message: 'Cities will appear here once they are available.',
+                    action: FilledButton.icon(
+                      onPressed: () => context.go('/cities/new'),
+                      icon: const Icon(Icons.add),
+                      label: const Text('New city'),
+                    ),
                   );
                 }
                 return AppCard(
@@ -82,6 +93,26 @@ class CitiesListScreen extends ConsumerWidget {
                               tooltip: 'Edit city',
                               onPressed: () => context.go('/cities/${city.id}'),
                               icon: const Icon(Icons.edit_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete city',
+                              onPressed: () async {
+                                final confirmed =
+                                    await showSweetConfirmationDialog(
+                                  context: context,
+                                  title: 'Delete city?',
+                                  message:
+                                      'This will remove ${city.name} permanently.',
+                                  confirmLabel: 'Delete',
+                                );
+                                if (!confirmed || !context.mounted) {
+                                  return;
+                                }
+                                await ref
+                                    .read(cityActionsProvider.notifier)
+                                    .delete(city.id);
+                              },
+                              icon: const Icon(Icons.delete_outline),
                             ),
                           ],
                         ),

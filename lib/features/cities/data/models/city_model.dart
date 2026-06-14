@@ -10,6 +10,7 @@ class CityModel extends City {
     required super.isActive,
     required super.createdAt,
     required super.updatedAt,
+    super.userId,
   });
 
   factory CityModel.fromEntity(City city) {
@@ -20,6 +21,7 @@ class CityModel extends City {
       isActive: city.isActive,
       createdAt: city.createdAt,
       updatedAt: city.updatedAt,
+      userId: city.userId,
     );
   }
 
@@ -32,6 +34,7 @@ class CityModel extends City {
       isActive: data['isActive'] as bool? ?? false,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
+      userId: data['userId'] as String? ?? data['createdBy'] as String? ?? '',
     );
   }
 
@@ -51,6 +54,7 @@ class CityModel extends City {
       'name': name,
       'country': country,
       'isActive': isActive,
+      'userId': userId,
       if (includeCreatedAt) 'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };

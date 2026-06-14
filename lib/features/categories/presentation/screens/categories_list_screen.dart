@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../providers/category_providers.dart';
 
 class CategoriesListScreen extends ConsumerWidget {
@@ -96,6 +97,26 @@ class CategoriesListScreen extends ConsumerWidget {
                               onPressed: () =>
                                   context.go('/categories/${category.id}'),
                               icon: const Icon(Icons.edit_outlined),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete category',
+                              onPressed: () async {
+                                final confirmed =
+                                    await showSweetConfirmationDialog(
+                                  context: context,
+                                  title: 'Delete category?',
+                                  message:
+                                      'This will remove ${category.name} permanently.',
+                                  confirmLabel: 'Delete',
+                                );
+                                if (!confirmed || !context.mounted) {
+                                  return;
+                                }
+                                await ref
+                                    .read(categoryActionsProvider.notifier)
+                                    .delete(category.id);
+                              },
+                              icon: const Icon(Icons.delete_outline),
                             ),
                           ],
                         ),

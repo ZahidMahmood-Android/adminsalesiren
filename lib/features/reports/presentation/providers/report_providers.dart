@@ -46,4 +46,21 @@ class ReportActionsController extends AsyncNotifier<void> {
       _log.info('Update report status action completed id=$id');
     }
   }
+
+  Future<void> delete(String id) async {
+    _log.warning('Delete report action started id=$id');
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(reportsRepositoryProvider).deleteReport(id),
+    );
+    if (state.hasError) {
+      _log.severe(
+        'Delete report action failed id=$id',
+        state.error,
+        state.stackTrace,
+      );
+    } else {
+      _log.info('Delete report action completed id=$id');
+    }
+  }
 }

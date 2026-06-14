@@ -6,6 +6,8 @@ import '../../../../core/utils/copy_utils.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../providers/auth_providers.dart';
+import '../widgets/diagnostic_checklist_item.dart';
+import '../widgets/diagnostic_info_row.dart';
 
 class AdminAccessDiagnosticsPage extends ConsumerWidget {
   const AdminAccessDiagnosticsPage({super.key});
@@ -53,20 +55,20 @@ class AdminAccessDiagnosticsPage extends ConsumerWidget {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _InfoRow(
+                          DiagnosticInfoRow(
                             label: 'Email',
                             value: user.email,
                             context: context,
                           ),
                           const SizedBox(height: 8),
-                          _InfoRow(
+                          DiagnosticInfoRow(
                             label: 'UID (User ID)',
                             value: user.id,
                             context: context,
                             isCopyable: true,
                           ),
                           const SizedBox(height: 8),
-                          _InfoRow(
+                          DiagnosticInfoRow(
                             label: 'Display Name',
                             value: user.displayName,
                             context: context,
@@ -197,27 +199,27 @@ class AdminAccessDiagnosticsPage extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _ChecklistItem(
+                  DiagnosticChecklistItem(
                     title: 'Admin document exists in Firestore',
                     description:
                         'Check Firebase Console > Firestore > '
                         'Collections > admins > Your UID',
                   ),
                   const SizedBox(height: 12),
-                  _ChecklistItem(
+                  DiagnosticChecklistItem(
                     title: 'Document ID matches exactly',
                     description:
                         'Copy the UID from above and verify it matches '
                         'the Document ID in Firestore (case-sensitive)',
                   ),
                   const SizedBox(height: 12),
-                  _ChecklistItem(
+                  DiagnosticChecklistItem(
                     title: 'Security rules are deployed',
                     description:
                         'Run: firebase deploy --only firestore:rules,storage',
                   ),
                   const SizedBox(height: 12),
-                  _ChecklistItem(
+                  DiagnosticChecklistItem(
                     title: 'Clear browser cache',
                     description:
                         'Press Ctrl+Shift+Delete (or Cmd+Shift+Delete), '
@@ -317,104 +319,6 @@ class AdminAccessDiagnosticsPage extends ConsumerWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-    required this.context,
-    this.isCopyable = false,
-  });
-
-  final String label;
-  final String value;
-  final BuildContext context;
-  final bool isCopyable;
-
-  @override
-  Widget build(BuildContext context) {
-    final widget = Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Text(
-            value,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          ),
-        ),
-        if (isCopyable)
-          IconButton.filledTonal(
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-            iconSize: 16,
-            onPressed: () {
-              CopyUtils.copyToClipboard(context, value, label: label);
-            },
-            icon: const Icon(Icons.copy),
-          ),
-      ],
-    );
-
-    if (isCopyable) {
-      return GestureDetector(
-        onTap: () {
-          CopyUtils.copyToClipboard(context, value, label: label);
-        },
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: widget,
-        ),
-      );
-    }
-
-    return widget;
-  }
-}
-
-class _ChecklistItem extends StatelessWidget {
-  const _ChecklistItem({required this.title, required this.description});
-
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Icon(
-          Icons.check_box_outline_blank,
-          size: 20,
-          color: Colors.black54,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: const TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
