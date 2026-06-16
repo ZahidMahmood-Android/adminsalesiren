@@ -7,6 +7,11 @@ class Category {
     required this.sortOrder,
     required this.createdAt,
     required this.updatedAt,
+    this.slug = '',
+    this.description = '',
+    this.colorHex = '',
+    this.isFeatured = false,
+    this.searchKeywords = const [],
     this.userId = '',
   });
 
@@ -17,6 +22,11 @@ class Category {
   final int sortOrder;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String slug;
+  final String description;
+  final String colorHex;
+  final bool isFeatured;
+  final List<String> searchKeywords;
   final String userId;
 
   Category copyWith({
@@ -27,6 +37,11 @@ class Category {
     int? sortOrder,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? slug,
+    String? description,
+    String? colorHex,
+    bool? isFeatured,
+    List<String>? searchKeywords,
     String? userId,
   }) {
     return Category(
@@ -37,6 +52,11 @@ class Category {
       sortOrder: sortOrder ?? this.sortOrder,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      slug: slug ?? this.slug,
+      description: description ?? this.description,
+      colorHex: colorHex ?? this.colorHex,
+      isFeatured: isFeatured ?? this.isFeatured,
+      searchKeywords: searchKeywords ?? this.searchKeywords,
       userId: userId ?? this.userId,
     );
   }

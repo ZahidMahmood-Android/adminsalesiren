@@ -7,8 +7,11 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/category.dart';
 import '../providers/category_providers.dart';
+import '../../../../core/widgets/app_error_dialog.dart';
+import '../../../../core/widgets/screen_layout.dart';
 
 class CategoryFormScreen extends ConsumerStatefulWidget {
   const CategoryFormScreen({super.key, this.categoryId});
@@ -70,9 +73,12 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
         .save(category, isEditing: _isEditing);
     final actionState = ref.read(categoryActionsProvider);
     if (actionState.hasError && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ErrorMessages.friendly(actionState.error))),
-      );
+      if (mounted)
+        await showAppError(
+          context,
+          actionState.error,
+          title: 'Could Not Save Category',
+        );
       return;
     }
     if (mounted) {
@@ -106,6 +112,8 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
         ? ref.watch(categoryProvider(widget.categoryId!))
         : const AsyncValue<Category?>.data(null);
     final actionState = ref.watch(categoryActionsProvider);
+    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final currentUser = ref.watch(currentUserProvider);
 
     return categoryAsync.when(
       skipLoadingOnRefresh: true,
@@ -113,11 +121,18 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
         if (_isEditing && category == null) {
           return const AppErrorView(message: 'Category not found.');
         }
+        final canManageCategory =
+            !isBrandAdmin || !_isEditing || category?.userId == currentUser?.id;
+        if (!canManageCategory) {
+          return const AppErrorView(
+            message: 'You can only edit categories created by your account.',
+          );
+        }
         if (category != null) {
           _hydrate(category);
         }
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: screenPadding(context),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
@@ -137,7 +152,7 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
                                   ?.copyWith(fontWeight: FontWeight.w900),
                             ),
                           ),
-                          if (_isEditing)
+                          if (_isEditing && canManageCategory)
                             IconButton(
                               tooltip: 'Delete category',
                               onPressed: actionState.isLoading ? null : _delete,

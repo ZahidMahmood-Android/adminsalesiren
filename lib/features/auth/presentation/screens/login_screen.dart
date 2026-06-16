@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_error_dialog.dart';
 import '../providers/auth_providers.dart';
 import '../widgets/login_brand_panel.dart';
 
@@ -35,9 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         .signIn(_emailController.text, _passwordController.text);
     final error = ref.read(loginControllerProvider).error;
     if (error != null && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(ErrorMessages.friendly(error))));
+      showAppError(context, error, title: 'Sign In Failed');
     }
   }
 

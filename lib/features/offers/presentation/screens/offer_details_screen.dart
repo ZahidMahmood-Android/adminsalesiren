@@ -9,8 +9,10 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/offer_providers.dart';
 import '../widgets/info_grid.dart';
+import '../../../../core/widgets/screen_layout.dart';
 
 class OfferDetailsScreen extends ConsumerWidget {
   const OfferDetailsScreen({required this.offerId, super.key});
@@ -21,6 +23,8 @@ class OfferDetailsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final offerAsync = ref.watch(offerProvider(offerId));
     final actionState = ref.watch(offerActionsProvider);
+    final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final isBrandAdmin = ref.watch(isBrandAdminProvider);
 
     return offerAsync.when(
       data: (offer) {
@@ -28,190 +32,260 @@ class OfferDetailsScreen extends ConsumerWidget {
           return const AppErrorView(message: 'Offer not found.');
         }
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1080),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          offer.title,
-                          style: Theme.of(context).textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => context.go('/offers/$offerId/edit'),
-                        icon: const Icon(Icons.edit_outlined),
-                        label: const Text('Edit'),
-                      ),
-                      const SizedBox(width: 10),
-                      IconButton(
-                        tooltip: 'Delete offer',
-                        onPressed: actionState.isLoading
-                            ? null
-                            : () async {
-                                final confirmed =
-                                    await showSweetConfirmationDialog(
-                                  context: context,
-                                  title: 'Delete offer?',
-                                  message:
-                                      'This will remove ${offer.title} permanently.',
-                                  confirmLabel: 'Delete',
-                                );
-                                if (!confirmed || !context.mounted) {
-                                  return;
-                                }
-                                await ref
-                                    .read(offerActionsProvider.notifier)
-                                    .delete(offer.id);
-                                if (context.mounted) {
-                                  context.go('/offers');
-                                }
-                              },
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  AppCard(
-                    padding: EdgeInsets.zero,
+        return Column(
+          children: [
+            if (actionState.isLoading)
+              const LinearProgressIndicator(minHeight: 3),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: screenPadding(context),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1080),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (offer.imageUrl.isNotEmpty)
-                          ClipRRect(
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(8),
-                            ),
-                            child: AspectRatio(
-                              aspectRatio: 16 / 5,
-                              child: Image.network(
-                                offer.imageUrl,
-                                fit: BoxFit.cover,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                offer.title,
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w900),
                               ),
                             ),
-                          ),
-                        Padding(
-                          padding: const EdgeInsets.all(20),
+                            // Edit is always visible (super admin may edit live offers).
+                            if (!(isBrandAdmin && offer.isPublished))
+                              OutlinedButton.icon(
+                                onPressed: () =>
+                                    context.go('/offers/$offerId/edit'),
+                                icon: const Icon(Icons.edit_outlined),
+                                label: const Text('Edit'),
+                              ),
+                            if (!(isBrandAdmin && offer.isPublished))
+                              const SizedBox(width: 10),
+                            // Delete: hidden once published (must unpublish first).
+                            if (!offer.isPublished)
+                              IconButton(
+                                tooltip: 'Delete offer',
+                                onPressed: actionState.isLoading
+                                    ? null
+                                    : () async {
+                                        final confirmed =
+                                            await showSweetConfirmationDialog(
+                                              context: context,
+                                              title: 'Delete offer?',
+                                              message:
+                                                  'This will remove ${offer.title} permanently.',
+                                              confirmLabel: 'Delete',
+                                            );
+                                        if (!confirmed || !context.mounted) {
+                                          return;
+                                        }
+                                        await ref
+                                            .read(offerActionsProvider.notifier)
+                                            .delete(offer.id);
+                                        if (context.mounted) {
+                                          context.go('/offers');
+                                        }
+                                      },
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        AppCard(
+                          padding: EdgeInsets.zero,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  AppBadge(
-                                    label: offer.isPublished
-                                        ? 'Published'
-                                        : 'Draft',
-                                    color: offer.isPublished
-                                        ? AppTheme.deepGreen
-                                        : Colors.black45,
+                              if (offer.imageUrl.isNotEmpty)
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(8),
                                   ),
-                                  AppBadge(
-                                    label: offer.isVerified
-                                        ? 'Verified'
-                                        : 'Unverified',
-                                    color: offer.isVerified
-                                        ? AppTheme.freshGreen
-                                        : AppTheme.saffron,
-                                  ),
-                                  if (offer.isFeatured)
-                                    const AppBadge(
-                                      label: 'Featured',
-                                      color: AppTheme.coral,
+                                  child: AspectRatio(
+                                    aspectRatio: 16 / 5,
+                                    child: Image.network(
+                                      offer.imageUrl,
+                                      fit: BoxFit.cover,
                                     ),
-                                ],
-                              ),
-                              const SizedBox(height: 18),
-                              InfoGrid(
-                                entries: {
-                                  'Brand': offer.brandName,
-                                  'Category': offer.categoryName,
-                                  'City': offer.cityName,
-                                  'Discount': offer.discountText,
-                                  'Dates':
-                                      '${offer.startDate.shortDate} - ${offer.endDate.shortDate}',
-                                  'Created': offer.createdAt.compactDateTime,
-                                },
-                              ),
-                              const SizedBox(height: 18),
-                              Text(
-                                offer.description.isEmpty
-                                    ? 'No description provided.'
-                                    : offer.description,
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              const SizedBox(height: 22),
-                              Wrap(
-                                spacing: 10,
-                                runSpacing: 10,
-                                children: [
-                                  FilledButton.icon(
-                                    onPressed: actionState.isLoading
-                                        ? null
-                                        : () => ref
-                                              .read(
-                                                offerActionsProvider.notifier,
-                                              )
-                                              .publish(
-                                                offer.id,
-                                                !offer.isPublished,
+                                  ),
+                                ),
+                              Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        AppBadge(
+                                          label: _statusLabel(offer),
+                                          color: _statusColor(offer),
+                                        ),
+                                        AppBadge(
+                                          label: offer.isVerified
+                                              ? 'Verified'
+                                              : 'Unverified',
+                                          color: offer.isVerified
+                                              ? AppTheme.freshGreen
+                                              : AppTheme.saffron,
+                                        ),
+                                        if (offer.isFeatured)
+                                          const AppBadge(
+                                            label: 'Featured',
+                                            color: AppTheme.coral,
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 18),
+                                    InfoGrid(
+                                      entries: {
+                                        'Brand': offer.brandName,
+                                        'Category': offer.categoryName,
+                                        'Cities': offer.cityNames.isEmpty
+                                            ? offer.cityName
+                                            : offer.cityNames.join(', '),
+                                        'Discount': offer.discountText,
+                                        'Dates':
+                                            '${offer.startDate.shortDate} - ${offer.endDate.shortDate}',
+                                        'Created':
+                                            offer.createdAt.compactDateTime,
+                                      },
+                                    ),
+                                    const SizedBox(height: 18),
+                                    Text(
+                                      offer.description.isEmpty
+                                          ? 'No description provided.'
+                                          : offer.description,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyLarge,
+                                    ),
+                                    const SizedBox(height: 22),
+                                    Wrap(
+                                      spacing: 10,
+                                      runSpacing: 10,
+                                      children: [
+                                        if (isSuperAdmin) ...[
+                                          if (offer.approvalStatus ==
+                                                  'pending' ||
+                                              offer.status ==
+                                                  'pending_review') ...[
+                                            FilledButton.icon(
+                                              onPressed: actionState.isLoading
+                                                  ? null
+                                                  : () => ref
+                                                        .read(
+                                                          offerActionsProvider
+                                                              .notifier,
+                                                        )
+                                                        .approve(offer.id),
+                                              icon: const Icon(
+                                                Icons.check_circle_outline,
                                               ),
-                                    icon: Icon(
-                                      offer.isPublished
-                                          ? Icons.visibility_off_outlined
-                                          : Icons.visibility_outlined,
-                                    ),
-                                    label: Text(
-                                      offer.isPublished
-                                          ? 'Unpublish'
-                                          : 'Publish',
-                                    ),
-                                  ),
-                                  OutlinedButton.icon(
-                                    onPressed: actionState.isLoading
-                                        ? null
-                                        : () => ref
-                                              .read(
-                                                offerActionsProvider.notifier,
-                                              )
-                                              .verify(
-                                                offer.id,
-                                                !offer.isVerified,
+                                              label: const Text('Approve'),
+                                            ),
+                                            OutlinedButton.icon(
+                                              onPressed: actionState.isLoading
+                                                  ? null
+                                                  : () async {
+                                                      final notes =
+                                                          await _rejectionNotes(
+                                                            context,
+                                                          );
+                                                      if (notes == null) {
+                                                        return;
+                                                      }
+                                                      await ref
+                                                          .read(
+                                                            offerActionsProvider
+                                                                .notifier,
+                                                          )
+                                                          .reject(
+                                                            offer.id,
+                                                            notes,
+                                                          );
+                                                    },
+                                              icon: const Icon(
+                                                Icons.cancel_outlined,
                                               ),
-                                    icon: const Icon(Icons.verified_outlined),
-                                    label: Text(
-                                      offer.isVerified
-                                          ? 'Mark unverified'
-                                          : 'Mark verified',
+                                              label: const Text('Reject'),
+                                            ),
+                                          ],
+                                          FilledButton.icon(
+                                            onPressed: actionState.isLoading
+                                                ? null
+                                                : () => ref
+                                                      .read(
+                                                        offerActionsProvider
+                                                            .notifier,
+                                                      )
+                                                      .publish(
+                                                        offer.id,
+                                                        !offer.isPublished,
+                                                      ),
+                                            icon: Icon(
+                                              offer.isPublished
+                                                  ? Icons
+                                                        .visibility_off_outlined
+                                                  : Icons.visibility_outlined,
+                                            ),
+                                            label: Text(
+                                              offer.isPublished
+                                                  ? 'Unpublish'
+                                                  : 'Publish',
+                                            ),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed: actionState.isLoading
+                                                ? null
+                                                : () => ref
+                                                      .read(
+                                                        offerActionsProvider
+                                                            .notifier,
+                                                      )
+                                                      .verify(
+                                                        offer.id,
+                                                        !offer.isVerified,
+                                                      ),
+                                            icon: const Icon(
+                                              Icons.verified_outlined,
+                                            ),
+                                            label: Text(
+                                              offer.isVerified
+                                                  ? 'Mark unverified'
+                                                  : 'Mark verified',
+                                            ),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed: actionState.isLoading
+                                                ? null
+                                                : () => ref
+                                                      .read(
+                                                        offerActionsProvider
+                                                            .notifier,
+                                                      )
+                                                      .feature(
+                                                        offer.id,
+                                                        !offer.isFeatured,
+                                                      ),
+                                            icon: const Icon(
+                                              Icons.star_outline,
+                                            ),
+                                            label: Text(
+                                              offer.isFeatured
+                                                  ? 'Remove featured'
+                                                  : 'Feature',
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
-                                  ),
-                                  OutlinedButton.icon(
-                                    onPressed: actionState.isLoading
-                                        ? null
-                                        : () => ref
-                                              .read(
-                                                offerActionsProvider.notifier,
-                                              )
-                                              .feature(
-                                                offer.id,
-                                                !offer.isFeatured,
-                                              ),
-                                    icon: const Icon(Icons.star_outline),
-                                    label: Text(
-                                      offer.isFeatured
-                                          ? 'Remove featured'
-                                          : 'Feature',
-                                    ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -219,14 +293,75 @@ class OfferDetailsScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         );
       },
       loading: () => const AppLoadingView(label: 'Loading offer'),
       error: (error, _) => AppErrorView(message: error.toString()),
     );
   }
+}
+
+String _statusLabel(dynamic offer) {
+  if (offer.isExpired) {
+    return 'Expired';
+  }
+  if (offer.status == 'published' || offer.isPublished) {
+    return 'Published';
+  }
+  if (offer.status == 'pending_review' || offer.status == 'pending') {
+    return 'Pending Review';
+  }
+  if (offer.status == 'rejected') {
+    return 'Rejected';
+  }
+  if (offer.status == 'draft') {
+    return 'Draft';
+  }
+  return offer.status.isEmpty ? 'Pending Review' : offer.status;
+}
+
+Color _statusColor(dynamic offer) {
+  if (offer.isExpired) {
+    return Colors.black45;
+  }
+  if (offer.status == 'published' || offer.isPublished) {
+    return AppTheme.deepGreen;
+  }
+  if (offer.status == 'rejected') {
+    return Colors.red;
+  }
+  if (offer.status == 'draft') {
+    return Colors.black45;
+  }
+  return AppTheme.saffron;
+}
+
+Future<String?> _rejectionNotes(BuildContext context) {
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Reject offer'),
+      content: TextField(
+        controller: controller,
+        minLines: 3,
+        maxLines: 4,
+        decoration: const InputDecoration(labelText: 'Approval notes'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text.trim()),
+          child: const Text('Reject'),
+        ),
+      ],
+    ),
+  );
 }

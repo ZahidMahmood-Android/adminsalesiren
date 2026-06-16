@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/repositories/firebase_brands_repository.dart';
 import '../../domain/entities/brand.dart';
 import '../../domain/repositories/brands_repository.dart';
@@ -12,9 +13,12 @@ import '../../domain/usecases/delete_brand.dart';
 import '../../domain/usecases/update_brand.dart';
 
 final brandsRepositoryProvider = Provider<BrandsRepository>((ref) {
+  final user = ref.watch(currentUserProvider);
   return FirebaseBrandsRepository(
     ref.watch(firestoreProvider),
-    ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+    user?.id ?? ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+    user?.role ?? 'super_admin',
+    user?.brandId ?? '',
   );
 });
 
@@ -43,6 +47,23 @@ final activeBrandsProvider = StreamProvider.autoDispose<List<Brand>>((
       .watch(brandsRepositoryProvider)
       .watchBrands()
       .map((brands) => brands.where((brand) => brand.isActive).toList());
+});
+
+/// Only brands that have at least one registered brand-admin user.
+/// Used when assigning subscription plans — there is no point assigning
+/// a plan to a brand with no admin user to benefit from it.
+final registeredBrandsProvider = StreamProvider.autoDispose<List<Brand>>((
+  ref,
+) async* {
+  yield const <Brand>[];
+  yield* ref
+      .watch(brandsRepositoryProvider)
+      .watchBrands()
+      .map(
+        (brands) => brands
+            .where((b) => b.isActive && b.ownerUserIds.isNotEmpty)
+            .toList(),
+      );
 });
 
 final brandProvider = FutureProvider.autoDispose.family<Brand?, String>(

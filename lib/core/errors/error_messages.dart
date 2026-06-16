@@ -3,6 +3,13 @@ class ErrorMessages {
 
   static String friendly(Object? error) {
     final rawText = error.toString();
+
+    // Firebase exceptions are formatted as "[plugin/code] Human message".
+    // Extract just the human message when present so the fallback chain below
+    // sees clean text — and the final "Something went wrong" is less likely.
+    final extractedMessage = _extractFirebaseMessage(rawText);
+    if (extractedMessage != null) return extractedMessage;
+
     final text = rawText.toLowerCase();
 
     if (text.contains('the email or password is incorrect') ||
@@ -57,5 +64,22 @@ class ErrorMessages {
     }
 
     return 'Something went wrong. Please try again.';
+  }
+
+  /// Extracts the human-readable message from Firebase-style error strings
+  /// formatted as "[plugin/code] Some message here.".
+  ///
+  /// Returns `null` if the string is not in that format.
+  static String? _extractFirebaseMessage(String raw) {
+    final match = RegExp(
+      r'^\[[\w/.-]+\]\s+(.+)$',
+      dotAll: true,
+    ).firstMatch(raw.trim());
+    if (match == null) return null;
+    final msg = match.group(1)?.trim() ?? '';
+    if (msg.isEmpty) return null;
+    // Only use the extracted message if it's actually readable (not another code).
+    if (msg.startsWith('[')) return null;
+    return msg;
   }
 }

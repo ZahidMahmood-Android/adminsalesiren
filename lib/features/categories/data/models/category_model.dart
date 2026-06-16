@@ -11,6 +11,11 @@ class CategoryModel extends Category {
     required super.sortOrder,
     required super.createdAt,
     required super.updatedAt,
+    super.slug,
+    super.description,
+    super.colorHex,
+    super.isFeatured,
+    super.searchKeywords,
     super.userId,
   });
 
@@ -23,6 +28,11 @@ class CategoryModel extends Category {
       sortOrder: category.sortOrder,
       createdAt: category.createdAt,
       updatedAt: category.updatedAt,
+      slug: category.slug,
+      description: category.description,
+      colorHex: category.colorHex,
+      isFeatured: category.isFeatured,
+      searchKeywords: category.searchKeywords,
       userId: category.userId,
     );
   }
@@ -39,6 +49,11 @@ class CategoryModel extends Category {
       sortOrder: data['sortOrder'] as int? ?? 0,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
+      slug: data['slug'] as String? ?? doc.id,
+      description: data['description'] as String? ?? '',
+      colorHex: data['colorHex'] as String? ?? '',
+      isFeatured: data['isFeatured'] as bool? ?? false,
+      searchKeywords: _readStringList(data['searchKeywords']),
       userId: data['userId'] as String? ?? data['createdBy'] as String? ?? '',
     );
   }
@@ -57,12 +72,24 @@ class CategoryModel extends Category {
     return {
       'id': id,
       'name': name,
+      'slug': slug.isEmpty ? id : slug,
+      'description': description,
       'iconName': iconName,
+      'colorHex': colorHex,
       'isActive': isActive,
+      'isFeatured': isFeatured,
       'sortOrder': sortOrder,
+      'searchKeywords': searchKeywords,
       'userId': userId,
       if (includeCreatedAt) 'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
+  }
+
+  static List<String> _readStringList(Object? value) {
+    if (value is Iterable) {
+      return value.whereType<String>().toList();
+    }
+    return const [];
   }
 }

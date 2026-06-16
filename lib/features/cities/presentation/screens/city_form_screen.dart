@@ -9,6 +9,8 @@ import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../domain/entities/city.dart';
 import '../providers/city_providers.dart';
+import '../../../../core/widgets/app_error_dialog.dart';
+import '../../../../core/widgets/screen_layout.dart';
 
 class CityFormScreen extends ConsumerStatefulWidget {
   const CityFormScreen({super.key, this.cityId});
@@ -66,9 +68,12 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
         .save(city, isEditing: _isEditing);
     final actionState = ref.read(cityActionsProvider);
     if (actionState.hasError && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ErrorMessages.friendly(actionState.error))),
-      );
+      if (mounted)
+        await showAppError(
+          context,
+          actionState.error,
+          title: 'Could Not Save City',
+        );
       return;
     }
     if (mounted) {
@@ -113,7 +118,7 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
           _hydrate(city);
         }
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: screenPadding(context),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),

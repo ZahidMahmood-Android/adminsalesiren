@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../brands/domain/entities/brand.dart';
+import '../../../brands/presentation/providers/brand_providers.dart';
 import '../../data/repositories/firebase_cities_repository.dart';
 import '../../domain/entities/city.dart';
 import '../../domain/repositories/cities_repository.dart';
@@ -29,6 +32,36 @@ final activeCitiesProvider = StreamProvider.autoDispose<List<City>>((
       .watchCities()
       .map((cities) => cities.where((city) => city.isActive).toList());
 });
+
+final visibleCitiesProvider = StreamProvider.autoDispose<List<City>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  final cities = ref.watch(citiesProvider);
+  final brands = ref.watch(brandsProvider);
+  return cities.when(
+    data: (cityItems) {
+      if (user?.role != 'brand_admin') {
+        return Stream.value(cityItems);
+      }
+      final brandItems = brands.value ?? const <Brand>[];
+      final brand = _findBrand(brandItems, user?.brandId ?? '');
+      final allowed = brand?.cityIds.toSet() ?? const <String>{};
+      return Stream.value(
+        cityItems.where((city) => allowed.contains(city.id)).toList(),
+      );
+    },
+    loading: () => Stream.value(const <City>[]),
+    error: (error, stackTrace) => Stream.error(error, stackTrace),
+  );
+});
+
+Brand? _findBrand(Iterable<Brand> brands, String id) {
+  for (final brand in brands) {
+    if (brand.id == id) {
+      return brand;
+    }
+  }
+  return null;
+}
 
 final cityProvider = FutureProvider.autoDispose.family<City?, String>(
   (ref, id) => ref.watch(citiesRepositoryProvider).getCity(id),

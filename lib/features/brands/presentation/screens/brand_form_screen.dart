@@ -7,6 +7,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../categories/domain/entities/category.dart' as app_category;
 import '../../../categories/presentation/providers/category_providers.dart';
 import '../../../cities/domain/entities/city.dart';
@@ -14,6 +15,8 @@ import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/brand.dart';
 import '../providers/brand_providers.dart';
 import '../widgets/selection_block.dart';
+import '../../../../core/widgets/app_error_dialog.dart';
+import '../../../../core/widgets/screen_layout.dart';
 
 class BrandFormScreen extends ConsumerStatefulWidget {
   const BrandFormScreen({super.key, this.brandId});
@@ -31,10 +34,13 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
   final _websiteController = TextEditingController();
   final _instagramController = TextEditingController();
   final _facebookController = TextEditingController();
+  final _contactPhoneController = TextEditingController();
+  final _addressController = TextEditingController();
   final _selectedCategoryIds = <String>{};
   final _selectedCityIds = <String>{};
   var _isActive = true;
   var _hydrated = false;
+  Brand? _loadedBrand;
 
   bool get _isEditing => widget.brandId != null;
 
@@ -45,6 +51,8 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     _websiteController.dispose();
     _instagramController.dispose();
     _facebookController.dispose();
+    _contactPhoneController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -52,11 +60,14 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     if (_hydrated) {
       return;
     }
+    _loadedBrand = brand;
     _nameController.text = brand.name;
     _logoController.text = brand.logoUrl;
     _websiteController.text = brand.websiteUrl;
     _instagramController.text = brand.instagramUrl;
     _facebookController.text = brand.facebookUrl;
+    _contactPhoneController.text = brand.businessContactPhone;
+    _addressController.text = brand.address;
     _selectedCategoryIds
       ..clear()
       ..addAll(brand.categoryIds);
@@ -71,36 +82,60 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    if (_selectedCategoryIds.isEmpty || _selectedCityIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select at least one city and category.')),
-      );
+    final isBrandAdmin = ref.read(isBrandAdminProvider);
+    if (!isBrandAdmin &&
+        (_selectedCategoryIds.isEmpty || _selectedCityIds.isEmpty)) {
+      if (mounted)
+        showAppError(
+          context,
+          null,
+          message: 'Please select at least one city and category.',
+        );
       return;
     }
 
     final now = DateTime.now();
-    final brand = Brand(
-      id: widget.brandId ?? '',
-      name: _nameController.text.trim(),
-      logoUrl: _logoController.text.trim(),
-      websiteUrl: _websiteController.text.trim(),
-      instagramUrl: _instagramController.text.trim(),
-      facebookUrl: _facebookController.text.trim(),
-      categoryIds: _selectedCategoryIds.toList(),
-      cityIds: _selectedCityIds.toList(),
-      isActive: _isActive,
-      createdAt: now,
-      updatedAt: now,
-    );
+    final brand =
+        (_loadedBrand ??
+                Brand(
+                  id: widget.brandId ?? '',
+                  name: _nameController.text.trim(),
+                  logoUrl: '',
+                  websiteUrl: '',
+                  instagramUrl: '',
+                  facebookUrl: '',
+                  categoryIds: const [],
+                  cityIds: const [],
+                  isActive: true,
+                  createdAt: now,
+                  updatedAt: now,
+                ))
+            .copyWith(
+              id: widget.brandId ?? '',
+              name: _nameController.text.trim(),
+              logoUrl: _logoController.text.trim(),
+              websiteUrl: _websiteController.text.trim(),
+              instagramUrl: _instagramController.text.trim(),
+              facebookUrl: _facebookController.text.trim(),
+              categoryIds: _selectedCategoryIds.toList(),
+              cityIds: _selectedCityIds.toList(),
+              isActive: _isActive,
+              businessContactPhone: _contactPhoneController.text.trim(),
+              address: _addressController.text.trim(),
+              updatedAt: now,
+            );
 
     await ref
         .read(brandActionsProvider.notifier)
         .save(brand, isEditing: _isEditing);
     final actionState = ref.read(brandActionsProvider);
     if (actionState.hasError && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ErrorMessages.friendly(actionState.error))),
-      );
+      if (mounted)
+        await showAppError(
+          context,
+          actionState.error,
+          title: 'Could Not Save Brand',
+        );
       return;
     }
     if (mounted) {
@@ -136,6 +171,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     final categories = ref.watch(categoriesProvider);
     final cities = ref.watch(citiesProvider);
     final actionState = ref.watch(brandActionsProvider);
+    final isBrandAdmin = ref.watch(isBrandAdminProvider);
 
     return brandAsync.when(
       data: (brand) {
@@ -146,7 +182,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
           _hydrate(brand);
         }
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: screenPadding(context),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 920),
@@ -165,7 +201,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                                   ?.copyWith(fontWeight: FontWeight.w900),
                             ),
                           ),
-                          if (_isEditing)
+                          if (_isEditing && !isBrandAdmin)
                             IconButton(
                               tooltip: 'Delete brand',
                               onPressed: actionState.isLoading ? null : _delete,
@@ -176,6 +212,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                       const SizedBox(height: 22),
                       TextFormField(
                         controller: _nameController,
+                        enabled: !isBrandAdmin,
                         decoration: const InputDecoration(
                           labelText: 'Brand name',
                           prefixIcon: Icon(Icons.storefront_outlined),
@@ -232,31 +269,76 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: [
+                          SizedBox(
+                            width: 280,
+                            child: TextFormField(
+                              controller: _contactPhoneController,
+                              decoration: const InputDecoration(
+                                labelText: 'Contact phone',
+                                prefixIcon: Icon(Icons.phone_outlined),
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 580,
+                            child: TextFormField(
+                              controller: _addressController,
+                              decoration: const InputDecoration(
+                                labelText: 'Address',
+                                prefixIcon: Icon(Icons.location_on_outlined),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 20),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Active brand'),
-                        value: _isActive,
-                        onChanged: (value) => setState(() => _isActive = value),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Chip(
+                          avatar: Icon(
+                            Icons.circle,
+                            size: 12,
+                            color: _isActive
+                                ? const Color(0xFF0E7A5F)
+                                : const Color(0xFFB42318),
+                          ),
+                          label: Text(_isActive ? 'Active' : 'Inactive'),
+                          backgroundColor: _isActive
+                              ? const Color(0xFFE5F4F1)
+                              : const Color(0xFFFFE4E2),
+                          labelStyle: TextStyle(
+                            color: _isActive
+                                ? const Color(0xFF0E7A5F)
+                                : const Color(0xFFB42318),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
-                      SelectionBlock<City>(
-                        title: 'Cities',
-                        items: cities,
-                        selectedIds: _selectedCityIds,
-                        idOf: (city) => city.id,
-                        labelOf: (city) => city.name,
-                        onChanged: () => setState(() {}),
-                      ),
-                      const SizedBox(height: 18),
-                      SelectionBlock<app_category.Category>(
-                        title: 'Categories',
-                        items: categories,
-                        selectedIds: _selectedCategoryIds,
-                        idOf: (category) => category.id,
-                        labelOf: (category) => category.name,
-                        onChanged: () => setState(() {}),
-                      ),
+                      if (!isBrandAdmin) ...[
+                        SelectionBlock<City>(
+                          title: 'Cities',
+                          items: cities,
+                          selectedIds: _selectedCityIds,
+                          idOf: (city) => city.id,
+                          labelOf: (city) => city.name,
+                          onChanged: () => setState(() {}),
+                        ),
+                        const SizedBox(height: 18),
+                        SelectionBlock<app_category.Category>(
+                          title: 'Categories',
+                          items: categories,
+                          selectedIds: _selectedCategoryIds,
+                          idOf: (category) => category.id,
+                          labelOf: (category) => category.name,
+                          onChanged: () => setState(() {}),
+                        ),
+                      ],
                       const SizedBox(height: 26),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,

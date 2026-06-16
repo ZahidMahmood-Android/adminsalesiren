@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../brands/domain/entities/brand.dart';
+import '../../../brands/presentation/providers/brand_providers.dart';
 import '../../data/repositories/firebase_categories_repository.dart';
 import '../../domain/entities/category.dart';
 import '../../domain/repositories/categories_repository.dart';
@@ -31,6 +34,43 @@ final activeCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
       .watchCategories()
       .map((items) => items.where((category) => category.isActive).toList());
 });
+
+final visibleCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
+  ref,
+) {
+  final user = ref.watch(currentUserProvider);
+  final categories = ref.watch(categoriesProvider);
+  final brands = ref.watch(brandsProvider);
+  return categories.when(
+    data: (items) {
+      if (user?.role != 'brand_admin') {
+        return Stream.value(items);
+      }
+      final brandItems = brands.value ?? const <Brand>[];
+      final brand = _findBrand(brandItems, user?.brandId ?? '');
+      final allowed = brand?.categoryIds.toSet() ?? const <String>{};
+      return Stream.value(
+        items
+            .where(
+              (category) =>
+                  allowed.contains(category.id) || category.userId == user?.id,
+            )
+            .toList(),
+      );
+    },
+    loading: () => Stream.value(const <Category>[]),
+    error: (error, stackTrace) => Stream.error(error, stackTrace),
+  );
+});
+
+Brand? _findBrand(Iterable<Brand> brands, String id) {
+  for (final brand in brands) {
+    if (brand.id == id) {
+      return brand;
+    }
+  }
+  return null;
+}
 
 final categoryProvider = FutureProvider.autoDispose.family<Category?, String>(
   (ref, id) => ref.watch(categoriesRepositoryProvider).getCategory(id),

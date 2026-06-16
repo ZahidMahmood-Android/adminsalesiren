@@ -4,18 +4,10 @@ Flutter Web admin panel for managing verified sale and offer data for the Salesi
 
 ## Built So Far
 
-- Firebase initialization
-- Firebase Auth admin login
-- Clean Architecture feature folders
-- Riverpod repository and screen state providers
-- Premium Material 3 admin theme
-- Dashboard shell with sidebar and top bar
-- Brands CRUD
-- Offers CRUD
-- Firebase Storage offer image upload
-- Offer report review and status update
-- App-wide logging for startup, auth, repository writes, uploads, and action failures
-- Firestore and Storage rules drafts
+- Firebase Auth, Firestore, Storage with role-aware access (super admin, brand admin)
+- Cities, categories, brands, offers CRUD; users list; master-data seed settings
+- Brand registration, notification-request publish flow, dashboard analytics
+- Offer reports, image upload, app-wide logging, security rules
 
 ## Run Locally
 
@@ -24,27 +16,17 @@ flutter pub get
 flutter run -d chrome
 ```
 
-Before using real Firebase services, configure Firebase with FlutterFire or pass the required `--dart-define` values documented in `docs/firebase-setup.md`.
+Configure Firebase per `docs/firebase-setup.md` before connecting to a real project.
 
 ## Documentation
 
-- `AGENTS.md`: product and engineering standards for future work.
-- `docs/admin-panel-mvp-plan.md`: original MVP implementation plan.
-- `docs/implementation-log.md`: what was generated and why.
-- `docs/firebase-setup.md`: Firebase setup, seed data, and rule deployment.
-- `docs/firestore-schema.md`: Firestore collection schema.
-- `docs/logging.md`: Logging standard and safe logging rules.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| File | Purpose |
+|------|---------|
+| [`instructions.md`](./instructions.md) | **Agent and developer rules** — read before every task |
+| [`docs/updates-and-features.md`](./docs/updates-and-features.md) | New features and enhancements log |
+| [`docs/bug-fixes.md`](./docs/bug-fixes.md) | Bug fixes and troubleshooting |
+| [`docs/firestore-schema.md`](./docs/firestore-schema.md) | Firestore collection schema |
+| [`docs/firebase-setup.md`](./docs/firebase-setup.md) | Firebase setup and admin document |
+| [`docs/logging.md`](./docs/logging.md) | Logging standard |
+| [`docs/BUILD_AND_RUN.md`](./docs/BUILD_AND_RUN.md) | VS Code tasks and build/run |
+| [`AGENTS.md`](./AGENTS.md) | Short pointer for Cursor/agent tooling |

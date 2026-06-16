@@ -28,6 +28,22 @@ class OfferModel extends Offer {
     required super.createdBy,
     required super.createdAt,
     required super.updatedAt,
+    super.createdByUserId,
+    super.createdByRole,
+    super.status,
+    super.approvalStatus,
+    super.approvalNotes,
+    super.approvedBy,
+    super.approvedAt,
+    super.categoryIds,
+    super.categoryNames,
+    super.cityIds,
+    super.cityNames,
+    super.viewCount,
+    super.saveCount,
+    super.shareCount,
+    super.clickCount,
+    super.reportCount,
   });
 
   factory OfferModel.fromEntity(Offer offer) {
@@ -56,6 +72,22 @@ class OfferModel extends Offer {
       createdBy: offer.createdBy,
       createdAt: offer.createdAt,
       updatedAt: offer.updatedAt,
+      createdByUserId: offer.createdByUserId,
+      createdByRole: offer.createdByRole,
+      status: offer.status,
+      approvalStatus: offer.approvalStatus,
+      approvalNotes: offer.approvalNotes,
+      approvedBy: offer.approvedBy,
+      approvedAt: offer.approvedAt,
+      categoryIds: offer.categoryIds,
+      categoryNames: offer.categoryNames,
+      cityIds: offer.cityIds,
+      cityNames: offer.cityNames,
+      viewCount: offer.viewCount,
+      saveCount: offer.saveCount,
+      shareCount: offer.shareCount,
+      clickCount: offer.clickCount,
+      reportCount: offer.reportCount,
     );
   }
 
@@ -86,6 +118,45 @@ class OfferModel extends Offer {
       createdBy: data['createdBy'] as String? ?? '',
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),
+      createdByUserId:
+          data['createdByUserId'] as String? ??
+          data['createdBy'] as String? ??
+          '',
+      createdByRole: data['createdByRole'] as String? ?? 'super_admin',
+      status:
+          data['status'] as String? ??
+          ((data['isPublished'] as bool? ?? false) ? 'published' : 'draft'),
+      approvalStatus:
+          data['approvalStatus'] as String? ??
+          ((data['isVerified'] as bool? ?? false) ? 'approved' : 'pending'),
+      approvalNotes: data['approvalNotes'] as String? ?? '',
+      approvedBy: data['approvedBy'] as String? ?? '',
+      approvedAt: _readOptionalDate(data['approvedAt']),
+      categoryIds: _readStringList(data['categoryIds']).isEmpty
+          ? [
+              data['categoryId'] as String? ?? '',
+            ].where((id) => id.isNotEmpty).toList()
+          : _readStringList(data['categoryIds']),
+      categoryNames: _readStringList(data['categoryNames']).isEmpty
+          ? [
+              data['categoryName'] as String? ?? '',
+            ].where((name) => name.isNotEmpty).toList()
+          : _readStringList(data['categoryNames']),
+      cityIds: _readStringList(data['cityIds']).isEmpty
+          ? [
+              data['cityId'] as String? ?? '',
+            ].where((id) => id.isNotEmpty).toList()
+          : _readStringList(data['cityIds']),
+      cityNames: _readStringList(data['cityNames']).isEmpty
+          ? [
+              data['cityName'] as String? ?? '',
+            ].where((name) => name.isNotEmpty).toList()
+          : _readStringList(data['cityNames']),
+      viewCount: data['viewCount'] as int? ?? 0,
+      saveCount: data['saveCount'] as int? ?? 0,
+      shareCount: data['shareCount'] as int? ?? 0,
+      clickCount: data['clickCount'] as int? ?? 0,
+      reportCount: data['reportCount'] as int? ?? 0,
     );
   }
 
@@ -98,8 +169,12 @@ class OfferModel extends Offer {
       'brandName': brandName,
       'categoryId': categoryId,
       'categoryName': categoryName,
+      'categoryIds': categoryIds,
+      'categoryNames': categoryNames,
       'cityId': cityId,
       'cityName': cityName,
+      'cityIds': cityIds,
+      'cityNames': cityNames,
       'discountText': discountText,
       'discountType': discountType,
       'discountValue': discountValue,
@@ -113,6 +188,18 @@ class OfferModel extends Offer {
       'isFeatured': isFeatured,
       'aiConfidence': aiConfidence,
       'createdBy': createdBy,
+      'createdByUserId': createdByUserId,
+      'createdByRole': createdByRole,
+      'status': status,
+      'approvalStatus': approvalStatus,
+      'approvalNotes': approvalNotes,
+      'approvedBy': approvedBy,
+      'approvedAt': approvedAt == null ? null : Timestamp.fromDate(approvedAt!),
+      'viewCount': viewCount,
+      'saveCount': saveCount,
+      'shareCount': shareCount,
+      'clickCount': clickCount,
+      'reportCount': reportCount,
       if (includeCreatedAt) 'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -126,5 +213,19 @@ class OfferModel extends Offer {
       return value;
     }
     return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  static DateTime? _readOptionalDate(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    return _readDate(value);
+  }
+
+  static List<String> _readStringList(Object? value) {
+    if (value is Iterable) {
+      return value.whereType<String>().toList();
+    }
+    return const [];
   }
 }

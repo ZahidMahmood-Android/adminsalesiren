@@ -6,58 +6,256 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
+    function adminDocExists() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
-    // Admin document: only created via Firebase Console or backend
-    match /admins/{adminId} {
-      allow read: if isSignedIn() && request.auth.uid == adminId;
-      allow write: if false; // Admins must be created via Firebase Console
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    // Cities: public read, admin write
+    function hasUserDoc() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function role() {
+      return hasUserDoc() ? userDoc().data.role : null;
+    }
+
+    function isSuperAdmin() {
+      return adminDocExists()
+        || (hasUserDoc()
+          && userDoc().data.role == 'super_admin'
+          && userDoc().data.isActive == true);
+    }
+
+    function isAdminOrSuperAdmin() {
+      return isSuperAdmin()
+        || (hasUserDoc()
+          && userDoc().data.role == 'admin'
+          && userDoc().data.isActive == true);
+    }
+
+    function isBrandAdmin() {
+      return hasUserDoc()
+        && userDoc().data.role == 'brand_admin'
+        && userDoc().data.isActive == true
+        && userDoc().data.brandId is string
+        && userDoc().data.brandId != '';
+    }
+
+    function brandId() {
+      return isBrandAdmin() ? userDoc().data.brandId : '';
+    }
+
+    function ownsBrand(targetBrandId) {
+      return isBrandAdmin() && brandId() == targetBrandId;
+    }
+
+    function ownsOffer() {
+      return isBrandAdmin()
+        && resource.data.brandId == brandId();
+    }
+
+    function createsOwnOffer() {
+      let d = request.resource.data;
+      return isBrandAdmin()
+        && d.brandId == brandId()
+        && d.createdByUserId == request.auth.uid
+        && d.createdByRole == 'brand_admin'
+        && (
+          // Saved as pending review (default path)
+          (
+            d.status == 'pending_review'
+            && d.approvalStatus == 'pending'
+            && d.isPublished == false
+          )
+          // Saved as published directly by brand admin
+          || (
+            d.status == 'published'
+            && d.approvalStatus == 'approved'
+            && d.isPublished == true
+            && d.approvedBy == request.auth.uid
+          )
+        );
+    }
+
+    function ownsCategory() {
+      return isBrandAdmin()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    function createsOwnCategory() {
+      return isBrandAdmin()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.id is string
+        && request.resource.data.id != ''
+        && request.resource.data.name is string
+        && request.resource.data.name != '';
+    }
+
+    match /admins/{adminId} {
+      allow read: if isAdminOrSuperAdmin()
+        || (isSignedIn() && request.auth.uid == adminId);
+      allow write: if isAdminOrSuperAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAdminOrSuperAdmin()
+        || (isSignedIn() && request.auth.uid == userId);
+      allow create, update: if isAdminOrSuperAdmin()
+        || (isSignedIn() && request.auth.uid == userId);
+      allow delete: if isAdminOrSuperAdmin();
+    }
+
     match /cities/{cityId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdminOrSuperAdmin();
     }
 
-    // Categories: public read, admin write
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isAdminOrSuperAdmin() || createsOwnCategory();
+      allow update: if isAdminOrSuperAdmin()
+        || (ownsCategory()
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.id == resource.data.id);
+      allow delete: if isAdminOrSuperAdmin() || ownsCategory();
     }
 
-    // Brands: public read, admin write
-    match /brands/{brandId} {
+    match /brands/{targetBrandId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, delete: if isAdminOrSuperAdmin();
+      allow update: if isAdminOrSuperAdmin()
+        || (ownsBrand(targetBrandId)
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.name == resource.data.name
+          && request.resource.data.slug == resource.data.slug
+          && request.resource.data.approvalStatus == resource.data.approvalStatus
+          && request.resource.data.isVerified == resource.data.isVerified
+          && request.resource.data.isFeatured == resource.data.isFeatured
+          && request.resource.data.ownerUserIds == resource.data.ownerUserIds);
     }
 
-    // Offers: public read (published only), admin read/write all
     match /offers/{offerId} {
-      allow read: if resource.data.isPublished == true || isAdmin();
-      allow write: if isAdmin();
+      allow get: if resource.data.isPublished == true
+        || isAdminOrSuperAdmin()
+        || ownsOffer();
+      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow create: if isAdminOrSuperAdmin() || createsOwnOffer();
+      allow update: if isAdminOrSuperAdmin()
+        || (ownsOffer()
+          && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected', 'paused']
+          && request.resource.data.brandId == resource.data.brandId
+          && request.resource.data.createdByUserId == resource.data.createdByUserId
+          && (
+            request.resource.data.isPublished == false
+            || (
+              resource.data.status in ['pending', 'pending_review']
+              && request.resource.data.isPublished == true
+              && request.resource.data.status == 'published'
+              && request.resource.data.approvalStatus == 'approved'
+              && request.resource.data.approvedBy == request.auth.uid
+            )
+          ));
+      allow delete: if isAdminOrSuperAdmin()
+        || (ownsOffer() && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected']);
     }
 
-    // Offer Reports: any user can report, only admins can manage
     match /offer_reports/{reportId} {
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isAdmin();
+      // list: resource.data unavailable for queries; brand admin filters by brandId in code
+      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow get: if isAdminOrSuperAdmin()
+        || (isBrandAdmin() && resource.data.brandId == brandId());
+      allow update, delete: if isAdminOrSuperAdmin();
     }
 
-    // Notification Campaigns: admin only
+    match /notification_requests/{requestId} {
+      allow get: if isAdminOrSuperAdmin()
+        || (isBrandAdmin()
+          && (resource == null || resource.data.brandId == brandId()));
+      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow create: if isAdminOrSuperAdmin()
+        || (isBrandAdmin()
+          && request.resource.data.brandId == brandId()
+          && request.resource.data.requestedByUserId == request.auth.uid
+          && request.resource.data.status == 'pending');
+      allow update: if isAdminOrSuperAdmin()
+        || (isBrandAdmin()
+          && resource.data.brandId == brandId()
+          && resource.data.status == 'pending'
+          && request.resource.data.status in ['approved', 'pending', 'cancelled']
+          && (
+            request.resource.data.status != 'approved'
+            || request.resource.data.approvedBy == request.auth.uid
+          ));
+      allow delete: if isAdminOrSuperAdmin();
+    }
+
     match /notification_campaigns/{campaignId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isAdminOrSuperAdmin();
     }
 
-    // User profiles: user can manage own, admin can delete
-    match /users/{userId} {
-      allow create, read, update: if isSignedIn()
-        && request.auth.uid == userId;
-      allow delete: if isAdmin();
+    match /subscription_requests/{requestId} {
+      allow get: if isAdminOrSuperAdmin()
+        || (isBrandAdmin()
+          && (resource == null || resource.data.brandId == brandId()));
+      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow create: if isAdminOrSuperAdmin()
+        || (isBrandAdmin()
+          && request.resource.data.brandId == brandId());
+      allow update: if isAdminOrSuperAdmin();
+      allow delete: if isAdminOrSuperAdmin();
+    }
+
+    match /pricing_plans/{planId} {
+      allow read: if true;
+      allow write: if isAdminOrSuperAdmin();
+    }
+
+    match /brand_subscriptions/{subscriptionId} {
+      // list: resource.data unavailable for queries; brand admin filters by their own brandId in code
+      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow get: if isAdminOrSuperAdmin()
+        || (isBrandAdmin() && (resource == null || resource.data.brandId == brandId()));
+      allow write: if isAdminOrSuperAdmin();
+    }
+
+    match /brand_usage/{usageId} {
+      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      // resource == null guard: getOrCreateCurrentUsage does a doc.get() before creating;
+      // when the doc doesn't exist resource is null, so resource.data.brandId would be null
+      // and deny the read even for the owning brand admin.
+      allow get: if isAdminOrSuperAdmin()
+        || (isBrandAdmin() && (resource == null || resource.data.brandId == brandId()));
+      allow create, update: if isAdminOrSuperAdmin()
+        || (isBrandAdmin()
+          && request.resource.data.brandId == brandId());
+      allow delete: if isAdminOrSuperAdmin();
+    }
+
+    match /brand_payments/{paymentId} {
+      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow get: if isAdminOrSuperAdmin()
+        || (isBrandAdmin() && (resource == null || resource.data.brandId == brandId()));
+      allow create: if isAdminOrSuperAdmin()
+        || (isBrandAdmin()
+          && request.resource.data.brandId == brandId()
+          && request.resource.data.paymentStatus == 'pending');
+      allow update: if isAdminOrSuperAdmin();
+      // Verified payment records are immutable — they cannot be deleted by anyone.
+      allow delete: if isAdminOrSuperAdmin()
+        && resource.data.paymentStatus != 'verified';
+    }
+
+    // Catch-all: super admin can read any unlisted collection (e.g. future collections).
+    // Write access requires an explicit rule above.
+    match /{document=**} {
+      allow read: if isAdminOrSuperAdmin();
     }
   }
 }

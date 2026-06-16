@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/repositories/firebase_offer_image_repository.dart';
 import '../../data/repositories/firebase_offers_repository.dart';
 import '../../domain/entities/offer.dart';
@@ -15,11 +16,15 @@ import '../../domain/usecases/delete_offer.dart';
 import '../../domain/usecases/update_offer.dart';
 import '../../../notifications/domain/entities/notification_request.dart';
 import '../../../notifications/presentation/providers/notification_providers.dart';
+import '../../../subscriptions/presentation/providers/subscription_providers.dart';
 
 final offersRepositoryProvider = Provider<OffersRepository>((ref) {
+  final user = ref.watch(currentUserProvider);
   return FirebaseOffersRepository(
     ref.watch(firestoreProvider),
-    ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+    user?.id ?? ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
+    user?.role ?? 'super_admin',
+    user?.brandId ?? '',
   );
 });
 
@@ -65,7 +70,6 @@ class OfferFiltersController extends Notifier<OfferFilters> {
 
 final offersProvider = StreamProvider.autoDispose<List<Offer>>((ref) async* {
   final filters = ref.watch(offerFiltersProvider);
-  yield const <Offer>[];
   yield* ref.watch(offersRepositoryProvider).watchOffers(filters);
 });
 
@@ -90,23 +94,14 @@ class OfferActionsController extends AsyncNotifier<void> {
     String? id;
     state = await AsyncValue.guard(() async {
       id = await ref.read(createOfferProvider).call(offer);
-      await ref.read(createNotificationRequestProvider).call(
-            NotificationRequest(
-              id: '',
-              title: 'New offer available',
-              body: '${offer.brandName}: ${offer.discountText}',
-              topic: 'all_users',
-              type: 'new_offer',
-              data: {
-                'offerId': id ?? '',
-                'brandId': offer.brandId,
-                'categoryId': offer.categoryId,
-                'cityId': offer.cityId,
-              },
-              status: 'pending',
-              createdAt: DateTime.now(),
-            ),
-          );
+      final user = ref.read(currentUserProvider);
+      await _createOfferNotification(
+        offer.copyWith(
+          id: id,
+          createdByUserId: user?.id ?? '',
+          createdByRole: user?.role ?? 'super_admin',
+        ),
+      );
     });
     _logActionResult('Create offer action', id: id);
     return id;
@@ -124,18 +119,43 @@ class OfferActionsController extends AsyncNotifier<void> {
   Future<void> delete(String id) async {
     _log.warning('Delete offer action started id=$id');
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => ref.read(deleteOfferProvider).call(id),
-    );
+    state = await AsyncValue.guard(() async {
+      // Before deleting, check if this was an unpublished brand-admin offer
+      // so we can give back the quota that was consumed when it was created.
+      try {
+        final offer = await ref.read(offersRepositoryProvider).getOffer(id);
+        if (offer != null &&
+            !offer.isPublished &&
+            offer.createdByRole == 'brand_admin' &&
+            offer.brandId.isNotEmpty) {
+          await ref
+              .read(subscriptionsRepositoryProvider)
+              .incrementUsage(offer.brandId, offersCreated: -1);
+          _log.info(
+            'Decremented offersCreated usage for brandId=${offer.brandId}',
+          );
+        }
+      } catch (e) {
+        // Usage decrement is best-effort; don't block the delete.
+        _log.warning('Could not decrement usage before delete: $e');
+      }
+      await ref.read(deleteOfferProvider).call(id);
+    });
     _logActionResult('Delete offer action', id: id);
   }
 
   Future<void> publish(String id, bool isPublished) async {
     _log.info('Publish offer action started id=$id value=$isPublished');
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => ref.read(offersRepositoryProvider).publishOffer(id, isPublished),
-    );
+    state = await AsyncValue.guard(() async {
+      await ref.read(offersRepositoryProvider).publishOffer(id, isPublished);
+      if (isPublished) {
+        final offer = await ref.read(offersRepositoryProvider).getOffer(id);
+        if (offer != null) {
+          await _createOfferNotification(offer.copyWith(isPublished: true));
+        }
+      }
+    });
     _logActionResult('Publish offer action', id: id);
   }
 
@@ -157,11 +177,91 @@ class OfferActionsController extends AsyncNotifier<void> {
     _logActionResult('Feature offer action', id: id);
   }
 
+  Future<void> approve(String id) async {
+    final user = ref.read(currentUserProvider);
+    _log.info('Approve offer action started id=$id');
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(offersRepositoryProvider).approveOffer(id, user?.id ?? ''),
+    );
+    _logActionResult('Approve offer action', id: id);
+  }
+
+  Future<void> reject(String id, String notes) async {
+    final user = ref.read(currentUserProvider);
+    _log.info('Reject offer action started id=$id');
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref
+          .read(offersRepositoryProvider)
+          .rejectOffer(id, notes, user?.id ?? ''),
+    );
+    _logActionResult('Reject offer action', id: id);
+  }
+
   void _logActionResult(String label, {String? id}) {
     if (state.hasError) {
       _log.severe('$label failed id=$id', state.error, state.stackTrace);
     } else {
       _log.info('$label completed id=$id');
+    }
+  }
+
+  Future<void> _createOfferNotification(Offer offer) async {
+    try {
+      final user = ref.read(currentUserProvider);
+      if (user?.role == 'brand_admin' && offer.brandId.isNotEmpty) {
+        final limitMessage = await ref
+            .read(subscriptionActionsProvider.notifier)
+            .checkPushNotificationLimits(offer.brandId);
+        if (limitMessage != null) {
+          _log.warning(
+            'Notification request blocked for offer id=${offer.id}: $limitMessage',
+          );
+          return;
+        }
+      }
+      await ref
+          .read(createNotificationRequestProvider)
+          .call(
+            NotificationRequest(
+              id: '',
+              title: 'New offer available',
+              body: '${offer.brandName}: ${offer.discountText}',
+              topic: 'selected_cities',
+              type: 'new_offer',
+              data: {
+                'offerId': offer.id,
+                'brandId': offer.brandId,
+                'categoryId': offer.categoryId,
+                'categoryIds': offer.categoryIds.join(','),
+                'cityId': offer.cityId,
+                'cityIds': offer.cityIds.join(','),
+              },
+              brandId: offer.brandId,
+              offerId: offer.id,
+              requestedByUserId: offer.createdByUserId,
+              targetCityIds: offer.cityIds.isEmpty
+                  ? [offer.cityId]
+                  : offer.cityIds,
+              targetCategoryIds: offer.categoryIds.isEmpty
+                  ? [offer.categoryId]
+                  : offer.categoryIds,
+              status: offer.isPublished ? 'approved' : 'pending',
+              createdAt: DateTime.now(),
+            ),
+          );
+      if (user?.role == 'brand_admin' && offer.brandId.isNotEmpty) {
+        await ref
+            .read(subscriptionActionsProvider.notifier)
+            .recordPushRequested(offer.brandId);
+      }
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Notification request skipped for offer id=${offer.id}',
+        error,
+        stackTrace,
+      );
     }
   }
 }

@@ -17,24 +17,18 @@ class FirebaseCitiesRepository implements CitiesRepository {
 
   @override
   Stream<List<City>> watchCities() {
-    if (_currentUserId.isEmpty) {
-      return Stream.value(const <City>[]);
-    }
-    return _cities.where('userId', isEqualTo: _currentUserId).snapshots().map((snapshot) {
+    return _cities.snapshots().map((snapshot) {
       final cities = snapshot.docs.map(CityModel.fromSnapshot).toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       return cities;
     });
   }
 
   @override
   Future<List<City>> getCities() async {
-    if (_currentUserId.isEmpty) {
-      return const <City>[];
-    }
-    final snapshot = await _cities.where('userId', isEqualTo: _currentUserId).get();
+    final snapshot = await _cities.get();
     return snapshot.docs.map(CityModel.fromSnapshot).toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   }
 
   @override
@@ -46,8 +40,7 @@ class FirebaseCitiesRepository implements CitiesRepository {
     if (!snapshot.exists) {
       return null;
     }
-    final city = CityModel.fromSnapshot(snapshot);
-    return city.userId == _currentUserId ? city : null;
+    return CityModel.fromSnapshot(snapshot);
   }
 
   @override

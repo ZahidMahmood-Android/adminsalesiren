@@ -8,6 +8,17 @@ class NotificationRequest {
     required this.data,
     required this.status,
     required this.createdAt,
+    this.brandId = '',
+    this.offerId = '',
+    this.requestedByUserId = '',
+    this.targetCityIds = const [],
+    this.targetCategoryIds = const [],
+    this.adminNotes = '',
+    this.approvedBy = '',
+    this.approvedAt,
+    this.sentAt,
+    this.sentCount = 0,
+    this.openCount = 0,
   });
 
   final String id;
@@ -18,4 +29,15 @@ class NotificationRequest {
   final Map<String, String> data;
   final String status;
   final DateTime createdAt;
+  final String brandId;
+  final String offerId;
+  final String requestedByUserId;
+  final List<String> targetCityIds;
+  final List<String> targetCategoryIds;
+  final String adminNotes;
+  final String approvedBy;
+  final DateTime? approvedAt;
+  final DateTime? sentAt;
+  final int sentCount;
+  final int openCount;
 }

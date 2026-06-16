@@ -24,6 +24,22 @@ class Offer {
     required this.createdBy,
     required this.createdAt,
     required this.updatedAt,
+    this.createdByUserId = '',
+    this.createdByRole = 'super_admin',
+    this.status = 'published',
+    this.approvalStatus = 'approved',
+    this.approvalNotes = '',
+    this.approvedBy = '',
+    this.approvedAt,
+    this.categoryIds = const [],
+    this.categoryNames = const [],
+    this.cityIds = const [],
+    this.cityNames = const [],
+    this.viewCount = 0,
+    this.saveCount = 0,
+    this.shareCount = 0,
+    this.clickCount = 0,
+    this.reportCount = 0,
   });
 
   final String id;
@@ -50,6 +66,22 @@ class Offer {
   final String createdBy;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String createdByUserId;
+  final String createdByRole;
+  final String status;
+  final String approvalStatus;
+  final String approvalNotes;
+  final String approvedBy;
+  final DateTime? approvedAt;
+  final List<String> categoryIds;
+  final List<String> categoryNames;
+  final List<String> cityIds;
+  final List<String> cityNames;
+  final int viewCount;
+  final int saveCount;
+  final int shareCount;
+  final int clickCount;
+  final int reportCount;
 
   bool get isExpired => endDate.isBefore(DateTime.now());
 
@@ -78,6 +110,22 @@ class Offer {
     String? createdBy,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? createdByUserId,
+    String? createdByRole,
+    String? status,
+    String? approvalStatus,
+    String? approvalNotes,
+    String? approvedBy,
+    DateTime? approvedAt,
+    List<String>? categoryIds,
+    List<String>? categoryNames,
+    List<String>? cityIds,
+    List<String>? cityNames,
+    int? viewCount,
+    int? saveCount,
+    int? shareCount,
+    int? clickCount,
+    int? reportCount,
   }) {
     return Offer(
       id: id ?? this.id,
@@ -104,6 +152,22 @@ class Offer {
       createdBy: createdBy ?? this.createdBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      createdByUserId: createdByUserId ?? this.createdByUserId,
+      createdByRole: createdByRole ?? this.createdByRole,
+      status: status ?? this.status,
+      approvalStatus: approvalStatus ?? this.approvalStatus,
+      approvalNotes: approvalNotes ?? this.approvalNotes,
+      approvedBy: approvedBy ?? this.approvedBy,
+      approvedAt: approvedAt ?? this.approvedAt,
+      categoryIds: categoryIds ?? this.categoryIds,
+      categoryNames: categoryNames ?? this.categoryNames,
+      cityIds: cityIds ?? this.cityIds,
+      cityNames: cityNames ?? this.cityNames,
+      viewCount: viewCount ?? this.viewCount,
+      saveCount: saveCount ?? this.saveCount,
+      shareCount: shareCount ?? this.shareCount,
+      clickCount: clickCount ?? this.clickCount,
+      reportCount: reportCount ?? this.reportCount,
     );
   }
 }

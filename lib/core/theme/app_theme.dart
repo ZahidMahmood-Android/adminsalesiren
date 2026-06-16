@@ -1,78 +1,105 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'app_colors.dart';
+
 class AppTheme {
   const AppTheme._();
 
-  static const ink = Color(0xFF17201D);
-  static const deepGreen = Color(0xFF0F766E);
-  static const freshGreen = Color(0xFF14A38B);
-  static const coral = Color(0xFFE76F51);
-  static const saffron = Color(0xFFC99700);
-  static const paper = Color(0xFFF7F9F8);
-  static const line = Color(0xFFE3E8E5);
+  // Keep direct color aliases so existing code that reads `AppTheme.deepGreen`
+  // continues to work without changes.
+  static const ink = AppColors.ink;
+  static const deepGreen = AppColors.deepGreen;
+  static const freshGreen = AppColors.freshGreen;
+  static const coral = AppColors.coral;
+  static const saffron = AppColors.saffron;
+  static const paper = AppColors.paper;
+  static const line = AppColors.line;
 
-  static ThemeData light() {
+  // ── Light theme ──────────────────────────────────────────────────────
+  static ThemeData light() => _build(Brightness.light);
+
+  // ── Dark theme ───────────────────────────────────────────────────────
+  static ThemeData dark() => _build(Brightness.dark);
+
+  static ThemeData _build(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+
+    final primary = AppColors.deepGreen;
+    final bg = AppColors.background(brightness);
+    final surface = AppColors.surface(brightness);
+    final borderColor = AppColors.border(brightness);
+    final textColor = AppColors.textPrimary(brightness);
+
     final colorScheme = ColorScheme.fromSeed(
-      seedColor: deepGreen,
-      brightness: Brightness.light,
-      primary: deepGreen,
-      secondary: coral,
-      tertiary: saffron,
-      surface: Colors.white,
-      surfaceContainerHighest: paper,
-      outline: line,
+      seedColor: primary,
+      brightness: brightness,
+      primary: primary,
+      secondary: AppColors.coral,
+      tertiary: AppColors.saffron,
+      surface: surface,
+      surfaceContainerHighest: bg,
+      outline: borderColor,
+      onSurface: textColor,
+      onSurfaceVariant: AppColors.textMuted(brightness),
+      error: AppColors.error,
     );
 
     final textTheme = GoogleFonts.interTextTheme().apply(
-      bodyColor: ink,
-      displayColor: ink,
+      bodyColor: textColor,
+      displayColor: textColor,
     );
 
     return ThemeData(
       useMaterial3: true,
+      brightness: brightness,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: paper,
+      scaffoldBackgroundColor: bg,
       textTheme: textTheme,
       visualDensity: VisualDensity.standard,
       appBarTheme: AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: ink,
+        backgroundColor: surface,
+        foregroundColor: textColor,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: textTheme.titleLarge?.copyWith(
           fontWeight: FontWeight.w700,
-          color: ink,
+          color: textColor,
         ),
       ),
       cardTheme: CardThemeData(
-        color: Colors.white,
+        color: surface,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: const BorderSide(color: line),
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: borderColor),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: isDark ? AppColors.darkSurface : Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: line),
+          borderSide: BorderSide(color: borderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: line),
+          borderSide: BorderSide(color: borderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: deepGreen, width: 1.4),
+          borderSide: const BorderSide(color: AppColors.deepGreen, width: 1.4),
+        ),
+        labelStyle: TextStyle(color: AppColors.textMuted(brightness)),
+        hintStyle: TextStyle(
+          color: AppColors.textMuted(brightness).withOpacity(0.6),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: deepGreen,
+          backgroundColor: primary,
           foregroundColor: Colors.white,
           minimumSize: const Size(112, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -81,7 +108,7 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: deepGreen,
+          backgroundColor: primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -89,27 +116,44 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: ink,
-          side: const BorderSide(color: line),
+          foregroundColor: textColor,
+          side: BorderSide(color: borderColor),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: paper,
-        selectedColor: const Color(0xFFE5F4F1),
-        side: const BorderSide(color: line),
+        backgroundColor: bg,
+        selectedColor: AppColors.greenTint,
+        side: BorderSide(color: borderColor),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         labelStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
       dataTableTheme: DataTableThemeData(
-        headingRowColor: WidgetStateProperty.all(paper),
-        headingTextStyle: const TextStyle(
-          color: ink,
+        headingRowColor: WidgetStateProperty.all(bg),
+        headingTextStyle: TextStyle(
+          color: textColor,
           fontWeight: FontWeight.w800,
         ),
-        dataTextStyle: const TextStyle(color: ink),
+        dataTextStyle: TextStyle(color: textColor),
         dividerThickness: 0.8,
+      ),
+      dividerTheme: DividerThemeData(color: borderColor, thickness: 0.8),
+      listTileTheme: ListTileThemeData(
+        textColor: textColor,
+        iconColor: AppColors.textMuted(brightness),
+      ),
+      iconTheme: IconThemeData(color: AppColors.textMuted(brightness)),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? Colors.white
+              : AppColors.textMuted(brightness),
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) =>
+              states.contains(WidgetState.selected) ? primary : borderColor,
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/extensions/date_time_extensions.dart';
 import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -18,6 +19,8 @@ import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/offer.dart';
 import '../providers/offer_providers.dart';
 import '../widgets/offer_form_controls.dart';
+import '../../../subscriptions/presentation/providers/subscription_providers.dart';
+import '../../../../core/widgets/screen_layout.dart';
 
 class OfferFormScreen extends ConsumerStatefulWidget {
   const OfferFormScreen({super.key, this.offerId});
@@ -40,8 +43,10 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
 
   String? _brandId;
   String? _categoryId;
-  String? _cityId;
+  final _selectedCategoryIds = <String>{};
+  final _selectedCityIds = <String>{};
   String _discountType = 'percentage';
+  String _status = 'pending_review';
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isPublished = false;
@@ -50,6 +55,8 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
   String _imageUrl = '';
   XFile? _pickedImage;
   var _hydrated = false;
+  var _isSubmitting = false;
+  Offer? _loadedOffer;
 
   bool get _isEditing => widget.offerId != null;
 
@@ -68,6 +75,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     if (_hydrated) {
       return;
     }
+    _loadedOffer = offer;
     _titleController.text = offer.title;
     _descriptionController.text = offer.description;
     _discountTextController.text = offer.discountText;
@@ -76,8 +84,19 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     _onlineUrlController.text = offer.onlineUrl;
     _brandId = offer.brandId;
     _categoryId = offer.categoryId;
-    _cityId = offer.cityId;
+    _selectedCategoryIds
+      ..clear()
+      ..addAll(
+        offer.categoryIds.isEmpty ? [offer.categoryId] : offer.categoryIds,
+      );
+    _selectedCityIds
+      ..clear()
+      ..addAll(offer.cityIds.isEmpty ? [offer.cityId] : offer.cityIds);
     _discountType = offer.discountType;
+    _status = offer.isPublished ? 'published' : offer.status;
+    if (_status == 'pending') {
+      _status = 'pending_review';
+    }
     _startDate = offer.startDate;
     _endDate = offer.endDate;
     _isPublished = offer.isPublished;
@@ -123,6 +142,37 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     });
   }
 
+  void _showLimitDialog(BuildContext context, String message) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.bar_chart_outlined, size: 40),
+        title: const Text('Limit Reached'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.go('/subscriptions/my');
+            },
+            child: const Text('View Subscription'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.go('/subscriptions/request');
+            },
+            child: const Text('Upgrade Plan'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Wait for Next Month'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit({
     required List<Brand> brands,
     required List<app_category.Category> categories,
@@ -131,27 +181,158 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    if (mounted) setState(() => _isSubmitting = true);
+    try {
+      await _doSubmit(brands: brands, categories: categories, cities: cities);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _doSubmit({
+    required List<Brand> brands,
+    required List<app_category.Category> categories,
+    required List<City> cities,
+  }) async {
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select start and end dates.')),
-      );
+      if (mounted) {
+        showAppError(
+          context,
+          null,
+          message: 'Please select start and end dates.',
+        );
+      }
       return;
     }
     if (!_endDate!.isAfter(_startDate!)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('End date must be after start date.')),
-      );
+      if (mounted) {
+        showAppError(
+          context,
+          null,
+          message: 'End date must be after start date.',
+        );
+      }
+      return;
+    }
+    if (_selectedCityIds.isEmpty) {
+      if (mounted) {
+        showAppError(
+          context,
+          null,
+          message: 'Please select at least one city.',
+        );
+      }
+      return;
+    }
+    if (_selectedCategoryIds.isEmpty && _categoryId == null) {
+      if (mounted) {
+        showAppError(
+          context,
+          null,
+          message: 'Please select at least one category.',
+        );
+      }
       return;
     }
 
     final brand = brands.firstWhere((item) => item.id == _brandId);
-    final category = categories.firstWhere((item) => item.id == _categoryId);
-    final city = cities.firstWhere((item) => item.id == _cityId);
+    final selectedCategories = categories
+        .where(
+          (item) =>
+              _selectedCategoryIds.contains(item.id) || item.id == _categoryId,
+        )
+        .toList();
+    if (selectedCategories.isEmpty) {
+      if (mounted) {
+        showAppError(
+          context,
+          null,
+          message:
+              'The selected category is not available. Please choose another.',
+        );
+      }
+      return;
+    }
+    final category = selectedCategories.first;
+    final selectedCities = cities
+        .where((item) => _selectedCityIds.contains(item.id))
+        .toList();
+    if (selectedCities.isEmpty) {
+      if (mounted) {
+        showAppError(
+          context,
+          null,
+          message: 'The selected city is not available. Please choose another.',
+        );
+      }
+      return;
+    }
+    final city = selectedCities.first;
     final user = ref.read(currentUserProvider);
+    final isBrandAdminUser = user?.role == 'brand_admin';
     final now = DateTime.now();
     final discountValue = num.tryParse(_discountValueController.text.trim());
 
-    var offer = Offer(
+    if (isBrandAdminUser && !_isEditing) {
+      try {
+        final limitMessage = await ref
+            .read(subscriptionActionsProvider.notifier)
+            .checkOfferCreationLimits(brand.id);
+        if (limitMessage != null) {
+          if (mounted) _showLimitDialog(context, limitMessage);
+          return;
+        }
+      } catch (_) {
+        // If quota check fails (e.g. usage record not yet created), allow save to proceed.
+      }
+    }
+    if (isBrandAdminUser && _isFeatured) {
+      try {
+        final featuredMessage = await ref
+            .read(subscriptionActionsProvider.notifier)
+            .checkFeaturedOfferLimits(brand.id);
+        if (featuredMessage != null) {
+          if (mounted) _showLimitDialog(context, featuredMessage);
+          return;
+        }
+      } catch (_) {
+        // If featured-offer quota check fails, allow save to proceed.
+      }
+    }
+
+    final baseOffer = _isEditing && _loadedOffer != null
+        ? _loadedOffer!
+        : Offer(
+            id: widget.offerId ?? '',
+            title: '',
+            description: '',
+            brandId: '',
+            brandName: '',
+            categoryId: '',
+            categoryName: '',
+            cityId: '',
+            cityName: '',
+            discountText: '',
+            discountType: _discountType,
+            discountValue: null,
+            imageUrl: '',
+            sourceUrl: '',
+            onlineUrl: '',
+            startDate: _startDate!,
+            endDate: _endDate!,
+            isVerified: false,
+            isPublished: false,
+            isFeatured: false,
+            aiConfidence: null,
+            createdBy: user?.id ?? '',
+            createdAt: now,
+            updatedAt: now,
+          );
+    final selectedStatus = isBrandAdminUser ? _status : baseOffer.status;
+    final selectedPublished = isBrandAdminUser
+        ? selectedStatus == 'published'
+        : _isPublished;
+    var offer = baseOffer.copyWith(
       id: widget.offerId ?? '',
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
@@ -159,8 +340,12 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       brandName: brand.name,
       categoryId: category.id,
       categoryName: category.name,
+      categoryIds: selectedCategories.map((item) => item.id).toList(),
+      categoryNames: selectedCategories.map((item) => item.name).toList(),
       cityId: city.id,
       cityName: city.name,
+      cityIds: selectedCities.map((item) => item.id).toList(),
+      cityNames: selectedCities.map((item) => item.name).toList(),
       discountText: _discountTextController.text.trim(),
       discountType: _discountType,
       discountValue: discountValue,
@@ -170,11 +355,24 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       startDate: _startDate!,
       endDate: _endDate!,
       isVerified: _isVerified,
-      isPublished: _isPublished,
+      isPublished: selectedPublished,
       isFeatured: _isFeatured,
-      aiConfidence: null,
-      createdBy: user?.id ?? '',
-      createdAt: now,
+      status: isBrandAdminUser ? selectedStatus : baseOffer.status,
+      approvalStatus: isBrandAdminUser
+          ? selectedStatus == 'published'
+                ? 'approved'
+                : 'pending'
+          : baseOffer.approvalStatus,
+      approvedBy: isBrandAdminUser
+          ? selectedStatus == 'published'
+                ? user?.id ?? ''
+                : ''
+          : baseOffer.approvedBy,
+      approvedAt: isBrandAdminUser
+          ? selectedStatus == 'published'
+                ? now
+                : null
+          : baseOffer.approvedAt,
       updatedAt: now,
     );
 
@@ -189,12 +387,52 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     final actionState = ref.read(offerActionsProvider);
     if (actionState.hasError || offerId == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorMessages.friendly(actionState.error))),
+        await showAppError(
+          context,
+          actionState.error,
+          title: 'Could Not Save Offer',
         );
       }
       return;
     }
+    if (isBrandAdminUser && !_isEditing) {
+      try {
+        await ref
+            .read(subscriptionActionsProvider.notifier)
+            .recordOfferCreated(brand.id);
+        if (_isFeatured) {
+          await ref
+              .read(subscriptionActionsProvider.notifier)
+              .recordFeaturedUsed(brand.id);
+        }
+      } catch (_) {
+        // Usage tracking is best-effort; don't block navigation after a successful save.
+      }
+    }
+    offer = offer.copyWith(
+      id: offerId,
+      createdByUserId: user?.id ?? '',
+      createdByRole: user?.role ?? 'super_admin',
+      status: user?.role == 'brand_admin' ? selectedStatus : offer.status,
+      approvalStatus: user?.role == 'brand_admin'
+          ? selectedStatus == 'published'
+                ? 'approved'
+                : 'pending'
+          : offer.approvalStatus,
+      isPublished: user?.role == 'brand_admin'
+          ? selectedPublished
+          : offer.isPublished,
+      approvedBy: user?.role == 'brand_admin'
+          ? selectedStatus == 'published'
+                ? user?.id ?? ''
+                : ''
+          : offer.approvedBy,
+      approvedAt: user?.role == 'brand_admin'
+          ? selectedStatus == 'published'
+                ? now
+                : null
+          : offer.approvedAt,
+    );
 
     if (_pickedImage != null) {
       final bytes = await _pickedImage!.readAsBytes();
@@ -207,7 +445,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
             contentType:
                 _pickedImage!.mimeType ?? _contentTypeFor(_pickedImage!.name),
           );
-      offer = offer.copyWith(id: offerId, imageUrl: imageUrl);
+      offer = offer.copyWith(imageUrl: imageUrl);
       await actions.saveChanges(offer);
     }
 
@@ -221,10 +459,12 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     final offerAsync = _isEditing
         ? ref.watch(offerProvider(widget.offerId!))
         : const AsyncValue<Offer?>.data(null);
-    final brands = ref.watch(activeBrandsProvider);
-    final categories = ref.watch(categoriesProvider);
-    final cities = ref.watch(citiesProvider);
+    final brands = ref.watch(brandsProvider);
+    final categories = ref.watch(visibleCategoriesProvider);
+    final cities = ref.watch(visibleCitiesProvider);
     final actionState = ref.watch(offerActionsProvider);
+    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final user = ref.watch(currentUserProvider);
 
     return offerAsync.when(
       data: (offer) {
@@ -234,16 +474,57 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         if (offer != null) {
           _hydrate(offer);
         }
+        final publishedBrandOffer =
+            isBrandAdmin && offer != null && offer.isPublished;
 
         final brandItems = brands.value ?? const <Brand>[];
         final categoryItems =
             categories.value ?? const <app_category.Category>[];
         final cityItems = cities.value ?? const <City>[];
+        if (!_hydrated && isBrandAdmin && (user?.brandId.isNotEmpty ?? false)) {
+          _brandId = user!.brandId;
+        }
+        final selectedBrand = _brandById(brandItems, _brandId);
         final loadingLookups =
             brands.isLoading || categories.isLoading || cities.isLoading;
+        if (publishedBrandOffer) {
+          return SingleChildScrollView(
+            padding: screenPadding(context),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: AppCard(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
+                        size: 42,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'This offer is already published and cannot be edited.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                      const SizedBox(height: 18),
+                      FilledButton.icon(
+                        onPressed: () => context.go('/offers/${offer.id}'),
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('View offer'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
 
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: screenPadding(context),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1040),
@@ -259,6 +540,31 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                             ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 22),
+                      DropdownBox(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _status,
+                          decoration: const InputDecoration(
+                            labelText: 'Status',
+                            prefixIcon: Icon(Icons.info_outline),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'pending_review',
+                              child: Text('Pending Review'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'published',
+                              child: Text('Published'),
+                            ),
+                          ],
+                          onChanged: publishedBrandOffer
+                              ? null
+                              : (value) => setState(
+                                  () => _status = value ?? 'pending_review',
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _titleController,
                         decoration: const InputDecoration(
@@ -288,64 +594,133 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                           spacing: 16,
                           runSpacing: 16,
                           children: [
-                            DropdownBox(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _brandId,
-                                decoration: const InputDecoration(
-                                  labelText: 'Brand',
+                            if (isBrandAdmin)
+                              DropdownBox(
+                                child: TextFormField(
+                                  initialValue: selectedBrand?.name ?? '',
+                                  enabled: false,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Brand',
+                                    prefixIcon: Icon(Icons.storefront_outlined),
+                                  ),
+                                  validator: (_) =>
+                                      (_brandId == null || _brandId!.isEmpty)
+                                      ? 'Brand required'
+                                      : null,
                                 ),
-                                items: brandItems
-                                    .map(
-                                      (brand) => DropdownMenuItem(
-                                        value: brand.id,
-                                        child: Text(brand.name),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) =>
-                                    setState(() => _brandId = value),
-                                validator: (value) =>
-                                    value == null ? 'Brand required' : null,
+                              )
+                            else
+                              DropdownBox(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _brandId,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Brand',
+                                  ),
+                                  items: brandItems
+                                      .map(
+                                        (brand) => DropdownMenuItem(
+                                          value: brand.id,
+                                          child: Text(brand.name),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) =>
+                                      setState(() => _brandId = value),
+                                  validator: (value) =>
+                                      value == null ? 'Brand required' : null,
+                                ),
                               ),
-                            ),
                             DropdownBox(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _categoryId,
-                                decoration: const InputDecoration(
-                                  labelText: 'Category',
-                                ),
-                                items: categoryItems
-                                    .map(
-                                      (category) => DropdownMenuItem(
-                                        value: category.id,
-                                        child: Text(category.name),
+                              child: isBrandAdmin
+                                  ? InputDecorator(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Categories',
+                                        prefixIcon: Icon(
+                                          Icons.category_outlined,
+                                        ),
+                                      ),
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: categoryItems.map((category) {
+                                          final selected = _selectedCategoryIds
+                                              .contains(category.id);
+                                          return FilterChip(
+                                            label: Text(category.name),
+                                            selected: selected,
+                                            onSelected: (value) {
+                                              setState(() {
+                                                if (value) {
+                                                  _selectedCategoryIds.add(
+                                                    category.id,
+                                                  );
+                                                } else {
+                                                  _selectedCategoryIds.remove(
+                                                    category.id,
+                                                  );
+                                                }
+                                                _categoryId =
+                                                    _selectedCategoryIds.isEmpty
+                                                    ? null
+                                                    : _selectedCategoryIds
+                                                          .first;
+                                              });
+                                            },
+                                          );
+                                        }).toList(),
                                       ),
                                     )
-                                    .toList(),
-                                onChanged: (value) =>
-                                    setState(() => _categoryId = value),
-                                validator: (value) =>
-                                    value == null ? 'Category required' : null,
-                              ),
-                            ),
-                            DropdownBox(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _cityId,
-                                decoration: const InputDecoration(
-                                  labelText: 'City',
-                                ),
-                                items: cityItems
-                                    .map(
-                                      (city) => DropdownMenuItem(
-                                        value: city.id,
-                                        child: Text(city.name),
+                                  : DropdownButtonFormField<String>(
+                                      initialValue: _categoryId,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Category',
                                       ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) =>
-                                    setState(() => _cityId = value),
-                                validator: (value) =>
-                                    value == null ? 'City required' : null,
+                                      items: categoryItems
+                                          .map(
+                                            (category) => DropdownMenuItem(
+                                              value: category.id,
+                                              child: Text(category.name),
+                                            ),
+                                          )
+                                          .toList(),
+                                      onChanged: (value) =>
+                                          setState(() => _categoryId = value),
+                                      validator: (value) => value == null
+                                          ? 'Category required'
+                                          : null,
+                                    ),
+                            ),
+                            SizedBox(
+                              width: 360,
+                              child: InputDecorator(
+                                decoration: const InputDecoration(
+                                  labelText: 'Cities',
+                                  prefixIcon: Icon(
+                                    Icons.location_city_outlined,
+                                  ),
+                                ),
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: cityItems.map((city) {
+                                    final selected = _selectedCityIds.contains(
+                                      city.id,
+                                    );
+                                    return FilterChip(
+                                      label: Text(city.name),
+                                      selected: selected,
+                                      onSelected: (value) {
+                                        setState(() {
+                                          if (value) {
+                                            _selectedCityIds.add(city.id);
+                                          } else {
+                                            _selectedCityIds.remove(city.id);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
                               ),
                             ),
                           ],
@@ -462,12 +837,6 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                         runSpacing: 8,
                         children: [
                           FilterChip(
-                            label: const Text('Published'),
-                            selected: _isPublished,
-                            onSelected: (value) =>
-                                setState(() => _isPublished = value),
-                          ),
-                          FilterChip(
                             label: const Text('Verified'),
                             selected: _isVerified,
                             onSelected: (value) =>
@@ -491,14 +860,17 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                           ),
                           const SizedBox(width: 12),
                           FilledButton.icon(
-                            onPressed: actionState.isLoading || loadingLookups
+                            onPressed:
+                                _isSubmitting ||
+                                    actionState.isLoading ||
+                                    loadingLookups
                                 ? null
                                 : () => _submit(
                                     brands: brandItems,
                                     categories: categoryItems,
                                     cities: cityItems,
                                   ),
-                            icon: actionState.isLoading
+                            icon: _isSubmitting || actionState.isLoading
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
@@ -534,4 +906,13 @@ String _contentTypeFor(String fileName) {
     return 'image/webp';
   }
   return 'image/jpeg';
+}
+
+Brand? _brandById(List<Brand> brands, String? id) {
+  for (final brand in brands) {
+    if (brand.id == id) {
+      return brand;
+    }
+  }
+  return null;
 }

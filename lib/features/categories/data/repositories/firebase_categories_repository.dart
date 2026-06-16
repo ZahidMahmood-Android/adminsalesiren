@@ -17,10 +17,7 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
 
   @override
   Stream<List<Category>> watchCategories() {
-    if (_currentUserId.isEmpty) {
-      return Stream.value(const <Category>[]);
-    }
-    return _categories.where('userId', isEqualTo: _currentUserId).snapshots().map((snapshot) {
+    return _categories.snapshots().map((snapshot) {
       final categories = snapshot.docs.map(CategoryModel.fromSnapshot).toList()
         ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       return categories;
@@ -29,10 +26,7 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
 
   @override
   Future<List<Category>> getCategories() async {
-    if (_currentUserId.isEmpty) {
-      return const <Category>[];
-    }
-    final snapshot = await _categories.where('userId', isEqualTo: _currentUserId).get();
+    final snapshot = await _categories.get();
     return snapshot.docs.map(CategoryModel.fromSnapshot).toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
   }
@@ -46,8 +40,7 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
     if (!snapshot.exists) {
       return null;
     }
-    final category = CategoryModel.fromSnapshot(snapshot);
-    return category.userId == _currentUserId ? category : null;
+    return CategoryModel.fromSnapshot(snapshot);
   }
 
   @override

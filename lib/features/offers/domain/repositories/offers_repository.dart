@@ -10,4 +10,6 @@ abstract class OffersRepository {
   Future<void> publishOffer(String id, bool isPublished);
   Future<void> verifyOffer(String id, bool isVerified);
   Future<void> featureOffer(String id, bool isFeatured);
+  Future<void> approveOffer(String id, String approvedBy);
+  Future<void> rejectOffer(String id, String notes, String approvedBy);
 }

@@ -6,10 +6,17 @@ import '../../domain/repositories/brands_repository.dart';
 import '../models/brand_model.dart';
 
 class FirebaseBrandsRepository implements BrandsRepository {
-  FirebaseBrandsRepository(this._firestore, this._currentUserId);
+  FirebaseBrandsRepository(
+    this._firestore,
+    this._currentUserId,
+    this._currentUserRole,
+    this._currentBrandId,
+  );
 
   final FirebaseFirestore _firestore;
   final String _currentUserId;
+  final String _currentUserRole;
+  final String _currentBrandId;
   final _log = AppLogger.get('FirebaseBrandsRepository');
 
   CollectionReference<Map<String, dynamic>> get _brands =>
@@ -17,14 +24,12 @@ class FirebaseBrandsRepository implements BrandsRepository {
 
   @override
   Stream<List<Brand>> watchBrands() {
-    if (_currentUserId.isEmpty) {
-      return Stream.value(const <Brand>[]);
-    }
-    return _brands.where('userId', isEqualTo: _currentUserId).snapshots().map((
-      snapshot,
-    ) {
-      final brands = snapshot.docs.map(BrandModel.fromSnapshot).toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+    return _brands.snapshots().map((snapshot) {
+      final brands = snapshot.docs
+          .map(BrandModel.fromSnapshot)
+          .where(_canReadBrand)
+          .toList()
+        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       return brands;
     });
   }
@@ -39,7 +44,7 @@ class FirebaseBrandsRepository implements BrandsRepository {
       return null;
     }
     final brand = BrandModel.fromSnapshot(snapshot);
-    return brand.userId == _currentUserId ? brand : null;
+    return _canReadBrand(brand) ? brand : null;
   }
 
   @override
@@ -75,5 +80,12 @@ class FirebaseBrandsRepository implements BrandsRepository {
   Future<void> deleteBrand(String id) {
     _log.warning('Deleting brand id=$id');
     return _brands.doc(id).delete();
+  }
+
+  bool _canReadBrand(Brand brand) {
+    if (_currentUserRole == 'brand_admin') {
+      return brand.id == _currentBrandId || brand.ownerUserIds.contains(_currentUserId);
+    }
+    return true;
   }
 }

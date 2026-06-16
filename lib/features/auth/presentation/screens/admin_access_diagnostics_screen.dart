@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_loading_view.dart';
 import '../providers/auth_providers.dart';
 import '../widgets/diagnostic_checklist_item.dart';
 import '../widgets/diagnostic_info_row.dart';
+import '../../../../core/widgets/screen_layout.dart';
 
 class AdminAccessDiagnosticsPage extends ConsumerWidget {
   const AdminAccessDiagnosticsPage({super.key});
@@ -23,7 +24,7 @@ class AdminAccessDiagnosticsPage extends ConsumerWidget {
         centerTitle: true,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: screenPadding(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -133,11 +133,11 @@ Review and deploy:
 firebase deploy --only firestore:rules,storage
 ```
 
-The current draft allows public reads for active catalog data and admin-only writes through the `admins/{uid}` document check.
+The current draft allows public reads for active catalog data and role-based writes through `admins/{uid}` and `users/{uid}` profiles. See `firestore.rules` and `docs/bug-fixes.md`.
 
-## Dashboard Permission Troubleshooting
+## Create Admin Document
 
-If login succeeds but the dashboard shows permission errors in Android Studio or Chrome DevTools, check these first:
+After creating the first Firebase Auth user, add an admin marker document:
 
 1. Copy the signed-in user's Firebase Auth `uid`.
 2. Create a Firestore document at `admins/{uid}`.
@@ -152,7 +152,14 @@ If login succeeds but the dashboard shows permission errors in Android Studio or
 }
 ```
 
-4. Deploy the local `firestore.rules` file if the Firebase Console rules are different.
-5. Refresh the admin panel.
+For role-aware flows, also create `users/{uid}` with `role`, `brandId` (for brand admins), and `isActive`.
 
-Without `admins/{uid}`, the app will allow Firebase Auth login but block dashboard data that requires admin access.
+## Dashboard Permission Troubleshooting
+
+If login succeeds but the dashboard shows permission errors in Android Studio or Chrome DevTools:
+
+1. Complete the [Create Admin Document](#create-admin-document) steps above.
+2. Deploy the local `firestore.rules` file if the Firebase Console rules are different.
+3. Refresh the admin panel.
+
+Without `admins/{uid}` and/or a valid `users/{uid}` profile, the app will allow Firebase Auth login but block dashboard data that requires admin access.
