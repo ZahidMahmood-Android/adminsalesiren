@@ -4,6 +4,120 @@ Log all bug fixes here **before** implementing. For new features use `docs/updat
 
 ---
 
+## 2026-06-17 — Offer featured requires verified and listing status pill
+**Files:** offer form/detail/list/actions as needed
+**Fix:** Prevent unverified offers from being featured and align offer listing status pill style with notification request listing.
+
+---
+
+## 2026-06-17 — Login left panel post-animation jerk
+**File:** `lib/features/auth/presentation/widgets/login_brand_panel.dart`
+**Fix:** Replaced slide+audio trigger behavior with a stable fade-only text reveal to prevent the left panel from jerking after animation completes.
+
+---
+
+## 2026-06-17 — Login logo background removal
+**File:** `lib/features/auth/presentation/widgets/login_brand_panel.dart`
+**Fix:** Removed background wrapper from login logo so only the logo image appears on the login screen.
+
+---
+
+## 2026-06-17 — Logo green tile background and small sizing
+**Files:** `lib/core/widgets/app_shell.dart`, `lib/features/auth/presentation/widgets/login_brand_panel.dart`
+**Fix:** Removed green logo tile background and increased logo render size in sidebar/dashboard brand mark and login panel so the parrot icon fits better.
+
+---
+
+## 2026-06-17 — Notification request status selector overflow
+**File:** `lib/features/notifications/presentation/screens/notification_requests_screen.dart`
+**Fix:** Prevent right-side `RenderFlex` overflow by making status selector width adaptive based on how many action icons are rendered in each list row.
+
+---
+
+## 2026-06-17 — Notification request selector/pill/action alignment
+**File:** `lib/features/notifications/presentation/screens/notification_requests_screen.dart`
+**Fix:** Hide the status pill when status selector is visible, and keep view/edit/delete action icons to the right side of the selector in notification request list rows.
+
+---
+
+## 2026-06-17 — Published offer edit/delete lock
+**Files:** offer list/detail actions and Firestore rules as needed
+**Fix:** Published offers cannot be edited or deleted; they can only be expired.
+
+---
+
+## 2026-06-17 — Offer form dropdown assertion and expired edit lock
+**Files:** offer form/detail/list widgets as needed
+**Fix:** Prevent dropdown initial-value assertions from invalid/duplicate option values and block editing expired offers.
+
+---
+
+## 2026-06-17 — Dashboard recent offers ownership visibility
+**Files:** dashboard screen/provider as needed
+**Fix:** Show dashboard recent offers created by the current signed-in user only.
+
+---
+
+## 2026-06-17 — Notification request ownership visibility
+**Files:** notification request repository/provider as needed
+**Fix:** Show notification requests created by the current signed-in user only.
+
+---
+
+## 2026-06-17 — Profile settings routing
+**Files:** app shell/profile navigation and router as needed
+**Fix:** Ensure clicking Profile Settings opens the correct profile/settings page instead of redirecting to dashboard.
+
+---
+
+## 2026-06-17 — Offer image upload stuck and notification cleanup on delete
+**Files:** offer form/actions, offer image repository, notification repository as needed
+**Fix:** Prevent offer create/edit from getting stuck during image upload, and delete linked notification requests when an offer is deleted.
+
+---
+
+## 2026-06-17 — Offer list ownership, loaders, refresh, and delete confirmation
+**Files:** offer list/detail/form/providers/widgets as needed
+**Fix:** Show offers created by the current user where required, ensure save/delete actions show loading and refresh offer views, and require confirmation before deleting.
+
+---
+
+## 2026-06-17 — Manager CRUD permissions and city routing
+**Files:** `app_router.dart`, `firestore.rules`, city/category/offer/notification screens/providers as needed
+**Fix:** Ensure manager role has CRUD access for categories, cities, offers, and notification requests, and fix Add New City route redirecting to dashboard.
+
+---
+
+## 2026-06-17 — CRUD speed for categories, cities, and offers
+**Files:** `firebase_offers_repository.dart`, `firebase_categories_repository.dart`, `firebase_cities_repository.dart`, `offer_providers.dart`, `category_providers.dart`, `city_providers.dart`
+**Fix:** Reduce slow loading and action latency by keeping Firestore streams query-based, avoiding unnecessary initial empty emissions, and using server timestamps for lightweight create/update/delete writes where safe.
+
+---
+
+## 2026-06-17 — Slow load/save/update/delete on offers, categories, and cities
+**Files:** `firebase_offers_repository.dart`, `firebase_categories_repository.dart`, `firebase_cities_repository.dart`, `offer_providers.dart`, `category_providers.dart`, `city_providers.dart`
+**Fix:** Replaced full-collection snapshot reads with query-based Firestore streams (`orderBy` and role/filter-aware `where` constraints), and removed extra initial empty-stream emits in providers that caused unnecessary intermediate loading/rebuild cycles.
+
+---
+
+## 2026-06-17 — Offer view/edit showed persistent loading + manager city/category permissions
+**Files:** `offer_form_screen.dart`, `offer_details_screen.dart`, `app_router.dart`, `firestore.rules`
+**Fix:** Removed stale action-loading dependency from offer edit/view UI paths to prevent persistent loading indicators, allowed manager access to city form routes, and expanded Firestore city/category write permissions so managers can add/update/activate/delete categories and cities.
+
+---
+
+## 2026-06-17 — Offers list kept showing loading after create/update
+**File:** `lib/features/offers/presentation/screens/offers_list_screen.dart`
+**Fix:** Removed global screen loading binding to `offerActionsProvider.isLoading` on the offers list page. This avoids stale action-state causing persistent loading UI after create/update navigation.
+
+---
+
+## 2026-06-17 — NetworkImageLoadException for blocked favicon/logo URLs
+**File:** `lib/core/widgets/app_avatar.dart`
+**Fix:** Replaced `CircleAvatar(backgroundImage: NetworkImage(...))` with a guarded `Image.network` render path using `errorBuilder`, so failed logo/favicon HTTP requests gracefully fall back to initials/icon instead of throwing `NetworkImageLoadException`.
+
+---
+
 ## 2026-06-16 — Register brand allowed submission without selecting existing brand
 **File:** `register_brand_screen.dart`
 **Fix:** `_submit()` now returns early with a friendly error if `_selectedBrand == null`, preventing accidental brand creation outside the dedicated "New Brand" flow.

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
+import '../../../auth/domain/entities/user_roles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/repositories/firebase_offer_image_repository.dart';
 import '../../data/repositories/firebase_offers_repository.dart';
@@ -68,9 +69,9 @@ class OfferFiltersController extends Notifier<OfferFilters> {
   }
 }
 
-final offersProvider = StreamProvider.autoDispose<List<Offer>>((ref) async* {
+final offersProvider = StreamProvider.autoDispose<List<Offer>>((ref) {
   final filters = ref.watch(offerFiltersProvider);
-  yield* ref.watch(offersRepositoryProvider).watchOffers(filters);
+  return ref.watch(offersRepositoryProvider).watchOffers(filters);
 });
 
 final offerProvider = FutureProvider.autoDispose.family<Offer?, String>(
@@ -84,6 +85,9 @@ final offerActionsProvider =
 
 class OfferActionsController extends AsyncNotifier<void> {
   final _log = AppLogger.get('OfferActionsController');
+
+  bool _isBrandScopedRole(String? role) =>
+      role == UserRoles.brandAdmin || role == UserRoles.manager;
 
   @override
   FutureOr<void> build() {}
@@ -103,6 +107,7 @@ class OfferActionsController extends AsyncNotifier<void> {
         ),
       );
     });
+    _refreshOffers(id: id);
     _logActionResult('Create offer action', id: id);
     return id;
   }
@@ -113,6 +118,7 @@ class OfferActionsController extends AsyncNotifier<void> {
     state = await AsyncValue.guard(
       () => ref.read(updateOfferProvider).call(offer),
     );
+    _refreshOffers(id: offer.id);
     _logActionResult('Update offer action', id: offer.id);
   }
 
@@ -126,7 +132,7 @@ class OfferActionsController extends AsyncNotifier<void> {
         final offer = await ref.read(offersRepositoryProvider).getOffer(id);
         if (offer != null &&
             !offer.isPublished &&
-            offer.createdByRole == 'brand_admin' &&
+            _isBrandScopedRole(offer.createdByRole) &&
             offer.brandId.isNotEmpty) {
           await ref
               .read(subscriptionsRepositoryProvider)
@@ -139,8 +145,13 @@ class OfferActionsController extends AsyncNotifier<void> {
         // Usage decrement is best-effort; don't block the delete.
         _log.warning('Could not decrement usage before delete: $e');
       }
+      await ref
+          .read(notificationsRepositoryProvider)
+          .deleteRequestsForOffer(id);
       await ref.read(deleteOfferProvider).call(id);
     });
+    ref.invalidate(notificationRequestsProvider);
+    _refreshOffers(id: id);
     _logActionResult('Delete offer action', id: id);
   }
 
@@ -156,7 +167,18 @@ class OfferActionsController extends AsyncNotifier<void> {
         }
       }
     });
+    _refreshOffers(id: id);
     _logActionResult('Publish offer action', id: id);
+  }
+
+  Future<void> expire(String id) async {
+    _log.info('Expire offer action started id=$id');
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(offersRepositoryProvider).expireOffer(id),
+    );
+    _refreshOffers(id: id);
+    _logActionResult('Expire offer action', id: id);
   }
 
   Future<void> verify(String id, bool isVerified) async {
@@ -165,15 +187,23 @@ class OfferActionsController extends AsyncNotifier<void> {
     state = await AsyncValue.guard(
       () => ref.read(offersRepositoryProvider).verifyOffer(id, isVerified),
     );
+    _refreshOffers(id: id);
     _logActionResult('Verify offer action', id: id);
   }
 
   Future<void> feature(String id, bool isFeatured) async {
     _log.info('Feature offer action started id=$id value=$isFeatured');
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
-      () => ref.read(offersRepositoryProvider).featureOffer(id, isFeatured),
-    );
+    state = await AsyncValue.guard(() async {
+      if (isFeatured) {
+        final offer = await ref.read(offersRepositoryProvider).getOffer(id);
+        if (offer == null || !offer.isVerified) {
+          throw StateError('Only verified offers can be featured.');
+        }
+      }
+      await ref.read(offersRepositoryProvider).featureOffer(id, isFeatured);
+    });
+    _refreshOffers(id: id);
     _logActionResult('Feature offer action', id: id);
   }
 
@@ -184,6 +214,7 @@ class OfferActionsController extends AsyncNotifier<void> {
     state = await AsyncValue.guard(
       () => ref.read(offersRepositoryProvider).approveOffer(id, user?.id ?? ''),
     );
+    _refreshOffers(id: id);
     _logActionResult('Approve offer action', id: id);
   }
 
@@ -196,7 +227,18 @@ class OfferActionsController extends AsyncNotifier<void> {
           .read(offersRepositoryProvider)
           .rejectOffer(id, notes, user?.id ?? ''),
     );
+    _refreshOffers(id: id);
     _logActionResult('Reject offer action', id: id);
+  }
+
+  void _refreshOffers({String? id}) {
+    if (state.hasError) {
+      return;
+    }
+    ref.invalidate(offersProvider);
+    if (id != null && id.isNotEmpty) {
+      ref.invalidate(offerProvider(id));
+    }
   }
 
   void _logActionResult(String label, {String? id}) {
@@ -210,7 +252,7 @@ class OfferActionsController extends AsyncNotifier<void> {
   Future<void> _createOfferNotification(Offer offer) async {
     try {
       final user = ref.read(currentUserProvider);
-      if (user?.role == 'brand_admin' && offer.brandId.isNotEmpty) {
+      if (user?.role == UserRoles.brandAdmin && offer.brandId.isNotEmpty) {
         final limitMessage = await ref
             .read(subscriptionActionsProvider.notifier)
             .checkPushNotificationLimits(offer.brandId);
@@ -251,7 +293,7 @@ class OfferActionsController extends AsyncNotifier<void> {
               createdAt: DateTime.now(),
             ),
           );
-      if (user?.role == 'brand_admin' && offer.brandId.isNotEmpty) {
+      if (user?.role == UserRoles.brandAdmin && offer.brandId.isNotEmpty) {
         await ref
             .read(subscriptionActionsProvider.notifier)
             .recordPushRequested(offer.brandId);

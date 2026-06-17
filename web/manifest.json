@@ -1,11 +1,11 @@
 {
-    "name": "adminpanel",
-    "short_name": "adminpanel",
+    "name": "Sale Siren",
+    "short_name": "Sale Siren",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Sale Siren admin panel.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

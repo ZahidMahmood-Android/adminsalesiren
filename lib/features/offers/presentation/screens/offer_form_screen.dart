@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +10,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
+import '../../../auth/domain/entities/user_roles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/domain/entities/brand.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
@@ -47,6 +49,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
   final _selectedCityIds = <String>{};
   String _discountType = 'percentage';
   String _status = 'pending_review';
+  String _lifecycleStatus = 'active';
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isPublished = false;
@@ -97,8 +100,22 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     if (_status == 'pending') {
       _status = 'pending_review';
     }
+    if (_status != 'pending_review' && _status != 'published') {
+      _status = 'pending_review';
+    }
+    if (![
+      'percentage',
+      'flat',
+      'upto_percentage',
+      'upto_amount',
+      'bundle',
+      'other',
+    ].contains(_discountType)) {
+      _discountType = 'other';
+    }
     _startDate = offer.startDate;
     _endDate = offer.endDate;
+    _lifecycleStatus = _lifecycleForDate(offer.endDate);
     _isPublished = offer.isPublished;
     _isVerified = offer.isVerified;
     _isFeatured = offer.isFeatured;
@@ -138,6 +155,25 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         }
       } else {
         _endDate = picked;
+      }
+      _lifecycleStatus = _lifecycleForDate(_endDate);
+    });
+  }
+
+  void _setLifecycleStatus(String value) {
+    final today = DateTime.now();
+    final date = DateTime(today.year, today.month, today.day);
+    setState(() {
+      _lifecycleStatus = value;
+      if (value == 'expired') {
+        _startDate = date.subtract(const Duration(days: 7));
+        _endDate = date.subtract(const Duration(days: 1));
+      } else if (value == 'ending_soon') {
+        _startDate = date;
+        _endDate = date.add(const Duration(days: 2));
+      } else {
+        _startDate = date;
+        _endDate = date.add(const Duration(days: 14));
       }
     });
   }
@@ -184,6 +220,10 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     if (mounted) setState(() => _isSubmitting = true);
     try {
       await _doSubmit(brands: brands, categories: categories, cities: cities);
+    } catch (error) {
+      if (mounted) {
+        await showAppError(context, error, title: 'Could Not Save Offer');
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -235,7 +275,24 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       return;
     }
 
-    final brand = brands.firstWhere((item) => item.id == _brandId);
+    if (_brandId == null || _brandId!.isEmpty) {
+      if (mounted) {
+        showAppError(context, null, message: 'Brand required');
+      }
+      return;
+    }
+    final brand = _brandById(brands, _brandId);
+    if (brand == null) {
+      if (mounted) {
+        showAppError(
+          context,
+          null,
+          message:
+              'The selected brand is not available. Please choose another.',
+        );
+      }
+      return;
+    }
     final selectedCategories = categories
         .where(
           (item) =>
@@ -269,11 +326,23 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     }
     final city = selectedCities.first;
     final user = ref.read(currentUserProvider);
-    final isBrandAdminUser = user?.role == 'brand_admin';
+    final isBrandScopedUser =
+        user?.role == UserRoles.brandAdmin || user?.role == UserRoles.manager;
+    final enforceSubscriptionLimits = user?.role == UserRoles.brandAdmin;
     final now = DateTime.now();
-    final discountValue = num.tryParse(_discountValueController.text.trim());
+    final discountValue = int.tryParse(_discountValueController.text.trim());
+    if (_isFeatured && !_isVerified) {
+      if (mounted) {
+        showAppError(
+          context,
+          null,
+          message: 'Only verified offers can be featured.',
+        );
+      }
+      return;
+    }
 
-    if (isBrandAdminUser && !_isEditing) {
+    if (enforceSubscriptionLimits && !_isEditing) {
       try {
         final limitMessage = await ref
             .read(subscriptionActionsProvider.notifier)
@@ -286,7 +355,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         // If quota check fails (e.g. usage record not yet created), allow save to proceed.
       }
     }
-    if (isBrandAdminUser && _isFeatured) {
+    if (enforceSubscriptionLimits && _isFeatured) {
       try {
         final featuredMessage = await ref
             .read(subscriptionActionsProvider.notifier)
@@ -328,8 +397,8 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
             createdAt: now,
             updatedAt: now,
           );
-    final selectedStatus = isBrandAdminUser ? _status : baseOffer.status;
-    final selectedPublished = isBrandAdminUser
+    final selectedStatus = isBrandScopedUser ? _status : baseOffer.status;
+    final selectedPublished = isBrandScopedUser
         ? selectedStatus == 'published'
         : _isPublished;
     var offer = baseOffer.copyWith(
@@ -357,18 +426,18 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       isVerified: _isVerified,
       isPublished: selectedPublished,
       isFeatured: _isFeatured,
-      status: isBrandAdminUser ? selectedStatus : baseOffer.status,
-      approvalStatus: isBrandAdminUser
+      status: isBrandScopedUser ? selectedStatus : baseOffer.status,
+      approvalStatus: isBrandScopedUser
           ? selectedStatus == 'published'
                 ? 'approved'
                 : 'pending'
           : baseOffer.approvalStatus,
-      approvedBy: isBrandAdminUser
+      approvedBy: isBrandScopedUser
           ? selectedStatus == 'published'
                 ? user?.id ?? ''
                 : ''
           : baseOffer.approvedBy,
-      approvedAt: isBrandAdminUser
+      approvedAt: isBrandScopedUser
           ? selectedStatus == 'published'
                 ? now
                 : null
@@ -395,7 +464,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       }
       return;
     }
-    if (isBrandAdminUser && !_isEditing) {
+    if (enforceSubscriptionLimits && !_isEditing) {
       try {
         await ref
             .read(subscriptionActionsProvider.notifier)
@@ -413,21 +482,19 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       id: offerId,
       createdByUserId: user?.id ?? '',
       createdByRole: user?.role ?? 'super_admin',
-      status: user?.role == 'brand_admin' ? selectedStatus : offer.status,
-      approvalStatus: user?.role == 'brand_admin'
+      status: isBrandScopedUser ? selectedStatus : offer.status,
+      approvalStatus: isBrandScopedUser
           ? selectedStatus == 'published'
                 ? 'approved'
                 : 'pending'
           : offer.approvalStatus,
-      isPublished: user?.role == 'brand_admin'
-          ? selectedPublished
-          : offer.isPublished,
-      approvedBy: user?.role == 'brand_admin'
+      isPublished: isBrandScopedUser ? selectedPublished : offer.isPublished,
+      approvedBy: isBrandScopedUser
           ? selectedStatus == 'published'
                 ? user?.id ?? ''
                 : ''
           : offer.approvedBy,
-      approvedAt: user?.role == 'brand_admin'
+      approvedAt: isBrandScopedUser
           ? selectedStatus == 'published'
                 ? now
                 : null
@@ -462,9 +529,10 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     final brands = ref.watch(brandsProvider);
     final categories = ref.watch(visibleCategoriesProvider);
     final cities = ref.watch(visibleCitiesProvider);
-    final actionState = ref.watch(offerActionsProvider);
-    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
     final user = ref.watch(currentUserProvider);
+    final actionState = ref.watch(offerActionsProvider);
+    final isSaving = _isSubmitting || actionState.isLoading;
 
     return offerAsync.when(
       data: (offer) {
@@ -474,20 +542,23 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         if (offer != null) {
           _hydrate(offer);
         }
-        final publishedBrandOffer =
-            isBrandAdmin && offer != null && offer.isPublished;
+        final lockedOffer =
+            offer != null && (offer.isExpired || offer.isPublished);
 
         final brandItems = brands.value ?? const <Brand>[];
-        final categoryItems =
-            categories.value ?? const <app_category.Category>[];
+        final categoryItems = _uniqueCategories(
+          categories.value ?? const <app_category.Category>[],
+        );
         final cityItems = cities.value ?? const <City>[];
-        if (!_hydrated && isBrandAdmin && (user?.brandId.isNotEmpty ?? false)) {
+        if (!_hydrated &&
+            isBrandScopedUser &&
+            (user?.brandId.isNotEmpty ?? false)) {
           _brandId = user!.brandId;
         }
         final selectedBrand = _brandById(brandItems, _brandId);
         final loadingLookups =
             brands.isLoading || categories.isLoading || cities.isLoading;
-        if (publishedBrandOffer) {
+        if (lockedOffer) {
           return SingleChildScrollView(
             padding: screenPadding(context),
             child: Center(
@@ -504,7 +575,9 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        'This offer is already published and cannot be edited.',
+                        offer.isExpired
+                            ? 'This offer is expired and cannot be edited.'
+                            : 'This offer is already published and cannot be edited.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w900),
@@ -540,29 +613,85 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                             ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 22),
-                      DropdownBox(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _status,
-                          decoration: const InputDecoration(
-                            labelText: 'Status',
-                            prefixIcon: Icon(Icons.info_outline),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'pending_review',
-                              child: Text('Pending Review'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'published',
-                              child: Text('Published'),
-                            ),
-                          ],
-                          onChanged: publishedBrandOffer
-                              ? null
-                              : (value) => setState(
-                                  () => _status = value ?? 'pending_review',
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        children: [
+                          DropdownBox(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _status,
+                              decoration: const InputDecoration(
+                                labelText: 'Status',
+                                prefixIcon: Icon(Icons.info_outline),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'pending_review',
+                                  child: Text('Pending Review'),
                                 ),
-                        ),
+                                DropdownMenuItem(
+                                  value: 'published',
+                                  child: Text('Published'),
+                                ),
+                              ],
+                              onChanged: lockedOffer
+                                  ? null
+                                  : (value) => setState(
+                                      () => _status = value ?? 'pending_review',
+                                    ),
+                            ),
+                          ),
+                          DropdownBox(
+                            child: DropdownButtonFormField<bool>(
+                              initialValue: _isVerified,
+                              decoration: const InputDecoration(
+                                labelText: 'Verification',
+                                prefixIcon: Icon(Icons.verified_outlined),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: true,
+                                  child: Text('Verified'),
+                                ),
+                                DropdownMenuItem(
+                                  value: false,
+                                  child: Text('Unverified'),
+                                ),
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => _isVerified = value ?? false),
+                            ),
+                          ),
+                          DropdownBox(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _lifecycleStatus,
+                              decoration: const InputDecoration(
+                                labelText: 'Offer lifecycle',
+                                prefixIcon: Icon(Icons.timeline_outlined),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'active',
+                                  child: Text('Active'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'ending_soon',
+                                  child: Text('Ending Soon'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'expired',
+                                  child: Text('Expired'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                _setLifecycleStatus(value);
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -594,7 +723,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                           spacing: 16,
                           runSpacing: 16,
                           children: [
-                            if (isBrandAdmin)
+                            if (isBrandScopedUser)
                               DropdownBox(
                                 child: TextFormField(
                                   initialValue: selectedBrand?.name ?? '',
@@ -611,27 +740,31 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                               )
                             else
                               DropdownBox(
-                                child: DropdownButtonFormField<String>(
-                                  initialValue: _brandId,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Brand',
+                                child: DropdownMenu<String>(
+                                  width: 360,
+                                  requestFocusOnTap: true,
+                                  initialSelection: _brandId,
+                                  enableSearch: true,
+                                  enableFilter: true,
+                                  label: const Text('Brand'),
+                                  leadingIcon: const Icon(
+                                    Icons.storefront_outlined,
                                   ),
-                                  items: brandItems
+                                  hintText: 'Select brand',
+                                  dropdownMenuEntries: brandItems
                                       .map(
-                                        (brand) => DropdownMenuItem(
+                                        (brand) => DropdownMenuEntry(
                                           value: brand.id,
-                                          child: Text(brand.name),
+                                          label: brand.name,
                                         ),
                                       )
                                       .toList(),
-                                  onChanged: (value) =>
+                                  onSelected: (value) =>
                                       setState(() => _brandId = value),
-                                  validator: (value) =>
-                                      value == null ? 'Brand required' : null,
                                 ),
                               ),
                             DropdownBox(
-                              child: isBrandAdmin
+                              child: isBrandScopedUser
                                   ? InputDecorator(
                                       decoration: const InputDecoration(
                                         labelText: 'Categories',
@@ -671,7 +804,10 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                                       ),
                                     )
                                   : DropdownButtonFormField<String>(
-                                      initialValue: _categoryId,
+                                      initialValue: _singleMatchingValue(
+                                        _categoryId,
+                                        categoryItems.map((item) => item.id),
+                                      ),
                                       decoration: const InputDecoration(
                                         labelText: 'Category',
                                       ),
@@ -758,6 +894,14 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                                   child: Text('Flat amount'),
                                 ),
                                 DropdownMenuItem(
+                                  value: 'upto_percentage',
+                                  child: Text('Up to percentage'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'upto_amount',
+                                  child: Text('Up to amount'),
+                                ),
+                                DropdownMenuItem(
                                   value: 'bundle',
                                   child: Text('Bundle'),
                                 ),
@@ -775,8 +919,11 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                             child: TextFormField(
                               controller: _discountValueController,
                               keyboardType: TextInputType.number,
+                              inputFormatters:  [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
                               decoration: const InputDecoration(
-                                labelText: 'Discount value',
+                                labelText: 'Discount value (numbers only)',
                                 prefixIcon: Icon(Icons.numbers),
                               ),
                             ),
@@ -832,23 +979,12 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                         onPick: _pickImage,
                       ),
                       const SizedBox(height: 18),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 8,
-                        children: [
-                          FilterChip(
-                            label: const Text('Verified'),
-                            selected: _isVerified,
-                            onSelected: (value) =>
-                                setState(() => _isVerified = value),
-                          ),
-                          FilterChip(
-                            label: const Text('Featured'),
-                            selected: _isFeatured,
-                            onSelected: (value) =>
-                                setState(() => _isFeatured = value),
-                          ),
-                        ],
+                      FilterChip(
+                        label: const Text('Featured'),
+                        selected: _isFeatured,
+                        onSelected: _isVerified
+                            ? (value) => setState(() => _isFeatured = value)
+                            : null,
                       ),
                       const SizedBox(height: 28),
                       Row(
@@ -860,17 +996,14 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                           ),
                           const SizedBox(width: 12),
                           FilledButton.icon(
-                            onPressed:
-                                _isSubmitting ||
-                                    actionState.isLoading ||
-                                    loadingLookups
+                            onPressed: isSaving || loadingLookups
                                 ? null
                                 : () => _submit(
                                     brands: brandItems,
                                     categories: categoryItems,
                                     cities: cityItems,
                                   ),
-                            icon: _isSubmitting || actionState.isLoading
+                            icon: isSaving
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
@@ -915,4 +1048,46 @@ Brand? _brandById(List<Brand> brands, String? id) {
     }
   }
   return null;
+}
+
+List<app_category.Category> _uniqueCategories(
+  List<app_category.Category> categories,
+) {
+  final seen = <String>{};
+  final unique = <app_category.Category>[];
+  for (final category in categories) {
+    if (seen.add(category.id)) {
+      unique.add(category);
+    }
+  }
+  return unique;
+}
+
+String? _singleMatchingValue(String? value, Iterable<String> options) {
+  if (value == null) {
+    return null;
+  }
+  var matches = 0;
+  for (final option in options) {
+    if (option == value) {
+      matches++;
+    }
+  }
+  return matches == 1 ? value : null;
+}
+
+String _lifecycleForDate(DateTime? endDate) {
+  if (endDate == null) {
+    return 'active';
+  }
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final end = DateTime(endDate.year, endDate.month, endDate.day);
+  if (end.isBefore(today)) {
+    return 'expired';
+  }
+  if (!end.isAfter(today.add(const Duration(days: 3)))) {
+    return 'ending_soon';
+  }
+  return 'active';
 }

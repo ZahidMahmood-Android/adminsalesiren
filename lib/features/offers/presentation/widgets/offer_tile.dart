@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/extensions/date_time_extensions.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/widgets/app_status_chip.dart';
+import '../../../../core/widgets/app_badge.dart';
 import '../../../../core/widgets/app_text_view.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -20,7 +20,6 @@ class OfferTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final actionState = ref.watch(offerActionsProvider);
     final isSuperAdmin = ref.watch(isSuperAdminProvider);
-    final statusLabel = _statusLabel(offer);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -75,21 +74,23 @@ class OfferTile extends ConsumerWidget {
         spacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          AppStatusChip(status: statusLabel.toLowerCase()),
-          AppStatusChip(status: offer.isVerified ? 'verified' : 'unverified'),
-          if (isSuperAdmin)
+          AppBadge(
+            label: _statusPillLabel(offer),
+            color: _statusPillColor(offer),
+          ),
+          AppBadge(
+            label: offer.isVerified ? 'Verified' : 'Unverified',
+            color: offer.isVerified ? Colors.green : Colors.orange,
+          ),
+          if (isSuperAdmin && !offer.isPublished)
             IconButton(
-              tooltip: offer.isPublished ? 'Unpublish' : 'Publish',
+              tooltip: 'Publish',
               onPressed: actionState.isLoading
                   ? null
                   : () => ref
                         .read(offerActionsProvider.notifier)
-                        .publish(offer.id, !offer.isPublished),
-              icon: Icon(
-                offer.isPublished
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-              ),
+                        .publish(offer.id, true),
+              icon: const Icon(Icons.visibility_outlined),
             ),
           if (!offer.isPublished)
             IconButton(
@@ -112,6 +113,29 @@ class OfferTile extends ConsumerWidget {
                     },
               icon: const Icon(Icons.delete_outline),
             ),
+          if (offer.isPublished && !offer.isExpired)
+            IconButton(
+              tooltip: 'Expire offer',
+              onPressed: actionState.isLoading
+                  ? null
+                  : () async {
+                      final confirmed = await showSweetConfirmationDialog(
+                        context: context,
+                        title: 'Expire offer?',
+                        message:
+                            'This will retire ${offer.title} so you can create a replacement offer.',
+                        confirmLabel: 'Expire',
+                        icon: Icons.event_busy_outlined,
+                      );
+                      if (!confirmed || !context.mounted) {
+                        return;
+                      }
+                      await ref
+                          .read(offerActionsProvider.notifier)
+                          .expire(offer.id);
+                    },
+              icon: const Icon(Icons.event_busy_outlined),
+            ),
           IconButton(
             tooltip: 'Open offer',
             onPressed: () => context.go('/offers/${offer.id}'),
@@ -123,13 +147,20 @@ class OfferTile extends ConsumerWidget {
   }
 }
 
-String _statusLabel(Offer offer) {
-  if (offer.isExpired) return 'expired';
-  if (offer.status == 'published' || offer.isPublished) return 'published';
+String _statusPillLabel(Offer offer) {
+  if (offer.isExpired) return 'Expired';
+  if (offer.status == 'published' || offer.isPublished) return 'Published';
   if (offer.status == 'pending_review' || offer.status == 'pending') {
-    return 'pending';
+    return 'Pending Review';
   }
-  if (offer.status == 'rejected') return 'rejected';
-  if (offer.status == 'draft') return 'draft';
-  return offer.status.isEmpty ? 'pending' : offer.status;
+  if (offer.status == 'rejected') return 'Rejected';
+  if (offer.status == 'draft') return 'Draft';
+  return offer.status.isEmpty ? 'Pending Review' : offer.status;
+}
+
+Color _statusPillColor(Offer offer) {
+  if (offer.isExpired) return Colors.black45;
+  if (offer.status == 'published' || offer.isPublished) return Colors.green;
+  if (offer.status == 'rejected') return Colors.red;
+  return Colors.orange;
 }

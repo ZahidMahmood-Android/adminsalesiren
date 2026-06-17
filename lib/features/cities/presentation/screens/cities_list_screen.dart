@@ -20,14 +20,14 @@ class CitiesListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cities = ref.watch(visibleCitiesProvider);
-    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
     final actionState = ref.watch(cityActionsProvider);
 
     return ScreenScaffold(
       loading: actionState.isLoading,
       header: ScreenHeader(
         title: 'Cities',
-        actions: isBrandAdmin
+        actions: isBrandScopedUser
             ? []
             : [
                 FilledButton.icon(
@@ -47,7 +47,7 @@ class CitiesListScreen extends ConsumerWidget {
                 icon: Icons.location_city_outlined,
                 title: 'No cities yet',
                 message: 'Cities will appear here once they are available.',
-                action: isBrandAdmin
+                action: isBrandScopedUser
                     ? null
                     : FilledButton.icon(
                         onPressed: () => context.go('/cities/new'),
@@ -90,7 +90,7 @@ class CitiesListScreen extends ConsumerWidget {
                                 ? AppTheme.deepGreen
                                 : Colors.black45,
                           ),
-                          if (!isBrandAdmin) ...[
+                          if (!isBrandScopedUser) ...[
                             IconButton(
                               tooltip: 'Edit city',
                               onPressed: () => context.go('/cities/${city.id}'),

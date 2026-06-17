@@ -50,23 +50,31 @@ class AppAvatar extends StatelessWidget {
     final initial = name.isEmpty
         ? ''
         : name.trim().characters.first.toUpperCase();
+    final fallback = _icon != null
+        ? Icon(_icon, size: radius * 0.9, color: fg)
+        : Text(
+            initial,
+            style: TextStyle(
+              color: fg,
+              fontWeight: FontWeight.w900,
+              fontSize: radius * 0.75,
+            ),
+          );
 
     return CircleAvatar(
       radius: radius,
       backgroundColor: bg,
-      backgroundImage: hasImage ? NetworkImage(imageUrl!) : null,
       child: hasImage
-          ? null
-          : _icon != null
-          ? Icon(_icon, size: radius * 0.9, color: fg)
-          : Text(
-              initial,
-              style: TextStyle(
-                color: fg,
-                fontWeight: FontWeight.w900,
-                fontSize: radius * 0.75,
+          ? ClipOval(
+              child: Image.network(
+                imageUrl!,
+                width: radius * 2,
+                height: radius * 2,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Center(child: fallback),
               ),
-            ),
+            )
+          : fallback,
     );
   }
 }

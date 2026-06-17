@@ -20,10 +20,20 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final currentUser = ref.watch(currentUserProvider);
     final brands = ref.watch(brandsProvider);
     final offers = isSuperAdmin
         ? const AsyncValue<List<Offer>>.data(<Offer>[])
         : ref.watch(offersProvider);
+    final currentUserOffers = offers.whenData(
+      (items) => items
+          .where(
+            (offer) =>
+                offer.createdByUserId == currentUser?.id ||
+                offer.createdBy == currentUser?.id,
+          )
+          .toList(),
+    );
     final cities = ref.watch(visibleCitiesProvider);
     final categories = ref.watch(visibleCategoriesProvider);
     final analytics = isSuperAdmin
@@ -77,12 +87,12 @@ class DashboardScreen extends ConsumerWidget {
                       label: 'Offers',
                       icon: Icons.campaign_outlined,
                       color: AppTheme.coral,
-                      value: offers.when(
+                      value: currentUserOffers.when(
                         data: (items) => items.length.toString(),
                         loading: () => '-',
                         error: (error, _) => '!',
                       ),
-                      errorMessage: offers.when(
+                      errorMessage: currentUserOffers.when(
                         error: (error, _) => error.toString(),
                         data: (_) => null,
                         loading: () => null,
@@ -140,7 +150,7 @@ class DashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
               ],
-              if (!isSuperAdmin) RecentOffersCard(offers: offers),
+              if (!isSuperAdmin) RecentOffersCard(offers: currentUserOffers),
             ]),
           ),
         ),

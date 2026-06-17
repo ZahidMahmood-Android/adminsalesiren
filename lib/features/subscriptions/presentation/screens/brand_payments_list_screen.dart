@@ -22,6 +22,7 @@ class BrandPaymentsListScreen extends ConsumerWidget {
     final payments = ref.watch(brandPaymentsProvider);
     final isSuperAdmin = ref.watch(isSuperAdminProvider);
     final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isManager = ref.watch(isManagerProvider);
     final actionState = ref.watch(subscriptionActionsProvider);
 
     return ScreenScaffold(
@@ -29,7 +30,7 @@ class BrandPaymentsListScreen extends ConsumerWidget {
       header: ScreenHeader(
         title: isSuperAdmin ? 'Manual Payments' : 'Payment History',
         actions: [
-          if (isBrandAdmin)
+          if (isBrandAdmin && !isManager)
             FilledButton.icon(
               onPressed: () => context.go('/subscriptions/payments/new'),
               icon: const Icon(Icons.add),
@@ -45,7 +46,7 @@ class BrandPaymentsListScreen extends ConsumerWidget {
                 key: const ValueKey('payments-empty'),
                 icon: Icons.receipt_long_outlined,
                 title: 'No payments',
-                message: isBrandAdmin
+                message: isBrandAdmin && !isManager
                     ? 'Tap "Submit Payment" to record your first payment.'
                     : 'Manual payment records will appear here.',
               );

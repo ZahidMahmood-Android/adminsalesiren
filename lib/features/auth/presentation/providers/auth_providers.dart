@@ -65,7 +65,9 @@ final adminAccessProvider = FutureProvider<bool>((ref) async {
       .timeout(const Duration(seconds: 5));
   return user != null &&
       user.isActive &&
-      (user.role == UserRoles.superAdmin || user.role == UserRoles.brandAdmin);
+      (user.role == UserRoles.superAdmin ||
+          user.role == UserRoles.brandAdmin ||
+          user.role == UserRoles.manager);
 });
 
 final isSuperAdminProvider = Provider<bool>((ref) {
@@ -74,6 +76,15 @@ final isSuperAdminProvider = Provider<bool>((ref) {
 
 final isBrandAdminProvider = Provider<bool>((ref) {
   return ref.watch(currentUserProvider)?.role == UserRoles.brandAdmin;
+});
+
+final isManagerProvider = Provider<bool>((ref) {
+  return ref.watch(currentUserProvider)?.role == UserRoles.manager;
+});
+
+final isBrandScopedUserProvider = Provider<bool>((ref) {
+  final role = ref.watch(currentUserProvider)?.role;
+  return role == UserRoles.brandAdmin;
 });
 
 final loginControllerProvider =

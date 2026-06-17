@@ -3,5 +3,6 @@ class UserRoles {
 
   static const superAdmin = 'super_admin';
   static const brandAdmin = 'brand_admin';
+  static const manager = 'manager';
   static const mobileUser = 'mobile_user';
 }

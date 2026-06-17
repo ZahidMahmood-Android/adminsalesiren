@@ -23,8 +23,9 @@ class OfferDetailsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final offerAsync = ref.watch(offerProvider(offerId));
     final actionState = ref.watch(offerActionsProvider);
+    final isBusy = actionState.isLoading;
     final isSuperAdmin = ref.watch(isSuperAdminProvider);
-    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
 
     return offerAsync.when(
       data: (offer) {
@@ -34,8 +35,7 @@ class OfferDetailsScreen extends ConsumerWidget {
 
         return Column(
           children: [
-            if (actionState.isLoading)
-              const LinearProgressIndicator(minHeight: 3),
+            if (isBusy) const LinearProgressIndicator(minHeight: 3),
             Expanded(
               child: SingleChildScrollView(
                 padding: screenPadding(context),
@@ -54,21 +54,47 @@ class OfferDetailsScreen extends ConsumerWidget {
                                     ?.copyWith(fontWeight: FontWeight.w900),
                               ),
                             ),
-                            // Edit is always visible (super admin may edit live offers).
-                            if (!(isBrandAdmin && offer.isPublished))
+                            // Expired offers are retired and should not be edited.
+                            if (!offer.isExpired && !offer.isPublished)
                               OutlinedButton.icon(
                                 onPressed: () =>
                                     context.go('/offers/$offerId/edit'),
                                 icon: const Icon(Icons.edit_outlined),
                                 label: const Text('Edit'),
                               ),
-                            if (!(isBrandAdmin && offer.isPublished))
+                            if (!offer.isExpired && !offer.isPublished)
                               const SizedBox(width: 10),
+                            if (offer.isPublished && !offer.isExpired) ...[
+                              OutlinedButton.icon(
+                                onPressed: isBusy
+                                    ? null
+                                    : () async {
+                                        final confirmed =
+                                            await showSweetConfirmationDialog(
+                                              context: context,
+                                              title: 'Expire offer?',
+                                              message:
+                                                  'This will retire ${offer.title} so you can create a replacement offer.',
+                                              confirmLabel: 'Expire',
+                                              icon: Icons.event_busy_outlined,
+                                            );
+                                        if (!confirmed || !context.mounted) {
+                                          return;
+                                        }
+                                        await ref
+                                            .read(offerActionsProvider.notifier)
+                                            .expire(offer.id);
+                                      },
+                                icon: const Icon(Icons.event_busy_outlined),
+                                label: const Text('Expire'),
+                              ),
+                              const SizedBox(width: 10),
+                            ],
                             // Delete: hidden once published (must unpublish first).
                             if (!offer.isPublished)
                               IconButton(
                                 tooltip: 'Delete offer',
-                                onPressed: actionState.isLoading
+                                onPressed: isBusy
                                     ? null
                                     : () async {
                                         final confirmed =
@@ -85,7 +111,10 @@ class OfferDetailsScreen extends ConsumerWidget {
                                         await ref
                                             .read(offerActionsProvider.notifier)
                                             .delete(offer.id);
-                                        if (context.mounted) {
+                                        if (context.mounted &&
+                                            !ref
+                                                .read(offerActionsProvider)
+                                                .hasError) {
                                           context.go('/offers');
                                         }
                                       },
@@ -175,7 +204,7 @@ class OfferDetailsScreen extends ConsumerWidget {
                                               offer.status ==
                                                   'pending_review') ...[
                                             FilledButton.icon(
-                                              onPressed: actionState.isLoading
+                                              onPressed: isBusy
                                                   ? null
                                                   : () => ref
                                                         .read(
@@ -189,7 +218,7 @@ class OfferDetailsScreen extends ConsumerWidget {
                                               label: const Text('Approve'),
                                             ),
                                             OutlinedButton.icon(
-                                              onPressed: actionState.isLoading
+                                              onPressed: isBusy
                                                   ? null
                                                   : () async {
                                                       final notes =
@@ -215,72 +244,93 @@ class OfferDetailsScreen extends ConsumerWidget {
                                               label: const Text('Reject'),
                                             ),
                                           ],
-                                          FilledButton.icon(
-                                            onPressed: actionState.isLoading
-                                                ? null
-                                                : () => ref
-                                                      .read(
-                                                        offerActionsProvider
-                                                            .notifier,
-                                                      )
-                                                      .publish(
-                                                        offer.id,
-                                                        !offer.isPublished,
-                                                      ),
-                                            icon: Icon(
-                                              offer.isPublished
-                                                  ? Icons
-                                                        .visibility_off_outlined
-                                                  : Icons.visibility_outlined,
+                                          if (!offer.isPublished)
+                                            FilledButton.icon(
+                                              onPressed: isBusy
+                                                  ? null
+                                                  : () => ref
+                                                        .read(
+                                                          offerActionsProvider
+                                                              .notifier,
+                                                        )
+                                                        .publish(
+                                                          offer.id,
+                                                          true,
+                                                        ),
+                                              icon: const Icon(
+                                                Icons.visibility_outlined,
+                                              ),
+                                              label: const Text('Publish'),
                                             ),
-                                            label: Text(
-                                              offer.isPublished
-                                                  ? 'Unpublish'
-                                                  : 'Publish',
-                                            ),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed: actionState.isLoading
-                                                ? null
-                                                : () => ref
-                                                      .read(
-                                                        offerActionsProvider
-                                                            .notifier,
-                                                      )
-                                                      .verify(
-                                                        offer.id,
-                                                        !offer.isVerified,
-                                                      ),
-                                            icon: const Icon(
-                                              Icons.verified_outlined,
-                                            ),
-                                            label: Text(
-                                              offer.isVerified
-                                                  ? 'Mark unverified'
-                                                  : 'Mark verified',
-                                            ),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed: actionState.isLoading
-                                                ? null
-                                                : () => ref
-                                                      .read(
-                                                        offerActionsProvider
-                                                            .notifier,
-                                                      )
-                                                      .feature(
-                                                        offer.id,
-                                                        !offer.isFeatured,
-                                                      ),
-                                            icon: const Icon(
-                                              Icons.star_outline,
-                                            ),
-                                            label: Text(
-                                              offer.isFeatured
-                                                  ? 'Remove featured'
-                                                  : 'Feature',
+                                          SizedBox(
+                                            width: 220,
+                                            child: DropdownButtonFormField<bool>(
+                                              initialValue: offer.isVerified,
+                                              decoration: const InputDecoration(
+                                                labelText: 'Verification',
+                                                prefixIcon: Icon(
+                                                  Icons.verified_outlined,
+                                                ),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: true,
+                                                  child: Text('Verified'),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: false,
+                                                  child: Text('Unverified'),
+                                                ),
+                                              ],
+                                              onChanged:
+                                                  isBusy ||
+                                                      offer.isExpired ||
+                                                      offer.isPublished
+                                                  ? null
+                                                  : (value) {
+                                                      if (value == null ||
+                                                          value ==
+                                                              offer
+                                                                  .isVerified) {
+                                                        return;
+                                                      }
+                                                      ref
+                                                          .read(
+                                                            offerActionsProvider
+                                                                .notifier,
+                                                          )
+                                                          .verify(
+                                                            offer.id,
+                                                            value,
+                                                          );
+                                                    },
                                             ),
                                           ),
+                                          if (!offer.isPublished)
+                                            OutlinedButton.icon(
+                                              onPressed:
+                                                  isBusy ||
+                                                      (!offer.isVerified &&
+                                                          !offer.isFeatured)
+                                                  ? null
+                                                  : () => ref
+                                                        .read(
+                                                          offerActionsProvider
+                                                              .notifier,
+                                                        )
+                                                        .feature(
+                                                          offer.id,
+                                                          !offer.isFeatured,
+                                                        ),
+                                              icon: const Icon(
+                                                Icons.star_outline,
+                                              ),
+                                              label: Text(
+                                                offer.isFeatured
+                                                    ? 'Remove featured'
+                                                    : 'Feature',
+                                              ),
+                                            ),
                                         ],
                                       ],
                                     ),

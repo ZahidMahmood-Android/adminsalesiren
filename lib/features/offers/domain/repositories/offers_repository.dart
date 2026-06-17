@@ -8,6 +8,7 @@ abstract class OffersRepository {
   Future<void> updateOffer(Offer offer);
   Future<void> deleteOffer(String id);
   Future<void> publishOffer(String id, bool isPublished);
+  Future<void> expireOffer(String id);
   Future<void> verifyOffer(String id, bool isVerified);
   Future<void> featureOffer(String id, bool isFeatured);
   Future<void> approveOffer(String id, String approvedBy);

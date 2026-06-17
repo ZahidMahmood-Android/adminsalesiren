@@ -17,18 +17,16 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
 
   @override
   Stream<List<Category>> watchCategories() {
-    return _categories.snapshots().map((snapshot) {
-      final categories = snapshot.docs.map(CategoryModel.fromSnapshot).toList()
-        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return _categories.orderBy('sortOrder').snapshots().map((snapshot) {
+      final categories = snapshot.docs.map(CategoryModel.fromSnapshot).toList();
       return categories;
     });
   }
 
   @override
   Future<List<Category>> getCategories() async {
-    final snapshot = await _categories.get();
-    return snapshot.docs.map(CategoryModel.fromSnapshot).toList()
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final snapshot = await _categories.orderBy('sortOrder').get();
+    return snapshot.docs.map(CategoryModel.fromSnapshot).toList();
   }
 
   @override
@@ -57,7 +55,10 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
       ),
     );
     _log.info('Creating category id=$safeId name=${category.name}');
-    await doc.set(model.toFirestore());
+    final data = model.toFirestore()
+      ..['createdAt'] = FieldValue.serverTimestamp()
+      ..['updatedAt'] = FieldValue.serverTimestamp();
+    await doc.set(data);
     return safeId;
   }
 
@@ -67,9 +68,9 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
       category.copyWith(updatedAt: DateTime.now(), userId: _currentUserId),
     );
     _log.info('Updating category id=${category.id} name=${category.name}');
-    return _categories
-        .doc(category.id)
-        .update(model.toFirestore(includeCreatedAt: false));
+    final data = model.toFirestore(includeCreatedAt: false)
+      ..['updatedAt'] = FieldValue.serverTimestamp();
+    return _categories.doc(category.id).update(data);
   }
 
   @override

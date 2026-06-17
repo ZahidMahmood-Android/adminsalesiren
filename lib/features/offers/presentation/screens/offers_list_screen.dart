@@ -8,6 +8,7 @@ import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/screen_layout.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/offer_providers.dart';
 import '../widgets/offer_filters_bar.dart';
 import '../widgets/offer_tile.dart';
@@ -19,6 +20,7 @@ class OffersListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final offers = ref.watch(offersProvider);
     final actionState = ref.watch(offerActionsProvider);
+    final currentUser = ref.watch(currentUserProvider);
 
     return ScreenScaffold(
       loading: actionState.isLoading,
@@ -42,7 +44,17 @@ class OffersListScreen extends ConsumerWidget {
               child: offers.when(
                 skipLoadingOnRefresh: true,
                 data: (items) {
-                  if (items.isEmpty) {
+                  if (currentUser == null) {
+                    return const AppLoadingView(label: 'Loading offers');
+                  }
+                  final currentUserOffers = items
+                      .where(
+                        (offer) =>
+                            offer.createdByUserId == currentUser?.id ||
+                            offer.createdBy == currentUser?.id,
+                      )
+                      .toList();
+                  if (currentUserOffers.isEmpty) {
                     return EmptyState(
                       key: const ValueKey('offers-empty'),
                       icon: Icons.local_offer_outlined,
@@ -60,12 +72,12 @@ class OffersListScreen extends ConsumerWidget {
                     key: const ValueKey('offers-list'),
                     padding: EdgeInsets.zero,
                     child: ListView.separated(
-                      itemCount: items.length,
+                      itemCount: currentUserOffers.length,
                       separatorBuilder: (context, index) =>
                           const Divider(height: 1),
                       itemBuilder: (context, index) => FadeIn(
                         delay: Duration(milliseconds: index * 25),
-                        child: OfferTile(offer: items[index]),
+                        child: OfferTile(offer: currentUserOffers[index]),
                       ),
                     ),
                   );

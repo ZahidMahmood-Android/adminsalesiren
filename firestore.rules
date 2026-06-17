@@ -38,12 +38,26 @@ service cloud.firestore {
           && userDoc().data.isActive == true);
     }
 
+    function isManagerOrAdminOrSuperAdmin() {
+      return isAdminOrSuperAdmin() || isManager();
+    }
+
     function isBrandAdmin() {
       return hasUserDoc()
         && userDoc().data.role == 'brand_admin'
         && userDoc().data.isActive == true
         && userDoc().data.brandId is string
         && userDoc().data.brandId != '';
+    }
+
+    function isManager() {
+      return hasUserDoc()
+        && userDoc().data.role == 'manager'
+        && userDoc().data.isActive == true;
+    }
+
+    function isBrandScopedUser() {
+      return isBrandAdmin() || isManager();
     }
 
     function brandId() {
@@ -61,10 +75,13 @@ service cloud.firestore {
 
     function createsOwnOffer() {
       let d = request.resource.data;
-      return isBrandAdmin()
-        && d.brandId == brandId()
+      return isBrandScopedUser()
+        && (
+          isManager()
+          || d.brandId == brandId()
+        )
         && d.createdByUserId == request.auth.uid
-        && d.createdByRole == 'brand_admin'
+        && d.createdByRole in ['brand_admin', 'manager']
         && (
           // Saved as pending review (default path)
           (
@@ -112,17 +129,17 @@ service cloud.firestore {
 
     match /cities/{cityId} {
       allow read: if true;
-      allow write: if isAdminOrSuperAdmin();
+      allow write: if isManagerOrAdminOrSuperAdmin();
     }
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow create: if isAdminOrSuperAdmin() || createsOwnCategory();
-      allow update: if isAdminOrSuperAdmin()
+      allow create: if isManagerOrAdminOrSuperAdmin() || createsOwnCategory();
+      allow update: if isManagerOrAdminOrSuperAdmin()
         || (ownsCategory()
           && request.resource.data.userId == resource.data.userId
           && request.resource.data.id == resource.data.id);
-      allow delete: if isAdminOrSuperAdmin() || ownsCategory();
+      allow delete: if isManagerOrAdminOrSuperAdmin() || ownsCategory();
     }
 
     match /brands/{targetBrandId} {
@@ -141,17 +158,38 @@ service cloud.firestore {
 
     match /offers/{offerId} {
       allow get: if resource.data.isPublished == true
-        || isAdminOrSuperAdmin()
+        || isManagerOrAdminOrSuperAdmin()
         || ownsOffer();
-      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
-      allow create: if isAdminOrSuperAdmin() || createsOwnOffer();
-      allow update: if isAdminOrSuperAdmin()
+      allow list: if isManagerOrAdminOrSuperAdmin() || isBrandScopedUser();
+      allow create: if isManagerOrAdminOrSuperAdmin() || createsOwnOffer();
+      allow update: if (
+          isManagerOrAdminOrSuperAdmin()
+          && (
+            (resource.data.status != 'published' && resource.data.isPublished != true)
+            || (
+              (resource.data.status == 'published' || resource.data.isPublished == true)
+              && request.resource.data.isPublished == false
+              && request.resource.data.status == 'expired'
+              && request.resource.data.approvalStatus == 'expired'
+            )
+          )
+        )
         || (ownsOffer()
-          && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected', 'paused']
+          && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected', 'paused', 'published']
           && request.resource.data.brandId == resource.data.brandId
           && request.resource.data.createdByUserId == resource.data.createdByUserId
           && (
-            request.resource.data.isPublished == false
+            (
+              resource.data.status != 'published'
+              && resource.data.isPublished != true
+              && request.resource.data.isPublished == false
+            )
+            || (
+              (resource.data.status == 'published' || resource.data.isPublished == true)
+              && request.resource.data.isPublished == false
+              && request.resource.data.status == 'expired'
+              && request.resource.data.approvalStatus == 'expired'
+            )
             || (
               resource.data.status in ['pending', 'pending_review']
               && request.resource.data.isPublished == true
@@ -160,40 +198,47 @@ service cloud.firestore {
               && request.resource.data.approvedBy == request.auth.uid
             )
           ));
-      allow delete: if isAdminOrSuperAdmin()
-        || (ownsOffer() && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected']);
+      allow delete: if resource.data.status != 'published'
+        && resource.data.isPublished != true
+        && (
+          isManagerOrAdminOrSuperAdmin()
+          || (ownsOffer() && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected'])
+        );
     }
 
     match /offer_reports/{reportId} {
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;
       // list: resource.data unavailable for queries; brand admin filters by brandId in code
-      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
       allow get: if isAdminOrSuperAdmin()
         || (isBrandAdmin() && resource.data.brandId == brandId());
       allow update, delete: if isAdminOrSuperAdmin();
     }
 
     match /notification_requests/{requestId} {
-      allow get: if isAdminOrSuperAdmin()
-        || (isBrandAdmin()
+      allow get: if isManagerOrAdminOrSuperAdmin()
+        || (isBrandScopedUser()
           && (resource == null || resource.data.brandId == brandId()));
-      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
-      allow create: if isAdminOrSuperAdmin()
-        || (isBrandAdmin()
-          && request.resource.data.brandId == brandId()
+      allow list: if isManagerOrAdminOrSuperAdmin() || isBrandScopedUser();
+      allow create: if isManagerOrAdminOrSuperAdmin()
+        || (isBrandScopedUser()
+          && (isManager() || request.resource.data.brandId == brandId())
           && request.resource.data.requestedByUserId == request.auth.uid
           && request.resource.data.status == 'pending');
-      allow update: if isAdminOrSuperAdmin()
-        || (isBrandAdmin()
-          && resource.data.brandId == brandId()
+      allow update: if isManagerOrAdminOrSuperAdmin()
+        || (isBrandScopedUser()
+          && (isManager() || resource.data.brandId == brandId())
           && resource.data.status == 'pending'
           && request.resource.data.status in ['approved', 'pending', 'cancelled']
           && (
             request.resource.data.status != 'approved'
             || request.resource.data.approvedBy == request.auth.uid
           ));
-      allow delete: if isAdminOrSuperAdmin();
+      allow delete: if isManagerOrAdminOrSuperAdmin()
+        || (isBrandScopedUser()
+          && (isManager() || resource.data.brandId == brandId())
+          && resource.data.status in ['pending', 'cancelled', 'rejected']);
     }
 
     match /notification_campaigns/{campaignId} {
@@ -204,7 +249,7 @@ service cloud.firestore {
       allow get: if isAdminOrSuperAdmin()
         || (isBrandAdmin()
           && (resource == null || resource.data.brandId == brandId()));
-      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
       allow create: if isAdminOrSuperAdmin()
         || (isBrandAdmin()
           && request.resource.data.brandId == brandId());
@@ -219,14 +264,14 @@ service cloud.firestore {
 
     match /brand_subscriptions/{subscriptionId} {
       // list: resource.data unavailable for queries; brand admin filters by their own brandId in code
-      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
       allow get: if isAdminOrSuperAdmin()
         || (isBrandAdmin() && (resource == null || resource.data.brandId == brandId()));
       allow write: if isAdminOrSuperAdmin();
     }
 
     match /brand_usage/{usageId} {
-      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
       // resource == null guard: getOrCreateCurrentUsage does a doc.get() before creating;
       // when the doc doesn't exist resource is null, so resource.data.brandId would be null
       // and deny the read even for the owning brand admin.
@@ -239,7 +284,7 @@ service cloud.firestore {
     }
 
     match /brand_payments/{paymentId} {
-      allow list: if isAdminOrSuperAdmin() || isBrandAdmin();
+      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
       allow get: if isAdminOrSuperAdmin()
         || (isBrandAdmin() && (resource == null || resource.data.brandId == brandId()));
       allow create: if isAdminOrSuperAdmin()

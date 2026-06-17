@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
+import '../../../auth/domain/entities/user_roles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/domain/entities/brand.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
@@ -18,18 +19,14 @@ final categoriesRepositoryProvider = Provider<CategoriesRepository>((ref) {
   );
 });
 
-final categoriesProvider = StreamProvider.autoDispose<List<Category>>((
-  ref,
-) async* {
-  yield const <Category>[];
-  yield* ref.watch(categoriesRepositoryProvider).watchCategories();
+final categoriesProvider = StreamProvider.autoDispose<List<Category>>((ref) {
+  return ref.watch(categoriesRepositoryProvider).watchCategories();
 });
 
 final activeCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
   ref,
-) async* {
-  yield const <Category>[];
-  yield* ref
+) {
+  return ref
       .watch(categoriesRepositoryProvider)
       .watchCategories()
       .map((items) => items.where((category) => category.isActive).toList());
@@ -40,12 +37,12 @@ final visibleCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
 ) {
   final user = ref.watch(currentUserProvider);
   final categories = ref.watch(categoriesProvider);
-  final brands = ref.watch(brandsProvider);
   return categories.when(
     data: (items) {
-      if (user?.role != 'brand_admin') {
+      if (!_isBrandScopedRole(user?.role)) {
         return Stream.value(items);
       }
+      final brands = ref.watch(brandsProvider);
       final brandItems = brands.value ?? const <Brand>[];
       final brand = _findBrand(brandItems, user?.brandId ?? '');
       final allowed = brand?.categoryIds.toSet() ?? const <String>{};
@@ -62,6 +59,8 @@ final visibleCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
     error: (error, stackTrace) => Stream.error(error, stackTrace),
   );
 });
+
+bool _isBrandScopedRole(String? role) => role == UserRoles.brandAdmin;
 
 Brand? _findBrand(Iterable<Brand> brands, String id) {
   for (final brand in brands) {

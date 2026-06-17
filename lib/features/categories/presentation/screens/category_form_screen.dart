@@ -112,7 +112,7 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
         ? ref.watch(categoryProvider(widget.categoryId!))
         : const AsyncValue<Category?>.data(null);
     final actionState = ref.watch(categoryActionsProvider);
-    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
     final currentUser = ref.watch(currentUserProvider);
 
     return categoryAsync.when(
@@ -122,7 +122,9 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
           return const AppErrorView(message: 'Category not found.');
         }
         final canManageCategory =
-            !isBrandAdmin || !_isEditing || category?.userId == currentUser?.id;
+            !isBrandScopedUser ||
+            !_isEditing ||
+            category?.userId == currentUser?.id;
         if (!canManageCategory) {
           return const AppErrorView(
             message: 'You can only edit categories created by your account.',

@@ -20,7 +20,7 @@ class CategoriesListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(visibleCategoriesProvider);
-    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
     final currentUser = ref.watch(currentUserProvider);
     final actionState = ref.watch(categoryActionsProvider);
 
@@ -63,7 +63,7 @@ class CategoriesListScreen extends ConsumerWidget {
                 itemBuilder: (context, index) {
                   final category = items[index];
                   final canManageCategory =
-                      !isBrandAdmin || category.userId == currentUser?.id;
+                      !isBrandScopedUser || category.userId == currentUser?.id;
                   return FadeIn(
                     delay: Duration(milliseconds: index * 30),
                     child: ListTile(

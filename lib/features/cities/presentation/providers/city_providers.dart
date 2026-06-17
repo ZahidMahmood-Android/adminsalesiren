@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
+import '../../../auth/domain/entities/user_roles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/domain/entities/brand.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
@@ -18,16 +19,12 @@ final citiesRepositoryProvider = Provider<CitiesRepository>((ref) {
   );
 });
 
-final citiesProvider = StreamProvider.autoDispose<List<City>>((ref) async* {
-  yield const <City>[];
-  yield* ref.watch(citiesRepositoryProvider).watchCities();
+final citiesProvider = StreamProvider.autoDispose<List<City>>((ref) {
+  return ref.watch(citiesRepositoryProvider).watchCities();
 });
 
-final activeCitiesProvider = StreamProvider.autoDispose<List<City>>((
-  ref,
-) async* {
-  yield const <City>[];
-  yield* ref
+final activeCitiesProvider = StreamProvider.autoDispose<List<City>>((ref) {
+  return ref
       .watch(citiesRepositoryProvider)
       .watchCities()
       .map((cities) => cities.where((city) => city.isActive).toList());
@@ -36,12 +33,12 @@ final activeCitiesProvider = StreamProvider.autoDispose<List<City>>((
 final visibleCitiesProvider = StreamProvider.autoDispose<List<City>>((ref) {
   final user = ref.watch(currentUserProvider);
   final cities = ref.watch(citiesProvider);
-  final brands = ref.watch(brandsProvider);
   return cities.when(
     data: (cityItems) {
-      if (user?.role != 'brand_admin') {
+      if (!_isBrandScopedRole(user?.role)) {
         return Stream.value(cityItems);
       }
+      final brands = ref.watch(brandsProvider);
       final brandItems = brands.value ?? const <Brand>[];
       final brand = _findBrand(brandItems, user?.brandId ?? '');
       final allowed = brand?.cityIds.toSet() ?? const <String>{};
@@ -53,6 +50,8 @@ final visibleCitiesProvider = StreamProvider.autoDispose<List<City>>((ref) {
     error: (error, stackTrace) => Stream.error(error, stackTrace),
   );
 });
+
+bool _isBrandScopedRole(String? role) => role == UserRoles.brandAdmin;
 
 Brand? _findBrand(Iterable<Brand> brands, String id) {
   for (final brand in brands) {

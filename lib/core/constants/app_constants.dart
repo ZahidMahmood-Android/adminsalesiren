@@ -1,7 +1,10 @@
 class AppConstants {
   const AppConstants._();
 
-  static const appName = 'Salesiren';
+  static const appName = 'Sale Siren';
+  static const appLogoAsset = 'assets/images/salesiren_parrot_logo.png';
+  static const appTaglineLogoAsset =
+      'assets/images/salesiren_text_tagline_logo.png';
   static const defaultCityId = 'lahore';
   static const defaultCityName = 'City';
   static const supportEmail = 'admin@salesiren.pk';

@@ -82,8 +82,8 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    final isBrandAdmin = ref.read(isBrandAdminProvider);
-    if (!isBrandAdmin &&
+    final isBrandScopedUser = ref.read(isBrandScopedUserProvider);
+    if (!isBrandScopedUser &&
         (_selectedCategoryIds.isEmpty || _selectedCityIds.isEmpty)) {
       if (mounted)
         showAppError(
@@ -171,7 +171,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     final categories = ref.watch(categoriesProvider);
     final cities = ref.watch(citiesProvider);
     final actionState = ref.watch(brandActionsProvider);
-    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
 
     return brandAsync.when(
       data: (brand) {
@@ -201,7 +201,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                                   ?.copyWith(fontWeight: FontWeight.w900),
                             ),
                           ),
-                          if (_isEditing && !isBrandAdmin)
+                          if (_isEditing && !isBrandScopedUser)
                             IconButton(
                               tooltip: 'Delete brand',
                               onPressed: actionState.isLoading ? null : _delete,
@@ -212,7 +212,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                       const SizedBox(height: 22),
                       TextFormField(
                         controller: _nameController,
-                        enabled: !isBrandAdmin,
+                        enabled: !isBrandScopedUser,
                         decoration: const InputDecoration(
                           labelText: 'Brand name',
                           prefixIcon: Icon(Icons.storefront_outlined),
@@ -320,7 +320,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      if (!isBrandAdmin) ...[
+                      if (!isBrandScopedUser) ...[
                         SelectionBlock<City>(
                           title: 'Cities',
                           items: cities,

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/services/app_logger.dart';
+import '../../../auth/domain/entities/user_roles.dart';
 import '../../domain/entities/offer.dart';
 import '../../domain/entities/offer_filters.dart';
 import '../../domain/repositories/offers_repository.dart';
@@ -23,20 +24,37 @@ class FirebaseOffersRepository implements OffersRepository {
   CollectionReference<Map<String, dynamic>> get _offers =>
       _firestore.collection('offers');
 
+  bool get _isBrandScopedUser => _currentUserRole == UserRoles.brandAdmin;
+  bool get _isSuperAdmin => _currentUserRole == UserRoles.superAdmin;
+  bool get _hasFullAccess =>
+      _isSuperAdmin || _currentUserRole == UserRoles.manager;
+
   @override
   Stream<List<Offer>> watchOffers(OfferFilters filters) {
     if (_currentUserId.isEmpty) {
       return Stream.value(const <Offer>[]);
     }
 
-    return _offers.snapshots().map((snapshot) {
-      final offers =
-          snapshot.docs
-              .map(OfferModel.fromSnapshot)
-              .where(_canReadOffer)
-              .where((offer) => _matchesFilters(offer, filters))
-              .toList()
-            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    var query = _offers.orderBy('createdAt', descending: true);
+    if (!_hasFullAccess) {
+      query = query.where('createdByUserId', isEqualTo: _currentUserId);
+    }
+    if (filters.brandId != null && filters.brandId!.isNotEmpty) {
+      query = query.where('brandId', isEqualTo: filters.brandId);
+    }
+    if (filters.isPublished != null) {
+      query = query.where('isPublished', isEqualTo: filters.isPublished);
+    }
+    if (filters.isVerified != null) {
+      query = query.where('isVerified', isEqualTo: filters.isVerified);
+    }
+
+    return query.snapshots().map((snapshot) {
+      final offers = snapshot.docs
+          .map(OfferModel.fromSnapshot)
+          .where(_canReadOffer)
+          .where((offer) => _matchesFilters(offer, filters))
+          .toList();
       return offers;
     });
   }
@@ -67,20 +85,20 @@ class FirebaseOffersRepository implements OffersRepository {
         createdBy: _currentUserId,
         createdByUserId: _currentUserId,
         createdByRole: _currentUserRole,
-        status: _currentUserRole == 'brand_admin' ? brandStatus : offer.status,
-        approvalStatus: _currentUserRole == 'brand_admin'
+        status: _isBrandScopedUser ? brandStatus : offer.status,
+        approvalStatus: _isBrandScopedUser
             ? offer.isPublished
                   ? 'approved'
                   : 'pending'
             : offer.approvalStatus,
         isPublished: offer.isPublished,
         isVerified: offer.isVerified,
-        approvedBy: _currentUserRole == 'brand_admin'
+        approvedBy: _isBrandScopedUser
             ? offer.isPublished
                   ? _currentUserId
                   : ''
             : offer.approvedBy,
-        approvedAt: _currentUserRole == 'brand_admin'
+        approvedAt: _isBrandScopedUser
             ? offer.isPublished
                   ? now
                   : null
@@ -88,7 +106,10 @@ class FirebaseOffersRepository implements OffersRepository {
       ),
     );
     _log.info('Creating offer id=${doc.id} title=${offer.title}');
-    await doc.set(model.toFirestore());
+    final data = model.toFirestore()
+      ..['createdAt'] = FieldValue.serverTimestamp()
+      ..['updatedAt'] = FieldValue.serverTimestamp();
+    await doc.set(data);
     _log.info('Created offer id=${doc.id}');
     return doc.id;
   }
@@ -99,9 +120,9 @@ class FirebaseOffersRepository implements OffersRepository {
       offer.copyWith(updatedAt: DateTime.now(), createdBy: _currentUserId),
     );
     _log.info('Updating offer id=${offer.id} title=${offer.title}');
-    return _offers
-        .doc(offer.id)
-        .update(model.toFirestore(includeCreatedAt: false));
+    final data = model.toFirestore(includeCreatedAt: false)
+      ..['updatedAt'] = FieldValue.serverTimestamp();
+    return _offers.doc(offer.id).update(data);
   }
 
   @override
@@ -124,18 +145,39 @@ class FirebaseOffersRepository implements OffersRepository {
   }
 
   @override
-  Future<void> verifyOffer(String id, bool isVerified) {
-    _log.info('Setting offer verified id=$id value=$isVerified');
+  Future<void> expireOffer(String id) {
+    _log.info('Expiring offer id=$id');
     return _offers.doc(id).update({
-      'isVerified': isVerified,
+      'isPublished': false,
+      'isVerified': false,
+      'isFeatured': false,
+      'status': 'expired',
+      'approvalStatus': 'expired',
       'updatedAt': Timestamp.now(),
     });
   }
 
   @override
-  Future<void> featureOffer(String id, bool isFeatured) {
-    _log.info('Setting offer featured id=$id value=$isFeatured');
+  Future<void> verifyOffer(String id, bool isVerified) {
+    _log.info('Setting offer verified id=$id value=$isVerified');
     return _offers.doc(id).update({
+      'isVerified': isVerified,
+      if (!isVerified) 'isFeatured': false,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
+  @override
+  Future<void> featureOffer(String id, bool isFeatured) async {
+    _log.info('Setting offer featured id=$id value=$isFeatured');
+    if (isFeatured) {
+      final snapshot = await _offers.doc(id).get();
+      final verified = snapshot.data()?['isVerified'] as bool? ?? false;
+      if (!verified) {
+        throw StateError('Only verified offers can be featured.');
+      }
+    }
+    await _offers.doc(id).update({
       'isFeatured': isFeatured,
       'updatedAt': Timestamp.now(),
     });
@@ -193,9 +235,8 @@ class FirebaseOffersRepository implements OffersRepository {
   }
 
   bool _canReadOffer(Offer offer) {
-    if (_currentUserRole == 'brand_admin') {
-      return offer.brandId == _currentBrandId ||
-          offer.createdByUserId == _currentUserId ||
+    if (!_hasFullAccess) {
+      return offer.createdByUserId == _currentUserId ||
           offer.createdBy == _currentUserId;
     }
     return true;

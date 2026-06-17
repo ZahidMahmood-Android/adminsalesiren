@@ -34,9 +34,11 @@ class AppShell extends ConsumerWidget {
     final userProfile = ref.watch(currentUserProfileProvider);
     final adminAccess = ref.watch(adminAccessProvider);
     final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isManager = ref.watch(isManagerProvider);
     final accessContent = _AccessContent(
       adminAccess: adminAccess,
       isBrandAdmin: isBrandAdmin,
+      isManager: isManager,
       child: child,
     );
 
@@ -78,11 +80,13 @@ class _AccessContent extends ConsumerWidget {
   const _AccessContent({
     required this.adminAccess,
     required this.isBrandAdmin,
+    required this.isManager,
     required this.child,
   });
 
   final AsyncValue<bool> adminAccess;
   final bool isBrandAdmin;
+  final bool isManager;
   final Widget child;
 
   @override
@@ -97,7 +101,9 @@ class _AccessContent extends ConsumerWidget {
           }
           return const _MissingAdminAccessView();
         }
-        if (isBrandAdmin) return _SubscriptionGate(child: child);
+        if (isBrandAdmin && !isManager) {
+          return _SubscriptionGate(child: child);
+        }
         return child;
       },
       loading: () => const AppLoadingView(
@@ -130,6 +136,7 @@ class _SubscriptionGate extends ConsumerWidget {
     '/subscriptions/payments',
     '/subscriptions/my-usage',
     '/dashboard',
+    '/settings',
   };
 
   @override
@@ -447,6 +454,10 @@ class _MissingAdminAccessView extends ConsumerWidget {
 
 int _bellCount(WidgetRef ref) {
   final isSuperAdmin = ref.watch(isSuperAdminProvider);
+  final isManager = ref.watch(isManagerProvider);
+  if (isManager) {
+    return 0;
+  }
   final subRequests = ref.watch(subscriptionRequestsProvider);
   if (isSuperAdmin) {
     final notifRequests = ref.watch(notificationRequestsProvider);
@@ -473,6 +484,10 @@ class _BellButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final isManager = ref.watch(isManagerProvider);
+    if (isManager) {
+      return const SizedBox.shrink();
+    }
     final count = _bellCount(ref);
     return _BellPopup(isSuperAdmin: isSuperAdmin, count: count);
   }
@@ -820,6 +835,7 @@ class _ProfileMenu extends ConsumerWidget {
     final initial = email.isEmpty ? 'A' : email.characters.first.toUpperCase();
     final user = ref.watch(currentUserProvider);
     final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isManager = ref.watch(isManagerProvider);
     final brandId = user?.brandId ?? '';
 
     return PopupMenuButton<String>(
@@ -832,7 +848,7 @@ class _ProfileMenu extends ConsumerWidget {
           return;
         }
         if (value == 'profile') {
-          context.go(isBrandAdmin ? '/brands' : '/settings');
+          context.go('/settings');
         }
         if (value == 'logout') {
           _confirmLogout(context, ref);
@@ -849,8 +865,8 @@ class _ProfileMenu extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        // Brand ID row — visible to brand admins only
-        if (isBrandAdmin && brandId.isNotEmpty)
+        // Brand ID row — visible to brand-scoped roles only
+        if ((isBrandAdmin || isManager) && brandId.isNotEmpty)
           PopupMenuItem<String>(
             value: 'copy_brand_id',
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -1017,13 +1033,18 @@ class _BrandMark extends ConsumerWidget {
     return Row(
       children: [
         Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: AppTheme.deepGreen,
-            borderRadius: BorderRadius.circular(8),
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(10)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset(
+              AppConstants.appLogoAsset,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.local_offer, color: Colors.white),
+            ),
           ),
-          child: const Icon(Icons.local_offer, color: Colors.white),
         ),
         const SizedBox(width: 12),
         Column(
@@ -1188,12 +1209,16 @@ const _brandItems = [
   _NavItem('Dashboard', '/dashboard', Icons.dashboard_outlined),
   _NavItem('Cities', '/cities', Icons.location_city_outlined),
   _NavItem('Categories', '/categories', Icons.category_outlined),
-  _NavItem('My Offers', '/offers', Icons.local_offer_outlined),
+  _NavItem('Offers', '/offers', Icons.local_offer_outlined),
   _NavItem(
     'Notification Requests',
     '/notifications',
     Icons.notifications_outlined,
   ),
+];
+
+const _brandAdminItems = [
+  ..._brandItems,
   _NavItem(
     'My Subscription',
     '/subscriptions/my',
@@ -1204,5 +1229,11 @@ const _brandItems = [
 ];
 
 List<_NavItem> _visibleItems(WidgetRef ref) {
-  return ref.watch(isBrandAdminProvider) ? _brandItems : _items;
+  if (ref.watch(isBrandAdminProvider)) {
+    return _brandAdminItems;
+  }
+  if (ref.watch(isManagerProvider)) {
+    return _brandItems;
+  }
+  return _items;
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/animated_content.dart';
@@ -14,6 +15,7 @@ import '../../../../core/widgets/app_text_view.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/domain/entities/app_user.dart';
 import '../providers/user_management_providers.dart';
 
@@ -24,10 +26,21 @@ class UsersListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final users = ref.watch(managedUsersProvider);
     final actionState = ref.watch(userManagementActionsProvider);
+    final isSuperAdmin = ref.watch(isSuperAdminProvider);
 
     return ScreenScaffold(
       loading: actionState.isLoading,
-      header: const ScreenHeader(title: 'Users'),
+      header: ScreenHeader(
+        title: 'Users',
+        actions: [
+          if (isSuperAdmin)
+            FilledButton.icon(
+              onPressed: () => context.go('/users/new'),
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              label: const Text('Register User'),
+            ),
+        ],
+      ),
       child: AnimatedContent(
         child: users.when(
           skipLoadingOnRefresh: true,

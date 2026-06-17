@@ -17,7 +17,7 @@ class OfferFiltersBar extends ConsumerWidget {
     final cities = ref.watch(visibleCitiesProvider).value ?? const [];
     final categories = ref.watch(visibleCategoriesProvider).value ?? const [];
     final brands = ref.watch(activeBrandsProvider).value ?? const [];
-    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
     final controller = ref.read(offerFiltersProvider.notifier);
 
     return AppCard(
@@ -72,7 +72,7 @@ class OfferFiltersBar extends ConsumerWidget {
               ),
             ),
           ),
-          if (!isBrandAdmin)
+          if (!isBrandScopedUser)
             SizedBox(
               width: 220,
               child: DropdownButtonFormField<String>(

@@ -76,4 +76,18 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
           );
     });
   }
+
+  Future<void> saveRequest(NotificationRequest request) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(notificationsRepositoryProvider).updateRequest(request),
+    );
+  }
+
+  Future<void> deleteRequest(String id) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(
+      () => ref.read(notificationsRepositoryProvider).deleteRequest(id),
+    );
+  }
 }

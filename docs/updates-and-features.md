@@ -4,6 +4,153 @@ Log all new features, enhancements, and non-bug work here **before** implementin
 
 ---
 
+## 2026-06-17 — Notification Request Status Pill and Publish Selector
+
+Restored notification request status visibility with Pending Review/Published labels and added a status selector for pending requests. Published requests are read-only with only the status pill and view action.
+
+---
+
+## 2026-06-17 — Offer discount types + integer-only value input
+
+Added `Up to percentage` and `Up to amount` discount types, removed the temporary discount category selector, and made discount value input integer-only for custom percentage/flat/up-to values.
+
+---
+
+## 2026-06-17 — Offer create up-to discount category selector
+
+Added an "Up to %" discount category selector on the offer form to quickly set percentage-based discount text/value during offer creation.
+
+---
+
+## 2026-06-17 — Animated login right-panel logo
+
+Added a subtle fade + scale reveal animation for the combined logo shown above the right-side login card.
+
+---
+
+## 2026-06-17 — Right login logo moved outside card
+
+Moved the combined Sale Siren logo outside the login card container so it appears above the login section.
+
+---
+
+## 2026-06-17 — Right login panel combined logo
+
+Added the provided combined Sale Siren logo to the top of the right-side login section.
+
+---
+
+## 2026-06-17 — Login panel logos removed
+
+Removed both parrot and tagline logos from the login left panel, keeping text-only animated branding content.
+
+---
+
+## 2026-06-17 — Animated login left-panel text and intro chime
+
+Added animated visibility for login left-panel marketing text and a short built-in chime sequence when the panel appears.
+
+---
+
+## 2026-06-17 — Login left-panel combined branding
+
+Updated login left-panel branding to show the combined Sale Siren mark (parrot over tagline) and removed the old top-left heading/logo row.
+
+---
+
+## 2026-06-17 — Unified Sale Siren logo and browser title
+
+Fixed clipped panel logo rendering, reused the same parrot logo on login, applied the same logo for Chrome tab icons, and updated browser/app display name to `Sale Siren`.
+
+---
+
+## 2026-06-17 — Admin panel logo updated to parrot asset
+
+Updated the admin panel brand mark to use the provided Salesiren parrot image asset.
+
+---
+
+## 2026-06-17 — Offer Lifecycle Alignment and Notification Status Cleanup
+
+Moved the offer lifecycle selector next to Verification in the offer form, and temporarily hid notification request status pill/status-change controls from the listing.
+
+---
+
+## 2026-06-17 — Offer Form Status Row Alignment
+
+Aligned the Verified/Unverified selector with the offer Status selector in the offer create/edit form.
+
+---
+
+## 2026-06-17 — Offer Form Verification and Lifecycle Selectors
+
+Added selector-based controls on the offer form for verified/unverified state and offer lifecycle state: Active, Ending Soon, or Expired.
+
+---
+
+## 2026-06-17 — Offer and Notification Status Selectors
+
+Added selector-based controls for offer verification state and notification request status changes.
+
+---
+
+## 2026-06-17 — Offer Expire Action
+
+Added an offer expire action so a published offer can be retired before creating a replacement offer.
+
+---
+
+## Batch Update 12 — Manager Profile Routing, Offer Permissions, Notification Edit/Delete (2026-06-17)
+
+### 1 — Manager profile/settings routing
+Updated manager profile menu behavior so profile/settings opens the settings page instead of brands.
+
+### 2 — Manager offer save/update permissions
+Adjusted Firestore rules so manager can create/update offers with full access expectations.
+
+### 3 — Notification request edit/delete for non-published offers
+Added notification request actions to allow editing/deleting requests when the related offer is not published.
+
+---
+
+## Batch Update 11 — Offer Visibility and Notification Request Coverage (2026-06-17)
+
+### 1 — Users see only self-created offers
+Updated offers visibility for non-super-admin users so the offers list returns only records created by the signed-in user.
+
+### 2 — Notification requests remain generated for all offers
+Kept notification request creation flow applicable to offers regardless of publish state, so both published and unpublished offers are represented in notification requests.
+
+---
+
+## Batch Update 10 — Manager Role: No Brand Binding + Unrestricted Operations (2026-06-17)
+
+### 1 — Manager registration and permissions adjustment
+Updated manager behavior so brand is not required/visible during user registration, and managers can create unlimited offers across categories and manage cities, brands, and categories without subscription/package constraints.
+
+---
+
+## Batch Update 9 — Manager Role (Brand Admin Access Without Subscription) (2026-06-17)
+
+### 1 — New manager role and access behavior
+Added a new `manager` role that follows brand-admin style operational access (brand-scoped offers/cities/categories/notifications) but is excluded from subscription/package flows, plan UI, and subscription-gating requirements.
+
+---
+
+## Batch Update 8 — Users: Super Admin Role-Based Registration (2026-06-17)
+
+### 1 — Register user action in Users module
+Added a super-admin-only user registration flow from the Users section, including role-based account creation with Firebase Auth user provisioning and `users/{uid}` profile creation.
+
+---
+
+## Batch Update 7 — Offer Create: Admin Brand Selection Input (2026-06-17)
+
+### 1 — Searchable brand selector on create/edit offer (admin/super admin)
+In `OfferFormScreen`, the non-brand-admin brand field is updated from a basic dropdown to a searchable selector input so admins can quickly find and select any available brand while creating offers.
+
+---
+
 ## Batch Update 6 — Design System: Reusable Widgets, Color Palette, Dark Theme, Doodle Background (2026-06-16)
 
 ### 1 — AppColors (centralized color palette)

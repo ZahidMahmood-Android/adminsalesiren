@@ -21,14 +21,14 @@ class BrandsListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brands = ref.watch(brandsProvider);
-    final isBrandAdmin = ref.watch(isBrandAdminProvider);
+    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
     final actionState = ref.watch(brandActionsProvider);
 
     return ScreenScaffold(
       loading: actionState.isLoading,
       header: ScreenHeader(
-        title: isBrandAdmin ? 'My Brand Profile' : 'Brands',
-        actions: isBrandAdmin
+        title: isBrandScopedUser ? 'My Brand Profile' : 'Brands',
+        actions: isBrandScopedUser
             ? []
             : [
                 OutlinedButton.icon(
@@ -52,10 +52,10 @@ class BrandsListScreen extends ConsumerWidget {
                 key: const ValueKey('brands-empty'),
                 icon: Icons.storefront_outlined,
                 title: 'No brands yet',
-                message: isBrandAdmin
+                message: isBrandScopedUser
                     ? 'Your brand profile is not linked yet.'
                     : 'Create the first brand to start entering offers.',
-                action: isBrandAdmin
+                action: isBrandScopedUser
                     ? null
                     : FilledButton.icon(
                         onPressed: () => context.go('/brands/new'),
@@ -104,7 +104,7 @@ class BrandsListScreen extends ConsumerWidget {
                             onPressed: () => context.go('/brands/${brand.id}'),
                             icon: const Icon(Icons.edit_outlined),
                           ),
-                          if (!isBrandAdmin)
+                          if (!isBrandScopedUser)
                             IconButton(
                               tooltip: 'Delete brand',
                               onPressed: () async {

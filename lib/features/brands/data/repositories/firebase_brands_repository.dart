@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/services/app_logger.dart';
+import '../../../auth/domain/entities/user_roles.dart';
 import '../../domain/entities/brand.dart';
 import '../../domain/repositories/brands_repository.dart';
 import '../models/brand_model.dart';
@@ -25,11 +26,12 @@ class FirebaseBrandsRepository implements BrandsRepository {
   @override
   Stream<List<Brand>> watchBrands() {
     return _brands.snapshots().map((snapshot) {
-      final brands = snapshot.docs
-          .map(BrandModel.fromSnapshot)
-          .where(_canReadBrand)
-          .toList()
-        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+      final brands =
+          snapshot.docs
+              .map(BrandModel.fromSnapshot)
+              .where(_canReadBrand)
+              .toList()
+            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
       return brands;
     });
   }
@@ -83,8 +85,9 @@ class FirebaseBrandsRepository implements BrandsRepository {
   }
 
   bool _canReadBrand(Brand brand) {
-    if (_currentUserRole == 'brand_admin') {
-      return brand.id == _currentBrandId || brand.ownerUserIds.contains(_currentUserId);
+    if (_currentUserRole == UserRoles.brandAdmin) {
+      return brand.id == _currentBrandId ||
+          brand.ownerUserIds.contains(_currentUserId);
     }
     return true;
   }

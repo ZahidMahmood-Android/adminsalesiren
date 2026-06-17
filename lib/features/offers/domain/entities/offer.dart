@@ -83,7 +83,7 @@ class Offer {
   final int clickCount;
   final int reportCount;
 
-  bool get isExpired => endDate.isBefore(DateTime.now());
+  bool get isExpired => status == 'expired' || endDate.isBefore(DateTime.now());
 
   Offer copyWith({
     String? id,

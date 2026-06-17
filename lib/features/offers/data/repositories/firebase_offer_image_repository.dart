@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:firebase_storage/firebase_storage.dart';
@@ -24,11 +25,15 @@ class FirebaseOfferImageRepository implements OfferImageRepository {
     final ref = _storage.ref(path);
     _log.info('Uploading offer image offerId=$offerId path=$path');
     try {
-      final task = await ref.putData(
-        Uint8List.fromList(bytes),
-        SettableMetadata(contentType: contentType),
+      final task = await ref
+          .putData(
+            Uint8List.fromList(bytes),
+            SettableMetadata(contentType: contentType),
+          )
+          .timeout(const Duration(seconds: 45));
+      final url = await task.ref.getDownloadURL().timeout(
+        const Duration(seconds: 20),
       );
-      final url = await task.ref.getDownloadURL();
       _log.info('Uploaded offer image offerId=$offerId path=$path');
       return url;
     } catch (error, stackTrace) {

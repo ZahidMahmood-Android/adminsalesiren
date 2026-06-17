@@ -17,18 +17,16 @@ class FirebaseCitiesRepository implements CitiesRepository {
 
   @override
   Stream<List<City>> watchCities() {
-    return _cities.snapshots().map((snapshot) {
-      final cities = snapshot.docs.map(CityModel.fromSnapshot).toList()
-        ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return _cities.orderBy('sortOrder').snapshots().map((snapshot) {
+      final cities = snapshot.docs.map(CityModel.fromSnapshot).toList();
       return cities;
     });
   }
 
   @override
   Future<List<City>> getCities() async {
-    final snapshot = await _cities.get();
-    return snapshot.docs.map(CityModel.fromSnapshot).toList()
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    final snapshot = await _cities.orderBy('sortOrder').get();
+    return snapshot.docs.map(CityModel.fromSnapshot).toList();
   }
 
   @override
@@ -57,7 +55,10 @@ class FirebaseCitiesRepository implements CitiesRepository {
       ),
     );
     _log.info('Creating city id=$safeId name=${city.name}');
-    await doc.set(model.toFirestore());
+    final data = model.toFirestore()
+      ..['createdAt'] = FieldValue.serverTimestamp()
+      ..['updatedAt'] = FieldValue.serverTimestamp();
+    await doc.set(data);
     return safeId;
   }
 
@@ -67,9 +68,9 @@ class FirebaseCitiesRepository implements CitiesRepository {
       city.copyWith(updatedAt: DateTime.now(), userId: _currentUserId),
     );
     _log.info('Updating city id=${city.id} name=${city.name}');
-    return _cities
-        .doc(city.id)
-        .update(model.toFirestore(includeCreatedAt: false));
+    final data = model.toFirestore(includeCreatedAt: false)
+      ..['updatedAt'] = FieldValue.serverTimestamp();
+    return _cities.doc(city.id).update(data);
   }
 
   @override

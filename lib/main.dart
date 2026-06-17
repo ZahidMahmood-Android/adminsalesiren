@@ -41,7 +41,7 @@ class SalesirenAdminApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: 'Salesiren Admin',
+      title: 'Sale Siren',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),

@@ -8,14 +8,12 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
   FirebaseNotificationsRepository(
     this._firestore,
     this._currentUserId,
-    this._currentUserRole,
-    this._currentBrandId,
+    String _,
+    String __,
   );
 
   final FirebaseFirestore _firestore;
   final String _currentUserId;
-  final String _currentUserRole;
-  final String _currentBrandId;
   final _log = AppLogger.get('FirebaseNotificationsRepository');
 
   CollectionReference<Map<String, dynamic>> get _requests =>
@@ -23,12 +21,20 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
 
   @override
   Stream<List<NotificationRequest>> watchRequests() {
-    final query = _currentUserRole == 'brand_admin'
-        ? _requests.where('brandId', isEqualTo: _currentBrandId)
-        : _requests;
+    if (_currentUserId.isEmpty) {
+      return Stream.value(const <NotificationRequest>[]);
+    }
+    final query = _requests.where(
+      'requestedByUserId',
+      isEqualTo: _currentUserId,
+    );
     return query.snapshots().map((snapshot) {
-      final requests = snapshot.docs.map(_fromSnapshot).toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final requests =
+          snapshot.docs
+              .map(_fromSnapshot)
+              .where((request) => request.offerId.isNotEmpty)
+              .toList()
+            ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return requests;
     });
   }
@@ -71,6 +77,17 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
   }
 
   @override
+  Future<void> updateRequest(NotificationRequest request) {
+    return _requests.doc(request.id).update({
+      'title': request.title,
+      'body': request.body,
+      'targetCityIds': request.targetCityIds,
+      'targetCategoryIds': request.targetCategoryIds,
+      'updatedAt': Timestamp.now(),
+    });
+  }
+
+  @override
   Future<void> updateRequestStatus(
     String id,
     String status, {
@@ -84,6 +101,31 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
       'approvedAt': status == 'approved' ? Timestamp.now() : null,
       'updatedAt': Timestamp.now(),
     });
+  }
+
+  @override
+  Future<void> deleteRequest(String id) {
+    return _requests.doc(id).delete();
+  }
+
+  @override
+  Future<void> deleteRequestsForOffer(String offerId) async {
+    if (offerId.isEmpty) {
+      return;
+    }
+    _log.warning('Deleting notification requests for offerId=$offerId');
+    final snapshot = await _requests.where('offerId', isEqualTo: offerId).get();
+    if (snapshot.docs.isEmpty) {
+      return;
+    }
+    final batch = _firestore.batch();
+    for (final doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+    _log.info(
+      'Deleted ${snapshot.docs.length} notification requests for offerId=$offerId',
+    );
   }
 
   NotificationRequest _fromSnapshot(
