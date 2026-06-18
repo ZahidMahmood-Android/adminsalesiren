@@ -299,6 +299,7 @@ Future<NotificationRequest?> _editRequestDialog(
                 requestedByUserId: request.requestedByUserId,
                 targetCityIds: request.targetCityIds,
                 targetCategoryIds: request.targetCategoryIds,
+                targetTopics: request.targetTopics,
                 adminNotes: request.adminNotes,
                 approvedBy: request.approvedBy,
                 approvedAt: request.approvedAt,

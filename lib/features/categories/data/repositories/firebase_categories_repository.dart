@@ -49,6 +49,9 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
     final model = CategoryModel.fromEntity(
       category.copyWith(
         id: safeId,
+        topic: category.topic.isEmpty
+            ? _topicFor(category.name, safeId)
+            : category.topic,
         createdAt: now,
         updatedAt: now,
         userId: _currentUserId,
@@ -65,7 +68,13 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
   @override
   Future<void> updateCategory(Category category) {
     final model = CategoryModel.fromEntity(
-      category.copyWith(updatedAt: DateTime.now(), userId: _currentUserId),
+      category.copyWith(
+        topic: category.topic.isEmpty
+            ? _topicFor(category.name, category.id)
+            : category.topic,
+        updatedAt: DateTime.now(),
+        userId: _currentUserId,
+      ),
     );
     _log.info('Updating category id=${category.id} name=${category.name}');
     final data = model.toFirestore(includeCreatedAt: false)
@@ -85,5 +94,20 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
       '-',
     );
     return id.replaceAll(RegExp(r'^-+|-+$'), '');
+  }
+
+  String _topicFor(String name, String id) {
+    final base = _safeId(name).replaceAll('-', '');
+    final prefix = base.length <= 8 ? base : base.substring(0, 8);
+    return '${prefix}_${_shortCode('$id-$name')}';
+  }
+
+  String _shortCode(String value) {
+    var hash = 0;
+    for (final unit in value.codeUnits) {
+      hash = (hash * 31 + unit) & 0x7fffffff;
+    }
+    final code = hash.toRadixString(36).padLeft(4, '0');
+    return code.substring(code.length - 4);
   }
 }

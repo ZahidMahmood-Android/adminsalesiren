@@ -59,6 +59,9 @@ class FirebaseBrandsRepository implements BrandsRepository {
         createdAt: now,
         updatedAt: now,
         userId: _currentUserId,
+        topic: brand.topic.isEmpty
+            ? _topicFor(brand.name, doc.id)
+            : brand.topic,
       ),
     );
     _log.info('Creating brand id=${doc.id} name=${brand.name}');
@@ -70,7 +73,13 @@ class FirebaseBrandsRepository implements BrandsRepository {
   @override
   Future<void> updateBrand(Brand brand) {
     final model = BrandModel.fromEntity(
-      brand.copyWith(updatedAt: DateTime.now(), userId: _currentUserId),
+      brand.copyWith(
+        updatedAt: DateTime.now(),
+        userId: _currentUserId,
+        topic: brand.topic.isEmpty
+            ? _topicFor(brand.name, brand.id)
+            : brand.topic,
+      ),
     );
     _log.info('Updating brand id=${brand.id} name=${brand.name}');
     return _brands
@@ -90,5 +99,25 @@ class FirebaseBrandsRepository implements BrandsRepository {
           brand.ownerUserIds.contains(_currentUserId);
     }
     return true;
+  }
+
+  String _topicFor(String name, String id) {
+    final compactName = name.trim().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '',
+    );
+    final prefix = compactName.length <= 8
+        ? compactName
+        : compactName.substring(0, 8);
+    return '${prefix}_${_shortCode('$id-$name')}';
+  }
+
+  String _shortCode(String value) {
+    var hash = 0;
+    for (final unit in value.codeUnits) {
+      hash = (hash * 31 + unit) & 0x7fffffff;
+    }
+    final code = hash.toRadixString(36).padLeft(4, '0');
+    return code.substring(code.length - 4);
   }
 }

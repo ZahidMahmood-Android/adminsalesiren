@@ -12,6 +12,7 @@ class Brand {
     required this.createdAt,
     required this.updatedAt,
     this.slug = '',
+    this.topic = '',
     this.description = '',
     this.primaryCategoryId = '',
     this.type = 'brand',
@@ -42,6 +43,7 @@ class Brand {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String slug;
+  final String topic;
   final String description;
   final String primaryCategoryId;
   final String type;
@@ -72,6 +74,7 @@ class Brand {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? slug,
+    String? topic,
     String? description,
     String? primaryCategoryId,
     String? type,
@@ -102,6 +105,7 @@ class Brand {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       slug: slug ?? this.slug,
+      topic: topic ?? this.topic,
       description: description ?? this.description,
       primaryCategoryId: primaryCategoryId ?? this.primaryCategoryId,
       type: type ?? this.type,

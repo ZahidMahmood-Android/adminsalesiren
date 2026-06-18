@@ -4,9 +4,45 @@ Log all new features, enhancements, and non-bug work here **before** implementin
 
 ---
 
+## 2026-06-18 — Brand Topic Field for Future Subscriptions
+
+Added a future-ready brand `topic` field and generation path so brand topic subscriptions can be introduced later without changing the current app flow.
+
+---
+
+## 2026-06-18 — Offer Publish Category Topics
+
+Updated offer notification request creation so selected offer categories resolve to their seeded category topics for mobile-app topic subscribers.
+
+---
+
+## 2026-06-18 — Category Topic Seed Field
+
+Added a short unique category `topic` value generated during category seeding from the category name plus a short unique suffix.
+
+---
+
+## 2026-06-18 — Public mobile offer feed reads (published + verified, not expired)
+
+Updated Firestore `offers` get/list rules so anyone using the mobile app can read offers that are published, verified, and not expired (no `mobile_user` role required). Unpublished, unverified, and expired offers remain hidden. Admin/brand/manager and offer-owner access unchanged.
+
+---
+
+## 2026-06-18 — Merge mobile app saved_offers rule into admin Firestore rules
+
+Added the `users/{userId}/saved_offers/{offerId}` subcollection rule from the mobile app `firestore.rules` into the admin panel `firestore.rules` so a single ruleset can be pasted into the Firebase console. Existing admin/brand rules unchanged; the catalog/offer/report/user reads required by the mobile app are already covered by the current rules.
+
+---
+
 ## 2026-06-17 — Notification Request Status Pill and Publish Selector
 
 Restored notification request status visibility with Pending Review/Published labels and added a status selector for pending requests. Published requests are read-only with only the status pill and view action.
+
+---
+
+## 2026-06-18 — Mobile user offer visibility and save/share rule access
+
+Updated Firestore rules so `mobile_user` can read published offers and perform restricted save/share counter updates on published offers.
 
 ---
 

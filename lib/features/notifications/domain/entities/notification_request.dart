@@ -13,6 +13,7 @@ class NotificationRequest {
     this.requestedByUserId = '',
     this.targetCityIds = const [],
     this.targetCategoryIds = const [],
+    this.targetTopics = const [],
     this.adminNotes = '',
     this.approvedBy = '',
     this.approvedAt,
@@ -34,6 +35,7 @@ class NotificationRequest {
   final String requestedByUserId;
   final List<String> targetCityIds;
   final List<String> targetCategoryIds;
+  final List<String> targetTopics;
   final String adminNotes;
   final String approvedBy;
   final DateTime? approvedAt;

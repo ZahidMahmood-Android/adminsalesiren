@@ -6,6 +6,7 @@ import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
 import '../../../auth/domain/entities/user_roles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../categories/presentation/providers/category_providers.dart';
 import '../../data/repositories/firebase_offer_image_repository.dart';
 import '../../data/repositories/firebase_offers_repository.dart';
 import '../../domain/entities/offer.dart';
@@ -263,6 +264,10 @@ class OfferActionsController extends AsyncNotifier<void> {
           return;
         }
       }
+      final categoryIds = offer.categoryIds.isEmpty
+          ? [offer.categoryId]
+          : offer.categoryIds;
+      final categoryTopics = await _topicsForCategoryIds(categoryIds);
       await ref
           .read(createNotificationRequestProvider)
           .call(
@@ -270,13 +275,14 @@ class OfferActionsController extends AsyncNotifier<void> {
               id: '',
               title: 'New offer available',
               body: '${offer.brandName}: ${offer.discountText}',
-              topic: 'selected_cities',
+              topic: categoryTopics.isEmpty ? '' : categoryTopics.first,
               type: 'new_offer',
               data: {
                 'offerId': offer.id,
                 'brandId': offer.brandId,
                 'categoryId': offer.categoryId,
-                'categoryIds': offer.categoryIds.join(','),
+                'categoryIds': categoryIds.join(','),
+                'categoryTopics': categoryTopics.join(','),
                 'cityId': offer.cityId,
                 'cityIds': offer.cityIds.join(','),
               },
@@ -286,9 +292,8 @@ class OfferActionsController extends AsyncNotifier<void> {
               targetCityIds: offer.cityIds.isEmpty
                   ? [offer.cityId]
                   : offer.cityIds,
-              targetCategoryIds: offer.categoryIds.isEmpty
-                  ? [offer.categoryId]
-                  : offer.categoryIds,
+              targetCategoryIds: categoryIds,
+              targetTopics: categoryTopics,
               status: offer.isPublished ? 'approved' : 'pending',
               createdAt: DateTime.now(),
             ),
@@ -305,5 +310,19 @@ class OfferActionsController extends AsyncNotifier<void> {
         stackTrace,
       );
     }
+  }
+
+  Future<List<String>> _topicsForCategoryIds(List<String> categoryIds) async {
+    final ids = categoryIds.where((id) => id.trim().isNotEmpty).toSet();
+    if (ids.isEmpty) {
+      return const [];
+    }
+    final categories = await ref.read(categoriesProvider.future);
+    return categories
+        .where((category) => ids.contains(category.id))
+        .map((category) => category.topic.trim())
+        .where((topic) => topic.isNotEmpty)
+        .toSet()
+        .toList();
   }
 }

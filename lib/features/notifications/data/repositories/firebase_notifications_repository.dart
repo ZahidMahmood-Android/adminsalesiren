@@ -56,6 +56,7 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
       'requestedByUserId': request.requestedByUserId,
       'targetCityIds': request.targetCityIds,
       'targetCategoryIds': request.targetCategoryIds,
+      'targetTopics': request.targetTopics,
       'topic': request.topic,
       'type': request.type,
       'data': request.data,
@@ -83,6 +84,7 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
       'body': request.body,
       'targetCityIds': request.targetCityIds,
       'targetCategoryIds': request.targetCategoryIds,
+      'targetTopics': request.targetTopics,
       'updatedAt': Timestamp.now(),
     });
   }
@@ -150,6 +152,7 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
       requestedByUserId: data['requestedByUserId'] as String? ?? '',
       targetCityIds: _readStringList(data['targetCityIds']),
       targetCategoryIds: _readStringList(data['targetCategoryIds']),
+      targetTopics: _readStringList(data['targetTopics']),
       adminNotes: data['adminNotes'] as String? ?? '',
       approvedBy: data['approvedBy'] as String? ?? '',
       approvedAt: _readOptionalDate(data['approvedAt']),

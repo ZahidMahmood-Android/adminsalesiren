@@ -24,16 +24,18 @@ class FirebaseMasterDataSeedRepository implements MasterDataSeedRepository {
     var sortOrder = 1;
     for (final row in MasterSeedData.categories) {
       final id = row[0] as String;
+      final name = row[1] as String;
       await _upsert('categories', id, {
-        'name': row[1],
+        'name': name,
         'slug': id,
+        'topic': _topicFor(name, id),
         'description': _categoryDescription(id),
         'iconName': row[2],
         'colorHex': row[3],
         'isActive': row[4],
         'isFeatured': row[5],
         'sortOrder': sortOrder,
-        'searchKeywords': _keywords(id, row[1] as String),
+        'searchKeywords': _keywords(id, name),
       });
       sortOrder++;
     }
@@ -73,6 +75,7 @@ class FirebaseMasterDataSeedRepository implements MasterDataSeedRepository {
         {
           'name': name,
           'slug': id,
+          'topic': _topicFor(name, id),
           'description': '',
           'logoUrl': seedLogo,
           'websiteUrl': seedWebsite,
@@ -162,6 +165,26 @@ class FirebaseMasterDataSeedRepository implements MasterDataSeedRepository {
       name.toLowerCase(),
       ...name.toLowerCase().split(RegExp(r'[^a-z0-9]+')),
     }.where((item) => item.isNotEmpty).toList();
+  }
+
+  String _topicFor(String name, String id) {
+    final compactName = name.trim().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9]+'),
+      '',
+    );
+    final prefix = compactName.length <= 8
+        ? compactName
+        : compactName.substring(0, 8);
+    return '${prefix}_${_shortCode('$id-$name')}';
+  }
+
+  String _shortCode(String value) {
+    var hash = 0;
+    for (final unit in value.codeUnits) {
+      hash = (hash * 31 + unit) & 0x7fffffff;
+    }
+    final code = hash.toRadixString(36).padLeft(4, '0');
+    return code.substring(code.length - 4);
   }
 
   String _categoryDescription(String id) {

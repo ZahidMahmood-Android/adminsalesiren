@@ -56,6 +56,12 @@ service cloud.firestore {
         && userDoc().data.isActive == true;
     }
 
+    function isMobileUser() {
+      return hasUserDoc()
+        && userDoc().data.role == 'mobile_user'
+        && userDoc().data.isActive == true;
+    }
+
     function isBrandScopedUser() {
       return isBrandAdmin() || isManager();
     }
@@ -125,6 +131,11 @@ service cloud.firestore {
       allow create, update: if isAdminOrSuperAdmin()
         || (isSignedIn() && request.auth.uid == userId);
       allow delete: if isAdminOrSuperAdmin();
+
+      // Mobile app: each signed-in user owns their saved offers.
+      match /saved_offers/{offerId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     match /cities/{cityId} {
@@ -157,10 +168,18 @@ service cloud.firestore {
     }
 
     match /offers/{offerId} {
-      allow get: if resource.data.isPublished == true
+      // Public mobile feed: anyone can read offers that are published, verified,
+      // and not expired. Unpublished/unverified/expired offers stay hidden.
+      allow get: if (resource.data.isPublished == true
+          && resource.data.isVerified == true
+          && resource.data.status != 'expired')
         || isManagerOrAdminOrSuperAdmin()
         || ownsOffer();
-      allow list: if isManagerOrAdminOrSuperAdmin() || isBrandScopedUser();
+      allow list: if isManagerOrAdminOrSuperAdmin()
+        || isBrandScopedUser()
+        || (resource.data.isPublished == true
+          && resource.data.isVerified == true
+          && resource.data.status != 'expired');
       allow create: if isManagerOrAdminOrSuperAdmin() || createsOwnOffer();
       allow update: if (
           isManagerOrAdminOrSuperAdmin()
@@ -197,7 +216,18 @@ service cloud.firestore {
               && request.resource.data.approvalStatus == 'approved'
               && request.resource.data.approvedBy == request.auth.uid
             )
-          ));
+          ))
+        || (
+          isMobileUser()
+          && resource.data.isPublished == true
+          && request.resource.data.isPublished == true
+          && request.resource.data.saveCount is int
+          && request.resource.data.shareCount is int
+          && request.resource.data.saveCount >= resource.data.saveCount
+          && request.resource.data.shareCount >= resource.data.shareCount
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['saveCount', 'shareCount', 'updatedAt'])
+        );
       allow delete: if resource.data.status != 'published'
         && resource.data.isPublished != true
         && (

@@ -8,6 +8,7 @@ class Category {
     required this.createdAt,
     required this.updatedAt,
     this.slug = '',
+    this.topic = '',
     this.description = '',
     this.colorHex = '',
     this.isFeatured = false,
@@ -23,6 +24,7 @@ class Category {
   final DateTime createdAt;
   final DateTime updatedAt;
   final String slug;
+  final String topic;
   final String description;
   final String colorHex;
   final bool isFeatured;
@@ -38,6 +40,7 @@ class Category {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? slug,
+    String? topic,
     String? description,
     String? colorHex,
     bool? isFeatured,
@@ -53,6 +56,7 @@ class Category {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       slug: slug ?? this.slug,
+      topic: topic ?? this.topic,
       description: description ?? this.description,
       colorHex: colorHex ?? this.colorHex,
       isFeatured: isFeatured ?? this.isFeatured,
