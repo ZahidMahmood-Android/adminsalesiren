@@ -1,0 +1,18 @@
+---
+description: Keep Firestore rules and indexes in sync with mobile app; log changes in docs.
+globs:
+  - firestore.rules
+  - firestore.indexes.json
+alwaysApply: false
+---
+
+# Firestore rules & change logging
+
+1. **Edit here first:** `firestore.rules` and `firestore.indexes.json` in this app (canonical).
+2. **Sync to mobile:** copy to `apps/mobileapp/` — see `docs/firestore-rules-sync.md`.
+3. **Log changes:**
+   - Features / schema → `docs/updates-and-features.md`
+   - Bug fixes / permission issues → `docs/bug-fixes.md`
+4. **Deploy:** `firebase deploy --only firestore:rules,firestore:indexes`
+
+Rules bodies must match `apps/mobileapp/firestore.rules` (header comments may differ).

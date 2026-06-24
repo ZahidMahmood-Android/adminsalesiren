@@ -1,15 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/extensions/date_time_extensions.dart';
-import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../auth/domain/entities/user_roles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/domain/entities/brand.dart';
@@ -18,9 +18,12 @@ import '../../../categories/domain/entities/category.dart' as app_category;
 import '../../../categories/presentation/providers/category_providers.dart';
 import '../../../cities/domain/entities/city.dart';
 import '../../../cities/presentation/providers/city_providers.dart';
+import '../../../brands/domain/entities/brand_url_source.dart';
+import '../../data/local/offer_create_draft_storage.dart';
 import '../../domain/entities/offer.dart';
+import '../../domain/entities/offer_line.dart';
 import '../providers/offer_providers.dart';
-import '../widgets/offer_form_controls.dart';
+import '../widgets/offer_lines_editor.dart';
 import '../../../subscriptions/presentation/providers/subscription_providers.dart';
 import '../../../../core/widgets/screen_layout.dart';
 
@@ -36,42 +39,108 @@ class OfferFormScreen extends ConsumerStatefulWidget {
 class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _discountTextController = TextEditingController();
-  final _discountValueController = TextEditingController();
-  final _sourceUrlController = TextEditingController();
-  final _onlineUrlController = TextEditingController();
 
-  String? _brandId;
-  String? _categoryId;
-  final _selectedCategoryIds = <String>{};
-  final _selectedCityIds = <String>{};
-  String _discountType = 'percentage';
-  String _status = 'pending_review';
-  String _lifecycleStatus = 'active';
-  DateTime? _startDate;
-  DateTime? _endDate;
-  bool _isPublished = false;
-  bool _isVerified = false;
-  bool _isFeatured = false;
-  String _imageUrl = '';
-  XFile? _pickedImage;
+  List<OfferLineDraft> _lineDrafts = [OfferLineDraft.empty()];
   var _hydrated = false;
+  var _draftReady = false;
+  var _draftRestored = false;
+  var _draftLoadAttempted = false;
+  Timer? _draftTimer;
   var _isSubmitting = false;
   Offer? _loadedOffer;
 
   bool get _isEditing => widget.offerId != null;
 
+  bool get _allowsMultipleOffers =>
+      !_isEditing || (_loadedOffer?.isGroupOffer ?? false);
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) {
+      _draftReady = true;
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _tryLoadCreateDraft(),
+      );
+    }
+  }
+
   @override
   void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _discountTextController.dispose();
-    _discountValueController.dispose();
-    _sourceUrlController.dispose();
-    _onlineUrlController.dispose();
+    _draftTimer?.cancel();
+    if (!_isEditing) {
+      _persistDraft();
+    }
     super.dispose();
+  }
+
+  void _tryLoadCreateDraft() {
+    if (_isEditing || _draftLoadAttempted || !mounted) {
+      return;
+    }
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      return;
+    }
+    _draftLoadAttempted = true;
+    final isBrandScoped = ref.read(isBrandScopedUserProvider);
+    final stored = OfferCreateDraftStorage.load(user.id);
+    setState(() {
+      if (stored != null && stored.isNotEmpty) {
+        _lineDrafts = stored;
+        _draftRestored = true;
+      } else if (isBrandScoped && user.brandId.isNotEmpty) {
+        _lineDrafts = [OfferLineDraft.empty(brandId: user.brandId)];
+      }
+      _draftReady = true;
+    });
+  }
+
+  void _onDraftsChanged(List<OfferLineDraft> lines) {
+    setState(() => _lineDrafts = lines);
+    _scheduleDraftSave();
+  }
+
+  void _scheduleDraftSave() {
+    if (_isEditing) {
+      return;
+    }
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 400), _persistDraft);
+  }
+
+  void _persistDraft() {
+    if (_isEditing || !mounted) {
+      return;
+    }
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      return;
+    }
+    OfferCreateDraftStorage.save(user.id, _lineDrafts);
+  }
+
+  void _discardDraft() {
+    final user = ref.read(currentUserProvider);
+    if (user != null) {
+      OfferCreateDraftStorage.clear(user.id);
+    }
+    setState(() {
+      _lineDrafts = [
+        OfferLineDraft.empty(
+          brandId: user?.brandId.isNotEmpty == true ? user!.brandId : null,
+        ),
+      ];
+      _draftRestored = false;
+    });
+  }
+
+  void _clearDraftAfterSave() {
+    final user = ref.read(currentUserProvider);
+    if (user != null) {
+      OfferCreateDraftStorage.clear(user.id);
+    }
   }
 
   void _hydrate(Offer offer) {
@@ -79,65 +148,45 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       return;
     }
     _loadedOffer = offer;
-    _titleController.text = offer.title;
-    _descriptionController.text = offer.description;
-    _discountTextController.text = offer.discountText;
-    _discountValueController.text = offer.discountValue?.toString() ?? '';
-    _sourceUrlController.text = offer.sourceUrl;
-    _onlineUrlController.text = offer.onlineUrl;
-    _brandId = offer.brandId;
-    _categoryId = offer.categoryId;
-    _selectedCategoryIds
-      ..clear()
-      ..addAll(
-        offer.categoryIds.isEmpty ? [offer.categoryId] : offer.categoryIds,
-      );
-    _selectedCityIds
-      ..clear()
-      ..addAll(offer.cityIds.isEmpty ? [offer.cityId] : offer.cityIds);
-    _discountType = offer.discountType;
-    _status = offer.isPublished ? 'published' : offer.status;
-    if (_status == 'pending') {
-      _status = 'pending_review';
+    if (_allowsMultipleOffers && offer.isGroupOffer) {
+      _lineDrafts = offer.resolvedLines
+          .map((line) => OfferLineDraft.fromLine(line, parent: offer))
+          .toList();
+    } else {
+      _lineDrafts = [OfferLineDraft.fromOffer(offer)];
     }
-    if (_status != 'pending_review' && _status != 'published') {
-      _status = 'pending_review';
+    if (_lineDrafts.isEmpty) {
+      _lineDrafts = [OfferLineDraft.empty(brandId: offer.brandId)];
     }
-    if (![
-      'percentage',
-      'flat',
-      'upto_percentage',
-      'upto_amount',
-      'bundle',
-      'other',
-    ].contains(_discountType)) {
-      _discountType = 'other';
-    }
-    _startDate = offer.startDate;
-    _endDate = offer.endDate;
-    _lifecycleStatus = _lifecycleForDate(offer.endDate);
-    _isPublished = offer.isPublished;
-    _isVerified = offer.isVerified;
-    _isFeatured = offer.isFeatured;
-    _imageUrl = offer.imageUrl;
     _hydrated = true;
   }
 
-  Future<void> _pickImage() async {
-    final image = await _picker.pickImage(
-      source: ImageSource.gallery,
+  Future<void> _pickLineImages(int index) async {
+    final images = await _picker.pickMultiImage(
       maxWidth: 1800,
       imageQuality: 88,
     );
-    if (image != null) {
-      setState(() => _pickedImage = image);
+    if (images.isEmpty || index < 0 || index >= _lineDrafts.length) {
+      return;
     }
+    setState(() {
+      _lineDrafts[index].pickedImages
+        ..clear()
+        ..addAll(images);
+    });
+    _scheduleDraftSave();
   }
 
-  Future<void> _pickDate({required bool start}) async {
+  Future<void> _pickLineDate(int index, {required bool start}) async {
+    if (index < 0 || index >= _lineDrafts.length) {
+      return;
+    }
+    final draft = _lineDrafts[index];
     final initialDate = start
-        ? _startDate ?? DateTime.now()
-        : _endDate ?? _startDate ?? DateTime.now().add(const Duration(days: 7));
+        ? draft.startDate ?? DateTime.now()
+        : draft.endDate ??
+              draft.startDate ??
+              DateTime.now().add(const Duration(days: 7));
     final picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -149,33 +198,16 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     }
     setState(() {
       if (start) {
-        _startDate = picked;
-        if (_endDate != null && !_endDate!.isAfter(picked)) {
-          _endDate = picked.add(const Duration(days: 1));
+        draft.startDate = picked;
+        if (draft.endDate != null && !draft.endDate!.isAfter(picked)) {
+          draft.endDate = picked.add(const Duration(days: 1));
         }
       } else {
-        _endDate = picked;
+        draft.endDate = picked;
       }
-      _lifecycleStatus = _lifecycleForDate(_endDate);
+      draft.syncLifecycleFromEndDate();
     });
-  }
-
-  void _setLifecycleStatus(String value) {
-    final today = DateTime.now();
-    final date = DateTime(today.year, today.month, today.day);
-    setState(() {
-      _lifecycleStatus = value;
-      if (value == 'expired') {
-        _startDate = date.subtract(const Duration(days: 7));
-        _endDate = date.subtract(const Duration(days: 1));
-      } else if (value == 'ending_soon') {
-        _startDate = date;
-        _endDate = date.add(const Duration(days: 2));
-      } else {
-        _startDate = date;
-        _endDate = date.add(const Duration(days: 14));
-      }
-    });
+    _scheduleDraftSave();
   }
 
   void _showLimitDialog(BuildContext context, String message) {
@@ -213,13 +245,21 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     required List<Brand> brands,
     required List<app_category.Category> categories,
     required List<City> cities,
+    required bool isBrandScopedUser,
+    required bool isManager,
   }) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
     if (mounted) setState(() => _isSubmitting = true);
     try {
-      await _doSubmit(brands: brands, categories: categories, cities: cities);
+      await _doSubmit(
+        brands: brands,
+        categories: categories,
+        cities: cities,
+        isBrandScopedUser: isBrandScopedUser,
+        isManager: isManager,
+      );
     } catch (error) {
       if (mounted) {
         await showAppError(context, error, title: 'Could Not Save Offer');
@@ -233,228 +273,202 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     required List<Brand> brands,
     required List<app_category.Category> categories,
     required List<City> cities,
+    required bool isBrandScopedUser,
+    required bool isManager,
   }) async {
-    if (_startDate == null || _endDate == null) {
-      if (mounted) {
-        showAppError(
-          context,
-          null,
-          message: 'Please select start and end dates.',
-        );
-      }
-      return;
-    }
-    if (!_endDate!.isAfter(_startDate!)) {
-      if (mounted) {
-        showAppError(
-          context,
-          null,
-          message: 'End date must be after start date.',
-        );
-      }
-      return;
-    }
-    if (_selectedCityIds.isEmpty) {
-      if (mounted) {
-        showAppError(
-          context,
-          null,
-          message: 'Please select at least one city.',
-        );
-      }
-      return;
-    }
-    if (_selectedCategoryIds.isEmpty && _categoryId == null) {
-      if (mounted) {
-        showAppError(
-          context,
-          null,
-          message: 'Please select at least one category.',
-        );
-      }
-      return;
-    }
-
-    if (_brandId == null || _brandId!.isEmpty) {
-      if (mounted) {
-        showAppError(context, null, message: 'Brand required');
-      }
-      return;
-    }
-    final brand = _brandById(brands, _brandId);
-    if (brand == null) {
-      if (mounted) {
-        showAppError(
-          context,
-          null,
-          message:
-              'The selected brand is not available. Please choose another.',
-        );
-      }
-      return;
-    }
-    final selectedCategories = categories
-        .where(
-          (item) =>
-              _selectedCategoryIds.contains(item.id) || item.id == _categoryId,
-        )
-        .toList();
-    if (selectedCategories.isEmpty) {
-      if (mounted) {
-        showAppError(
-          context,
-          null,
-          message:
-              'The selected category is not available. Please choose another.',
-        );
-      }
-      return;
-    }
-    final category = selectedCategories.first;
-    final selectedCities = cities
-        .where((item) => _selectedCityIds.contains(item.id))
-        .toList();
-    if (selectedCities.isEmpty) {
-      if (mounted) {
-        showAppError(
-          context,
-          null,
-          message: 'The selected city is not available. Please choose another.',
-        );
-      }
-      return;
-    }
-    final city = selectedCities.first;
-    final user = ref.read(currentUserProvider);
-    final isBrandScopedUser =
-        user?.role == UserRoles.brandAdmin || user?.role == UserRoles.manager;
-    final enforceSubscriptionLimits = user?.role == UserRoles.brandAdmin;
-    final now = DateTime.now();
-    final discountValue = int.tryParse(_discountValueController.text.trim());
-    if (_isFeatured && !_isVerified) {
-      if (mounted) {
-        showAppError(
-          context,
-          null,
-          message: 'Only verified offers can be featured.',
-        );
-      }
-      return;
-    }
-
-    if (enforceSubscriptionLimits && !_isEditing) {
-      try {
-        final limitMessage = await ref
-            .read(subscriptionActionsProvider.notifier)
-            .checkOfferCreationLimits(brand.id);
-        if (limitMessage != null) {
-          if (mounted) _showLimitDialog(context, limitMessage);
-          return;
-        }
-      } catch (_) {
-        // If quota check fails (e.g. usage record not yet created), allow save to proceed.
-      }
-    }
-    if (enforceSubscriptionLimits && _isFeatured) {
-      try {
-        final featuredMessage = await ref
-            .read(subscriptionActionsProvider.notifier)
-            .checkFeaturedOfferLimits(brand.id);
-        if (featuredMessage != null) {
-          if (mounted) _showLimitDialog(context, featuredMessage);
-          return;
-        }
-      } catch (_) {
-        // If featured-offer quota check fails, allow save to proceed.
-      }
-    }
-
-    final baseOffer = _isEditing && _loadedOffer != null
-        ? _loadedOffer!
-        : Offer(
-            id: widget.offerId ?? '',
-            title: '',
-            description: '',
-            brandId: '',
-            brandName: '',
-            categoryId: '',
-            categoryName: '',
-            cityId: '',
-            cityName: '',
-            discountText: '',
-            discountType: _discountType,
-            discountValue: null,
-            imageUrl: '',
-            sourceUrl: '',
-            onlineUrl: '',
-            startDate: _startDate!,
-            endDate: _endDate!,
-            isVerified: false,
-            isPublished: false,
-            isFeatured: false,
-            aiConfidence: null,
-            createdBy: user?.id ?? '',
-            createdAt: now,
-            updatedAt: now,
-          );
-    final selectedStatus = isBrandScopedUser ? _status : baseOffer.status;
-    final selectedPublished = isBrandScopedUser
-        ? selectedStatus == 'published'
-        : _isPublished;
-    var offer = baseOffer.copyWith(
-      id: widget.offerId ?? '',
-      title: _titleController.text.trim(),
-      description: _descriptionController.text.trim(),
-      brandId: brand.id,
-      brandName: brand.name,
-      categoryId: category.id,
-      categoryName: category.name,
-      categoryIds: selectedCategories.map((item) => item.id).toList(),
-      categoryNames: selectedCategories.map((item) => item.name).toList(),
-      cityId: city.id,
-      cityName: city.name,
-      cityIds: selectedCities.map((item) => item.id).toList(),
-      cityNames: selectedCities.map((item) => item.name).toList(),
-      discountText: _discountTextController.text.trim(),
-      discountType: _discountType,
-      discountValue: discountValue,
-      imageUrl: _imageUrl,
-      sourceUrl: _sourceUrlController.text.trim(),
-      onlineUrl: _onlineUrlController.text.trim(),
-      startDate: _startDate!,
-      endDate: _endDate!,
-      isVerified: _isVerified,
-      isPublished: selectedPublished,
-      isFeatured: _isFeatured,
-      status: isBrandScopedUser ? selectedStatus : baseOffer.status,
-      approvalStatus: isBrandScopedUser
-          ? selectedStatus == 'published'
-                ? 'approved'
-                : 'pending'
-          : baseOffer.approvalStatus,
-      approvedBy: isBrandScopedUser
-          ? selectedStatus == 'published'
-                ? user?.id ?? ''
-                : ''
-          : baseOffer.approvedBy,
-      approvedAt: isBrandScopedUser
-          ? selectedStatus == 'published'
-                ? now
-                : null
-          : baseOffer.approvedAt,
-      updatedAt: now,
+    final draftError = validateOfferDrafts(
+      _lineDrafts,
+      isBrandScopedUser: isBrandScopedUser,
     );
+    if (draftError != null) {
+      if (mounted) {
+        showAppError(context, null, message: draftError);
+      }
+      return;
+    }
 
+    final user = ref.read(currentUserProvider);
+    final enforceSubscriptionLimits =
+        user?.hasRole(UserRoles.brandAdmin) ?? false;
     final actions = ref.read(offerActionsProvider.notifier);
-    var offerId = widget.offerId;
-    if (_isEditing) {
-      await actions.saveChanges(offer);
+    final offersToSave = <Offer>[];
+
+    for (final draft in _lineDrafts) {
+      final brandId = isBrandScopedUser ? user?.brandId : draft.brandId;
+      if (enforceSubscriptionLimits && !_isEditing && brandId != null) {
+        try {
+          final limitMessage = await ref
+              .read(subscriptionActionsProvider.notifier)
+              .checkOfferCreationLimits(brandId);
+          if (limitMessage != null) {
+            if (mounted) _showLimitDialog(context, limitMessage);
+            return;
+          }
+        } catch (_) {}
+      }
+      if (enforceSubscriptionLimits && draft.isFeatured && brandId != null) {
+        try {
+          final featuredMessage = await ref
+              .read(subscriptionActionsProvider.notifier)
+              .checkFeaturedOfferLimits(brandId);
+          if (featuredMessage != null) {
+            if (mounted) _showLimitDialog(context, featuredMessage);
+            return;
+          }
+        } catch (_) {}
+      }
+
+      final offer = buildOfferFromDraft(
+        draft: draft,
+        brands: brands,
+        categories: categories,
+        cities: cities,
+        user: user,
+        isBrandScopedUser: isBrandScopedUser,
+        isManager: isManager,
+        baseOffer: _isEditing ? _loadedOffer : null,
+        forcedId: _isEditing && !_allowsMultipleOffers ? widget.offerId : null,
+      );
+      if (offer == null) {
+        if (mounted) {
+          showAppError(
+            context,
+            null,
+            message: 'Could not build one of the offers. Check all fields.',
+          );
+        }
+        return;
+      }
+      offersToSave.add(offer);
+    }
+
+    final createdIds = <String>[];
+
+    if (_isEditing && _allowsMultipleOffers && _loadedOffer != null) {
+      final primaryDraft = _lineDrafts.first;
+      final primaryOffer = buildOfferFromDraft(
+        draft: primaryDraft,
+        brands: brands,
+        categories: categories,
+        cities: cities,
+        user: user,
+        isBrandScopedUser: isBrandScopedUser,
+        isManager: isManager,
+        baseOffer: _loadedOffer,
+        forcedId: _loadedOffer!.id,
+      );
+      if (primaryOffer == null) {
+        if (mounted) {
+          showAppError(
+            context,
+            null,
+            message: 'Could not build grouped offer.',
+          );
+        }
+        return;
+      }
+      final offerLines = _lineDrafts.map((draft) {
+        final category = categories
+            .where((item) => item.id == draft.categoryId)
+            .firstOrNull;
+        final images = draft.imageUrls
+            .map((url) => url.trim())
+            .where((url) => url.isNotEmpty)
+            .toList();
+        return OfferLine(
+          id: draft.id,
+          title: draft.title.trim(),
+          description: draft.description.trim(),
+          categoryId: category?.id ?? '',
+          categoryName: category?.name ?? '',
+          discountText: draft.discountText.trim(),
+          discountType: draft.discountType,
+          discountValue: int.tryParse(draft.discountValue.trim()),
+          imageUrl: images.isNotEmpty ? images.first : '',
+          imageUrls: images,
+          linkSources: BrandUrlSourceUtils.withStableIds(draft.linkSources),
+        );
+      }).toList();
+      var groupedOffer = primaryOffer.copyWith(
+        offerLines: offerLines,
+        discountText: offerLines.length > 1
+            ? '${offerLines.length} offers'
+            : primaryOffer.discountText,
+        categoryIds: offerLines.map((line) => line.categoryId).toList(),
+        categoryNames: offerLines.map((line) => line.categoryName).toList(),
+      );
+      await actions.saveChanges(groupedOffer);
+      for (var index = 0; index < _lineDrafts.length; index++) {
+        final uploaded = await _uploadDraftImages(
+          offerId: groupedOffer.id,
+          draft: _lineDrafts[index],
+          offer: groupedOffer,
+        );
+        if (uploaded != null) {
+          groupedOffer = uploaded;
+          offerLines[index] = offerLines[index].copyWith(
+            imageUrls: uploaded.imageUrls,
+            imageUrl: uploaded.imageUrl,
+          );
+          groupedOffer = groupedOffer.copyWith(offerLines: offerLines);
+          await actions.saveChanges(groupedOffer);
+        }
+      }
     } else {
-      offerId = await actions.create(offer);
+      for (var index = 0; index < offersToSave.length; index++) {
+        final draft = _lineDrafts[index];
+        var offer = offersToSave[index];
+        String? offerId;
+
+        if (_isEditing) {
+          await actions.saveChanges(offer);
+          offerId = offer.id;
+        } else {
+          final createdId = await actions.create(offer);
+          if (createdId == null) {
+            final actionState = ref.read(offerActionsProvider);
+            if (mounted) {
+              await showAppError(
+                context,
+                actionState.error,
+                title: 'Could Not Save Offer',
+              );
+            }
+            return;
+          }
+          offerId = createdId;
+          offer = offer.copyWith(id: createdId);
+          createdIds.add(createdId);
+        }
+
+        final uploaded = await _uploadDraftImages(
+          offerId: offerId!,
+          draft: draft,
+          offer: offer,
+        );
+        if (uploaded != null) {
+          await actions.saveChanges(uploaded);
+        }
+
+        if (enforceSubscriptionLimits &&
+            !_isEditing &&
+            offer.brandId.isNotEmpty) {
+          try {
+            await ref
+                .read(subscriptionActionsProvider.notifier)
+                .recordOfferCreated(offer.brandId);
+            if (draft.isFeatured) {
+              await ref
+                  .read(subscriptionActionsProvider.notifier)
+                  .recordFeaturedUsed(offer.brandId);
+            }
+          } catch (_) {}
+        }
+      }
     }
 
     final actionState = ref.read(offerActionsProvider);
-    if (actionState.hasError || offerId == null) {
+    if (actionState.hasError) {
       if (mounted) {
         await showAppError(
           context,
@@ -464,61 +478,46 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       }
       return;
     }
-    if (enforceSubscriptionLimits && !_isEditing) {
-      try {
-        await ref
-            .read(subscriptionActionsProvider.notifier)
-            .recordOfferCreated(brand.id);
-        if (_isFeatured) {
-          await ref
-              .read(subscriptionActionsProvider.notifier)
-              .recordFeaturedUsed(brand.id);
-        }
-      } catch (_) {
-        // Usage tracking is best-effort; don't block navigation after a successful save.
-      }
-    }
-    offer = offer.copyWith(
-      id: offerId,
-      createdByUserId: user?.id ?? '',
-      createdByRole: user?.role ?? 'super_admin',
-      status: isBrandScopedUser ? selectedStatus : offer.status,
-      approvalStatus: isBrandScopedUser
-          ? selectedStatus == 'published'
-                ? 'approved'
-                : 'pending'
-          : offer.approvalStatus,
-      isPublished: isBrandScopedUser ? selectedPublished : offer.isPublished,
-      approvedBy: isBrandScopedUser
-          ? selectedStatus == 'published'
-                ? user?.id ?? ''
-                : ''
-          : offer.approvedBy,
-      approvedAt: isBrandScopedUser
-          ? selectedStatus == 'published'
-                ? now
-                : null
-          : offer.approvedAt,
-    );
-
-    if (_pickedImage != null) {
-      final bytes = await _pickedImage!.readAsBytes();
-      final imageUrl = await ref
-          .read(offerImageRepositoryProvider)
-          .uploadOfferImage(
-            offerId: offerId,
-            fileName: _pickedImage!.name,
-            bytes: bytes,
-            contentType:
-                _pickedImage!.mimeType ?? _contentTypeFor(_pickedImage!.name),
-          );
-      offer = offer.copyWith(imageUrl: imageUrl);
-      await actions.saveChanges(offer);
-    }
 
     if (mounted) {
-      context.go('/offers/$offerId');
+      if (!_isEditing) {
+        _clearDraftAfterSave();
+      }
+      if (_isEditing) {
+        context.go('/offers/${widget.offerId}');
+      } else if (createdIds.length > 1) {
+        context.go('/offers');
+      } else if (createdIds.isNotEmpty) {
+        context.go('/offers/${createdIds.first}');
+      }
     }
+  }
+
+  Future<Offer?> _uploadDraftImages({
+    required String offerId,
+    required OfferLineDraft draft,
+    required Offer offer,
+  }) async {
+    if (draft.pickedImages.isEmpty) {
+      return null;
+    }
+    final imageRepo = ref.read(offerImageRepositoryProvider);
+    final nextUrls = [...offer.imageUrls];
+    for (final image in draft.pickedImages) {
+      final bytes = await image.readAsBytes();
+      nextUrls.add(
+        await imageRepo.uploadOfferImage(
+          offerId: offerId,
+          fileName: image.name,
+          bytes: bytes,
+          contentType: image.mimeType ?? _contentTypeFor(image.name),
+        ),
+      );
+    }
+    return offer.copyWith(
+      imageUrls: nextUrls,
+      imageUrl: nextUrls.isNotEmpty ? nextUrls.first : offer.imageUrl,
+    );
   }
 
   @override
@@ -530,6 +529,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     final categories = ref.watch(visibleCategoriesProvider);
     final cities = ref.watch(visibleCitiesProvider);
     final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
+    final isManager = ref.watch(isManagerProvider);
     final user = ref.watch(currentUserProvider);
     final actionState = ref.watch(offerActionsProvider);
     final isSaving = _isSubmitting || actionState.isLoading;
@@ -542,22 +542,25 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         if (offer != null) {
           _hydrate(offer);
         }
-        final lockedOffer =
-            offer != null && (offer.isExpired || offer.isPublished);
+        final lockedOffer = offer != null && offer.isExpired;
 
         final brandItems = brands.value ?? const <Brand>[];
         final categoryItems = _uniqueCategories(
           categories.value ?? const <app_category.Category>[],
         );
         final cityItems = cities.value ?? const <City>[];
-        if (!_hydrated &&
-            isBrandScopedUser &&
-            (user?.brandId.isNotEmpty ?? false)) {
-          _brandId = user!.brandId;
+        if (!_isEditing && user != null && !_draftLoadAttempted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _tryLoadCreateDraft();
+          });
         }
-        final selectedBrand = _brandById(brandItems, _brandId);
         final loadingLookups =
             brands.isLoading || categories.isLoading || cities.isLoading;
+
+        if (!_isEditing && !_draftReady) {
+          return const AppLoader();
+        }
+
         if (lockedOffer) {
           return SingleChildScrollView(
             padding: screenPadding(context),
@@ -575,9 +578,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        offer.isExpired
-                            ? 'This offer is expired and cannot be edited.'
-                            : 'This offer is already published and cannot be edited.',
+                        'This offer is expired and cannot be edited.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w900),
@@ -596,427 +597,134 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
           );
         }
 
-        return SingleChildScrollView(
-          padding: screenPadding(context),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1040),
-              child: AppCard(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _isEditing ? 'Edit offer' : 'New offer',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 22),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: [
-                          DropdownBox(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _status,
-                              decoration: const InputDecoration(
-                                labelText: 'Status',
-                                prefixIcon: Icon(Icons.info_outline),
+        return AppLoadingOverlay(
+          isLoading: isSaving,
+          child: SingleChildScrollView(
+            padding: screenPadding(context),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1040),
+                child: AppCard(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_draftRestored && !_isEditing)
+                          Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 18),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.2),
                               ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'pending_review',
-                                  child: Text('Pending Review'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'published',
-                                  child: Text('Published'),
-                                ),
-                              ],
-                              onChanged: lockedOffer
-                                  ? null
-                                  : (value) => setState(
-                                      () => _status = value ?? 'pending_review',
-                                    ),
                             ),
-                          ),
-                          DropdownBox(
-                            child: DropdownButtonFormField<bool>(
-                              initialValue: _isVerified,
-                              decoration: const InputDecoration(
-                                labelText: 'Verification',
-                                prefixIcon: Icon(Icons.verified_outlined),
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: true,
-                                  child: Text('Verified'),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.restore_page_outlined,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
-                                DropdownMenuItem(
-                                  value: false,
-                                  child: Text('Unverified'),
-                                ),
-                              ],
-                              onChanged: (value) =>
-                                  setState(() => _isVerified = value ?? false),
-                            ),
-                          ),
-                          DropdownBox(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _lifecycleStatus,
-                              decoration: const InputDecoration(
-                                labelText: 'Offer lifecycle',
-                                prefixIcon: Icon(Icons.timeline_outlined),
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'active',
-                                  child: Text('Active'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'ending_soon',
-                                  child: Text('Ending Soon'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'expired',
-                                  child: Text('Expired'),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                if (value == null) {
-                                  return;
-                                }
-                                _setLifecycleStatus(value);
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _titleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Title',
-                          prefixIcon: Icon(Icons.title),
-                        ),
-                        validator: (value) => (value ?? '').trim().isEmpty
-                            ? 'Title is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _descriptionController,
-                        minLines: 3,
-                        maxLines: 5,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
-                          alignLabelWithHint: true,
-                          prefixIcon: Icon(Icons.notes_outlined),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      if (loadingLookups)
-                        const LinearProgressIndicator()
-                      else
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: [
-                            if (isBrandScopedUser)
-                              DropdownBox(
-                                child: TextFormField(
-                                  initialValue: selectedBrand?.name ?? '',
-                                  enabled: false,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Brand',
-                                    prefixIcon: Icon(Icons.storefront_outlined),
-                                  ),
-                                  validator: (_) =>
-                                      (_brandId == null || _brandId!.isEmpty)
-                                      ? 'Brand required'
-                                      : null,
-                                ),
-                              )
-                            else
-                              DropdownBox(
-                                child: DropdownMenu<String>(
-                                  width: 360,
-                                  requestFocusOnTap: true,
-                                  initialSelection: _brandId,
-                                  enableSearch: true,
-                                  enableFilter: true,
-                                  label: const Text('Brand'),
-                                  leadingIcon: const Icon(
-                                    Icons.storefront_outlined,
-                                  ),
-                                  hintText: 'Select brand',
-                                  dropdownMenuEntries: brandItems
-                                      .map(
-                                        (brand) => DropdownMenuEntry(
-                                          value: brand.id,
-                                          label: brand.name,
-                                        ),
-                                      )
-                                      .toList(),
-                                  onSelected: (value) =>
-                                      setState(() => _brandId = value),
-                                ),
-                              ),
-                            DropdownBox(
-                              child: isBrandScopedUser
-                                  ? InputDecorator(
-                                      decoration: const InputDecoration(
-                                        labelText: 'Categories',
-                                        prefixIcon: Icon(
-                                          Icons.category_outlined,
-                                        ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Draft restored',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
                                       ),
-                                      child: Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: categoryItems.map((category) {
-                                          final selected = _selectedCategoryIds
-                                              .contains(category.id);
-                                          return FilterChip(
-                                            label: Text(category.name),
-                                            selected: selected,
-                                            onSelected: (value) {
-                                              setState(() {
-                                                if (value) {
-                                                  _selectedCategoryIds.add(
-                                                    category.id,
-                                                  );
-                                                } else {
-                                                  _selectedCategoryIds.remove(
-                                                    category.id,
-                                                  );
-                                                }
-                                                _categoryId =
-                                                    _selectedCategoryIds.isEmpty
-                                                    ? null
-                                                    : _selectedCategoryIds
-                                                          .first;
-                                              });
-                                            },
-                                          );
-                                        }).toList(),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Your previous offer draft was recovered. Newly picked images must be re-selected after leaving the page.',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: Colors.black54),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: _discardDraft,
+                                  child: const Text('Discard'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (loadingLookups)
+                          const SizedBox(height: 96, child: AppLoader(size: 72))
+                        else
+                          OfferLinesEditor(
+                            lines: _lineDrafts,
+                            brands: brandItems,
+                            cities: cityItems,
+                            categories: categoryItems,
+                            allowMultiple:
+                                !_isEditing ||
+                                (_loadedOffer?.isGroupOffer ?? false),
+                            isBrandScopedUser: isBrandScopedUser,
+                            scopedBrandId: user?.brandId,
+                            isManager: isManager,
+                            lockedOffer: false,
+                            isEditing: _isEditing,
+                            onPickImages: _pickLineImages,
+                            onPickDate: _pickLineDate,
+                            onChanged: _onDraftsChanged,
+                          ),
+                        const SizedBox(height: 28),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton(
+                              onPressed: () => context.go('/offers'),
+                              child: const Text('Cancel'),
+                            ),
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed: isSaving || loadingLookups
+                                  ? null
+                                  : () => _submit(
+                                      brands: brandItems,
+                                      categories: categoryItems,
+                                      cities: cityItems,
+                                      isBrandScopedUser: isBrandScopedUser,
+                                      isManager: isManager,
+                                    ),
+                              icon: isSaving
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
                                       ),
                                     )
-                                  : DropdownButtonFormField<String>(
-                                      initialValue: _singleMatchingValue(
-                                        _categoryId,
-                                        categoryItems.map((item) => item.id),
-                                      ),
-                                      decoration: const InputDecoration(
-                                        labelText: 'Category',
-                                      ),
-                                      items: categoryItems
-                                          .map(
-                                            (category) => DropdownMenuItem(
-                                              value: category.id,
-                                              child: Text(category.name),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (value) =>
-                                          setState(() => _categoryId = value),
-                                      validator: (value) => value == null
-                                          ? 'Category required'
-                                          : null,
-                                    ),
-                            ),
-                            SizedBox(
-                              width: 360,
-                              child: InputDecorator(
-                                decoration: const InputDecoration(
-                                  labelText: 'Cities',
-                                  prefixIcon: Icon(
-                                    Icons.location_city_outlined,
-                                  ),
-                                ),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: cityItems.map((city) {
-                                    final selected = _selectedCityIds.contains(
-                                      city.id,
-                                    );
-                                    return FilterChip(
-                                      label: Text(city.name),
-                                      selected: selected,
-                                      onSelected: (value) {
-                                        setState(() {
-                                          if (value) {
-                                            _selectedCityIds.add(city.id);
-                                          } else {
-                                            _selectedCityIds.remove(city.id);
-                                          }
-                                        });
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
+                                  : const Icon(Icons.save_outlined),
+                              label: Text(
+                                !_isEditing && _lineDrafts.length > 1
+                                    ? 'Save offers'
+                                    : 'Save offer',
                               ),
                             ),
                           ],
                         ),
-                      const SizedBox(height: 18),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: [
-                          DropdownBox(
-                            child: TextFormField(
-                              controller: _discountTextController,
-                              decoration: const InputDecoration(
-                                labelText: 'Discount text',
-                                prefixIcon: Icon(Icons.percent),
-                              ),
-                              validator: (value) => (value ?? '').trim().isEmpty
-                                  ? 'Discount text is required'
-                                  : null,
-                            ),
-                          ),
-                          DropdownBox(
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _discountType,
-                              decoration: const InputDecoration(
-                                labelText: 'Discount type',
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'percentage',
-                                  child: Text('Percentage'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'flat',
-                                  child: Text('Flat amount'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'upto_percentage',
-                                  child: Text('Up to percentage'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'upto_amount',
-                                  child: Text('Up to amount'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'bundle',
-                                  child: Text('Bundle'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'other',
-                                  child: Text('Other'),
-                                ),
-                              ],
-                              onChanged: (value) => setState(
-                                () => _discountType = value ?? 'percentage',
-                              ),
-                            ),
-                          ),
-                          DropdownBox(
-                            child: TextFormField(
-                              controller: _discountValueController,
-                              keyboardType: TextInputType.number,
-                              inputFormatters:  [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              decoration: const InputDecoration(
-                                labelText: 'Discount value (numbers only)',
-                                prefixIcon: Icon(Icons.numbers),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: [
-                          DateButton(
-                            label: 'Start date',
-                            value: _startDate?.shortDate,
-                            onPressed: () => _pickDate(start: true),
-                          ),
-                          DateButton(
-                            label: 'End date',
-                            value: _endDate?.shortDate,
-                            onPressed: () => _pickDate(start: false),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: [
-                          DropdownBox(
-                            child: TextFormField(
-                              controller: _sourceUrlController,
-                              decoration: const InputDecoration(
-                                labelText: 'Source URL',
-                                prefixIcon: Icon(Icons.link),
-                              ),
-                            ),
-                          ),
-                          DropdownBox(
-                            child: TextFormField(
-                              controller: _onlineUrlController,
-                              decoration: const InputDecoration(
-                                labelText: 'Online URL',
-                                prefixIcon: Icon(Icons.shopping_bag_outlined),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      ImagePickerPanel(
-                        imageUrl: _imageUrl,
-                        pickedImageName: _pickedImage?.name,
-                        onPick: _pickImage,
-                      ),
-                      const SizedBox(height: 18),
-                      FilterChip(
-                        label: const Text('Featured'),
-                        selected: _isFeatured,
-                        onSelected: _isVerified
-                            ? (value) => setState(() => _isFeatured = value)
-                            : null,
-                      ),
-                      const SizedBox(height: 28),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => context.go('/offers'),
-                            child: const Text('Cancel'),
-                          ),
-                          const SizedBox(width: 12),
-                          FilledButton.icon(
-                            onPressed: isSaving || loadingLookups
-                                ? null
-                                : () => _submit(
-                                    brands: brandItems,
-                                    categories: categoryItems,
-                                    cities: cityItems,
-                                  ),
-                            icon: isSaving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save_outlined),
-                            label: const Text('Save offer'),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1024,8 +732,8 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
           ),
         );
       },
-      loading: () => const AppLoadingView(label: 'Loading offer'),
-      error: (error, _) => AppErrorView(message: error.toString()),
+      loading: () => const AppLoader(),
+      error: (error, _) => AppErrorView(error: error),
     );
   }
 }
@@ -1041,15 +749,6 @@ String _contentTypeFor(String fileName) {
   return 'image/jpeg';
 }
 
-Brand? _brandById(List<Brand> brands, String? id) {
-  for (final brand in brands) {
-    if (brand.id == id) {
-      return brand;
-    }
-  }
-  return null;
-}
-
 List<app_category.Category> _uniqueCategories(
   List<app_category.Category> categories,
 ) {
@@ -1063,31 +762,12 @@ List<app_category.Category> _uniqueCategories(
   return unique;
 }
 
-String? _singleMatchingValue(String? value, Iterable<String> options) {
-  if (value == null) {
+extension<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    if (iterator.moveNext()) {
+      return iterator.current;
+    }
     return null;
   }
-  var matches = 0;
-  for (final option in options) {
-    if (option == value) {
-      matches++;
-    }
-  }
-  return matches == 1 ? value : null;
-}
-
-String _lifecycleForDate(DateTime? endDate) {
-  if (endDate == null) {
-    return 'active';
-  }
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final end = DateTime(endDate.year, endDate.month, endDate.day);
-  if (end.isBefore(today)) {
-    return 'expired';
-  }
-  if (!end.isAfter(today.add(const Duration(days: 3)))) {
-    return 'ending_soon';
-  }
-  return 'active';
 }

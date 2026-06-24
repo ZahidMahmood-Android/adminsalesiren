@@ -23,4 +23,10 @@ class AppConstants {
   static const byteCinchEmail = 'zahid@bytecinch.com';
   static const byteCinchPhone = '+923260766794';
   static const byteCinchLogoAsset = 'assets/images/bytecinch_logo.png';
+
+  static const offerShareBaseUrl = 'https://salesiren.bytecinch.com/o';
+  static const playStoreUrl =
+      'https://play.google.com/store/apps/details?id=com.bytecinch.salesiren';
+
+  static String offerShareUrl(String offerId) => '$offerShareBaseUrl/$offerId';
 }

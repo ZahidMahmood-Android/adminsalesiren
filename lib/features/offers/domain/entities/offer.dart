@@ -1,3 +1,7 @@
+import '../../../brands/domain/entities/brand_url_source.dart';
+import 'offer_line.dart';
+import 'package:sale_siren_models/sale_siren_models.dart';
+
 class Offer {
   const Offer({
     required this.id,
@@ -13,8 +17,13 @@ class Offer {
     required this.discountType,
     required this.discountValue,
     required this.imageUrl,
+    this.imageUrls = const [],
+    this.imageSliderAutoPlay = true,
+    this.imageDisplayMode = 'carousel',
     required this.sourceUrl,
     required this.onlineUrl,
+    this.linkSources = const [],
+    this.shareUrl = '',
     required this.startDate,
     required this.endDate,
     required this.isVerified,
@@ -25,7 +34,7 @@ class Offer {
     required this.createdAt,
     required this.updatedAt,
     this.createdByUserId = '',
-    this.createdByRole = 'super_admin',
+    this.createdByRole = 'owner',
     this.status = 'published',
     this.approvalStatus = 'approved',
     this.approvalNotes = '',
@@ -40,6 +49,7 @@ class Offer {
     this.shareCount = 0,
     this.clickCount = 0,
     this.reportCount = 0,
+    this.offerLines = const [],
   });
 
   final String id;
@@ -55,8 +65,13 @@ class Offer {
   final String discountType;
   final num? discountValue;
   final String imageUrl;
+  final List<String> imageUrls;
+  final bool imageSliderAutoPlay;
+  final String imageDisplayMode;
   final String sourceUrl;
   final String onlineUrl;
+  final List<BrandUrlSource> linkSources;
+  final String shareUrl;
   final DateTime startDate;
   final DateTime endDate;
   final bool isVerified;
@@ -82,6 +97,50 @@ class Offer {
   final int shareCount;
   final int clickCount;
   final int reportCount;
+  final List<OfferLine> offerLines;
+
+  bool get isGroupOffer => resolvedLines.length > 1;
+
+  List<OfferLine> get resolvedLines {
+    if (offerLines.isNotEmpty) {
+      return offerLines;
+    }
+    if (categoryId.isEmpty && discountText.isEmpty) {
+      return const [];
+    }
+    return [
+      OfferLine(
+        id: 'primary',
+        title: title,
+        description: description,
+        categoryId: categoryId,
+        categoryName: categoryName,
+        discountText: discountText,
+        discountType: discountType,
+        discountValue: discountValue,
+        imageUrl: imageUrl,
+        imageUrls: imageUrls,
+        linkSources: linkSources,
+        published: isPublished,
+      ),
+    ];
+  }
+
+  String get groupSummaryLabel {
+    final lines = resolvedLines;
+    if (lines.length <= 1) {
+      return discountText;
+    }
+    return '${lines.length} offers';
+  }
+
+  OfferDiscount get discount => OfferDiscount(
+    discountText: discountText,
+    discountType: discountType,
+    discountValue: discountValue,
+  );
+
+  String get discountDisplay => discount.displayText;
 
   bool get isExpired => status == 'expired' || endDate.isBefore(DateTime.now());
 
@@ -99,8 +158,13 @@ class Offer {
     String? discountType,
     num? discountValue,
     String? imageUrl,
+    List<String>? imageUrls,
+    bool? imageSliderAutoPlay,
+    String? imageDisplayMode,
     String? sourceUrl,
     String? onlineUrl,
+    List<BrandUrlSource>? linkSources,
+    String? shareUrl,
     DateTime? startDate,
     DateTime? endDate,
     bool? isVerified,
@@ -126,6 +190,7 @@ class Offer {
     int? shareCount,
     int? clickCount,
     int? reportCount,
+    List<OfferLine>? offerLines,
   }) {
     return Offer(
       id: id ?? this.id,
@@ -141,8 +206,13 @@ class Offer {
       discountType: discountType ?? this.discountType,
       discountValue: discountValue ?? this.discountValue,
       imageUrl: imageUrl ?? this.imageUrl,
+      imageUrls: imageUrls ?? this.imageUrls,
+      imageSliderAutoPlay: imageSliderAutoPlay ?? this.imageSliderAutoPlay,
+      imageDisplayMode: imageDisplayMode ?? this.imageDisplayMode,
       sourceUrl: sourceUrl ?? this.sourceUrl,
       onlineUrl: onlineUrl ?? this.onlineUrl,
+      linkSources: linkSources ?? this.linkSources,
+      shareUrl: shareUrl ?? this.shareUrl,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       isVerified: isVerified ?? this.isVerified,
@@ -168,6 +238,7 @@ class Offer {
       shareCount: shareCount ?? this.shareCount,
       clickCount: clickCount ?? this.clickCount,
       reportCount: reportCount ?? this.reportCount,
+      offerLines: offerLines ?? this.offerLines,
     );
   }
 }

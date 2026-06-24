@@ -27,8 +27,10 @@ Rules that keep schema changes backwards-compatible and non-breaking for existin
 - `brands`
 - `offers`
 - `offer_reports`
+- `offer_push_jobs`
 - `notification_requests`
 - `notification_campaigns` (future broadcast tooling)
+- `app_settings`
 - `pricing_plans`
 - `brand_subscriptions`
 - `brand_usage`
@@ -150,6 +152,30 @@ Brand admins may create categories with their own `userId`; only they can edit/d
 
 Primary `cityId` / `categoryId` fields remain for compatibility. Multi-select uses `cityIds`, `cityNames`, `categoryIds`, and `categoryNames`.
 
+**Grouped mall offers:** one Firestore offer can include multiple full sub-offers via `offerLines`. Top-level `categoryId`, `discountText`, `imageUrl`, etc. mirror the first line (or a summary like `"3 offers"`). Each line can include its own title, description, images, link sources, category, discount, and can be published/notified separately.
+
+```json
+{
+  "offerLines": [
+    {
+      "id": "uuid",
+      "title": "Men's wear 50% off",
+      "description": "Selected men's items only.",
+      "categoryId": "clothing",
+      "categoryName": "Clothing",
+      "discountText": "50% off",
+      "discountType": "percentage",
+      "discountValue": 50,
+      "imageUrl": "https://...",
+      "imageUrls": ["https://..."],
+      "linkSources": [],
+      "published": false,
+      "notificationRequestId": ""
+    }
+  ]
+}
+```
+
 ```json
 {
   "id": "autoId",
@@ -169,6 +195,9 @@ Primary `cityId` / `categoryId` fields remain for compatibility. Multi-select us
   "discountType": "percentage",
   "discountValue": 50,
   "imageUrl": "",
+  "imageUrls": [],
+  "imageSliderAutoPlay": true,
+  "imageDisplayMode": "carousel",
   "sourceUrl": "",
   "onlineUrl": "",
   "startDate": "Timestamp",
@@ -190,6 +219,7 @@ Primary `cityId` / `categoryId` fields remain for compatibility. Multi-select us
   "shareCount": 0,
   "clickCount": 0,
   "reportCount": 0,
+  "offerLines": [],
   "createdAt": "Timestamp",
   "updatedAt": "Timestamp"
 }
@@ -215,21 +245,27 @@ Brand-admin created offers typically start with `status: pending_review`, `appro
 
 ## Notification Requests
 
-Used when brand admins request publishing an offer to mobile users.
+Used when brand admins request publishing an offer to mobile users. **Grouped offers:** one request per `offerLines` entry; use `offerLineId` and `groupTitle` to tie lines to the parent offer.
 
 ```json
 {
   "id": "autoId",
-  "title": "New offer from Khaadi",
-  "body": "Flat 50% off on selected items.",
+  "title": "Al Fateh Mall sale",
+  "body": "Electronics: 7% off",
   "topic": "",
-  "type": "offer_publish",
+  "type": "new_offer",
   "data": {
-    "offerId": ""
+    "offerId": "",
+    "offerLineId": "",
+    "imageUrl": "",
+    "includeImage": "true"
   },
   "status": "pending",
+  "includeImage": true,
   "brandId": "",
   "offerId": "",
+  "offerLineId": "",
+  "groupTitle": "Al Fateh Mall sale",
   "requestedByUserId": "",
   "targetCityIds": ["lahore"],
   "targetCategoryIds": ["clothing"],
@@ -241,6 +277,33 @@ Used when brand admins request publishing an offer to mobile users.
   "openCount": 0,
   "createdAt": "Timestamp",
   "updatedAt": "Timestamp"
+}
+```
+
+## App Settings
+
+Platform-level flags controlled by owners. The mobile app can read these settings and should default safely when a document is missing.
+
+```json
+{
+  "id": "mobile_ads",
+  "enabled": false,
+  "updatedAt": "Timestamp"
+}
+```
+
+## Offer Push Jobs
+
+Written by the admin panel when an offer (or a single grouped line) is published. Triggers `dispatchOfferPushOnJob`. Job document ID is `{offerId}` for whole-offer publish, or `{offerId}-{offerLineId}` per line.
+
+```json
+{
+  "offerId": "",
+  "offerLineId": "",
+  "requestId": "",
+  "requestedByUserId": "",
+  "pushNonce": "Timestamp",
+  "createdAt": "Timestamp"
 }
 ```
 

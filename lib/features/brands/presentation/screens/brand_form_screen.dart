@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../categories/domain/entities/category.dart' as app_category;
@@ -13,8 +13,10 @@ import '../../../categories/presentation/providers/category_providers.dart';
 import '../../../cities/domain/entities/city.dart';
 import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/brand.dart';
+import '../../domain/entities/brand_url_source.dart';
 import '../providers/brand_providers.dart';
 import '../widgets/selection_block.dart';
+import '../widgets/url_sources_field.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/widgets/screen_layout.dart';
 
@@ -31,13 +33,11 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _logoController = TextEditingController();
-  final _websiteController = TextEditingController();
-  final _instagramController = TextEditingController();
-  final _facebookController = TextEditingController();
   final _contactPhoneController = TextEditingController();
   final _addressController = TextEditingController();
   final _selectedCategoryIds = <String>{};
   final _selectedCityIds = <String>{};
+  var _urlSources = BrandUrlSource.defaultTemplates();
   var _isActive = true;
   var _hydrated = false;
   Brand? _loadedBrand;
@@ -48,9 +48,6 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
   void dispose() {
     _nameController.dispose();
     _logoController.dispose();
-    _websiteController.dispose();
-    _instagramController.dispose();
-    _facebookController.dispose();
     _contactPhoneController.dispose();
     _addressController.dispose();
     super.dispose();
@@ -63,9 +60,13 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     _loadedBrand = brand;
     _nameController.text = brand.name;
     _logoController.text = brand.logoUrl;
-    _websiteController.text = brand.websiteUrl;
-    _instagramController.text = brand.instagramUrl;
-    _facebookController.text = brand.facebookUrl;
+    _urlSources = brand.urlSources.isEmpty
+        ? BrandUrlSourceUtils.fromLegacyFields(
+            websiteUrl: brand.websiteUrl,
+            instagramUrl: brand.instagramUrl,
+            facebookUrl: brand.facebookUrl,
+          )
+        : BrandUrlSourceUtils.copyList(brand.urlSources);
     _contactPhoneController.text = brand.businessContactPhone;
     _addressController.text = brand.address;
     _selectedCategoryIds
@@ -95,6 +96,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     }
 
     final now = DateTime.now();
+    final sources = BrandUrlSourceUtils.withStableIds(_urlSources);
     final brand =
         (_loadedBrand ??
                 Brand(
@@ -104,6 +106,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                   websiteUrl: '',
                   instagramUrl: '',
                   facebookUrl: '',
+                  urlSources: BrandUrlSource.defaultTemplates(),
                   categoryIds: const [],
                   cityIds: const [],
                   isActive: true,
@@ -114,9 +117,10 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
               id: widget.brandId ?? '',
               name: _nameController.text.trim(),
               logoUrl: _logoController.text.trim(),
-              websiteUrl: _websiteController.text.trim(),
-              instagramUrl: _instagramController.text.trim(),
-              facebookUrl: _facebookController.text.trim(),
+              websiteUrl: BrandUrlSourceUtils.websiteUrl(sources),
+              instagramUrl: BrandUrlSourceUtils.instagramUrl(sources),
+              facebookUrl: BrandUrlSourceUtils.facebookUrl(sources),
+              urlSources: sources,
               categoryIds: _selectedCategoryIds.toList(),
               cityIds: _selectedCityIds.toList(),
               isActive: _isActive,
@@ -233,41 +237,11 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: [
-                          SizedBox(
-                            width: 280,
-                            child: TextFormField(
-                              controller: _websiteController,
-                              decoration: const InputDecoration(
-                                labelText: 'Website URL',
-                                prefixIcon: Icon(Icons.language),
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 280,
-                            child: TextFormField(
-                              controller: _instagramController,
-                              decoration: const InputDecoration(
-                                labelText: 'Instagram URL',
-                                prefixIcon: Icon(Icons.camera_alt_outlined),
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: 280,
-                            child: TextFormField(
-                              controller: _facebookController,
-                              decoration: const InputDecoration(
-                                labelText: 'Facebook URL',
-                                prefixIcon: Icon(Icons.facebook),
-                              ),
-                            ),
-                          ),
-                        ],
+                      UrlSourcesField(
+                        sources: _urlSources,
+                        title: 'Brand link sources',
+                        onChanged: (sources) =>
+                            setState(() => _urlSources = sources),
                       ),
                       const SizedBox(height: 16),
                       Wrap(
@@ -371,8 +345,8 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
           ),
         );
       },
-      loading: () => const AppLoadingView(label: 'Loading brand'),
-      error: (error, _) => AppErrorView(message: error.toString()),
+      loading: () => const AppLoader(),
+      error: (error, _) => AppErrorView(error: error),
     );
   }
 }

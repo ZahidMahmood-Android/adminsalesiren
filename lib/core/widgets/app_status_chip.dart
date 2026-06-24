@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../utils/display_label_utils.dart';
 
 /// A compact status pill used throughout lists and detail cards.
 ///
@@ -78,6 +79,6 @@ class AppStatusChip extends StatelessWidget {
 
   static String _labelFor(String s) {
     if (s.isEmpty) return '—';
-    return s[0].toUpperCase() + s.substring(1).replaceAll('_', ' ');
+    return DisplayLabelUtils.slug(s);
   }
 }

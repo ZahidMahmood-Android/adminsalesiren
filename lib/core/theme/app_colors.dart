@@ -33,6 +33,7 @@ class AppColors {
   static const error = Color(0xFFEF4444);
   static const warning = Color(0xFFF59E0B);
   static const info = Color(0xFF3B82F6);
+  static const pendingReview = inkMuted;
 
   // ── Derived helpers ───────────────────────────────────────────────────
   /// Low-opacity tint of deepGreen used for selected nav items, chips, etc.

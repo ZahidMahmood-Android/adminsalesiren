@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/copy_utils.dart';
+import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../providers/auth_providers.dart';
 import '../widgets/diagnostic_checklist_item.dart';
 import '../widgets/diagnostic_info_row.dart';
@@ -77,9 +78,10 @@ class AdminAccessDiagnosticsPage extends ConsumerWidget {
                         ],
                       );
                     },
-                    loading: () =>
-                        const AppLoadingView(label: 'Loading user info'),
-                    error: (error, _) => Text('❌ Error: $error'),
+                    loading: () => const AppLoader(),
+                    error: (error, _) => Text(
+                      'Could not load account details: ${ErrorMessages.friendly(error)}',
+                    ),
                   ),
                 ],
               ),
@@ -178,10 +180,10 @@ class AdminAccessDiagnosticsPage extends ConsumerWidget {
                         );
                       }
                     },
-                    loading: () =>
-                        const AppLoadingView(label: 'Checking admin access'),
-                    error: (error, _) =>
-                        Text('❌ Error checking access: $error'),
+                    loading: () => const AppLoader(),
+                    error: (error, _) => Text(
+                      'Could not check admin access: ${ErrorMessages.friendly(error)}',
+                    ),
                   ),
                 ],
               ),

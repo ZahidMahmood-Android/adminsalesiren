@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/widgets/animated_content.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../domain/entities/brand_usage.dart';
@@ -18,7 +19,7 @@ class MyUsageScreen extends ConsumerWidget {
     final usage = ref.watch(brandUsageProvider);
 
     return ScreenScaffold(
-      header: const ScreenHeader(title: 'My Usage'),
+      title: 'My Usage',
       child: AnimatedContent(
         child: usage.when(
           data: (List<BrandUsage> rows) {
@@ -40,7 +41,8 @@ class MyUsageScreen extends ConsumerWidget {
                   final row = rows[index];
                   return FadeIn(
                     delay: Duration(milliseconds: index * 30),
-                    child: ListTile(
+                    child: AppListTileMaterial(
+                      child: ListTile(
                       title: Text(
                         '${row.month}/${row.year}',
                         style: const TextStyle(fontWeight: FontWeight.w700),
@@ -49,14 +51,15 @@ class MyUsageScreen extends ConsumerWidget {
                         'Offers: ${row.offersCreated} · Push: ${row.pushNotificationsRequested} · '
                         'Featured: ${row.featuredOffersUsed} · Views: ${row.viewCount}',
                       ),
+                      ),
                     ),
                   );
                 },
               ),
             );
           },
-          loading: () => const AppLoadingView(label: 'Loading usage'),
-          error: (error, _) => AppErrorView(message: error.toString()),
+          loading: () => const AppLoader(),
+          error: (error, _) => AppErrorView(error: error),
         ),
       ),
     );

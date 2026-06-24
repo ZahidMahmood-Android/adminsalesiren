@@ -1,6 +1,37 @@
 class MasterSeedData {
   const MasterSeedData._();
 
+  static final roles = [
+    const {
+      'id': 'super_admin',
+      'slug': 'super_admin',
+      'name': 'Super Admin',
+      'description': 'Full platform access across all modules.',
+      'isActive': true,
+    },
+    const {
+      'id': 'brand_admin',
+      'slug': 'brand_admin',
+      'name': 'Brand Admin',
+      'description': 'Manage a brand, offers, and subscription flows.',
+      'isActive': true,
+    },
+    const {
+      'id': 'manager',
+      'slug': 'manager',
+      'name': 'Manager',
+      'description': 'Operational brand access without subscription tools.',
+      'isActive': true,
+    },
+    const {
+      'id': 'mobile_user',
+      'slug': 'mobile_user',
+      'name': 'Mobile User',
+      'description': 'Sale Siren mobile app end user.',
+      'isActive': true,
+    },
+  ];
+
   static final cities = [
     const {
       'id': 'lahore',

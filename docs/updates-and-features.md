@@ -2,6 +2,252 @@
 
 Log all new features, enhancements, and non-bug work here **before** implementing.
 
+**Firestore rules/indexes:** edit `apps/adminpanel` first, copy to `apps/mobileapp` — see `docs/firestore-rules-sync.md`.
+
+---
+
+## 2026-06-24 — Admin branding logo refresh
+
+Replaced admin branding assets with the new Sale Siren icon and complete logo: full combined logo for login, icon-only mark for dashboard/sidebar branding, and icon-only mark for browser favicon/PWA icons.
+
+---
+
+## 2026-06-24 — Notification image control and mobile ads setting
+
+Notification requests now include a Send with image option so push notifications can be delivered with or without the offer image. Owner settings include a mobile ads toggle stored as `app_settings/mobile_ads.enabled` for the mobile app to read when ads are implemented.
+
+Schema: `docs/firestore-schema.md` (Notification Requests, App Settings). Functions: `docs/firebase-functions-deployment.md`.
+
+Update: when Send with image is enabled, notification requests store the first top-level offer image and push dispatch prefers that stored request image.
+
+---
+
+## 2026-06-24 — Offer replacement and cleanup lifecycle
+
+Notification requests can be edited after they are sent, expired offers can be duplicated into a fresh editable replacement, and a scheduled Cloud Function removes expired offers older than 10 days with their Storage images and related notification/push records. Duplicated offers copy content/settings but require fresh images so later cleanup cannot break replacement offers.
+
+Docs: `docs/firebase-functions-deployment.md`, `docs/firestore-rules-sync.md`.
+
+---
+
+## 2026-06-24 — Appealing default offer notification titles
+
+Default notification request titles now combine the offer title with discount text/type so mobile push notifications are more descriptive than “New offer available.”
+
+---
+
+## 2026-06-24 — User-friendly push notification errors in admin UI
+
+When FCM dispatch fails or sends to zero devices, show a clear dialog (not only console logs) with actionable guidance for IAM, missing tokens, stale tokens, and iOS APNs setup.
+
+---
+
+## 2026-06-19 — Human-readable labels for internal slugs in admin UI
+
+Show proper display names (e.g. **Price Drop** instead of `price_drop`) for alert types, roles, statuses, discount types, subscription types, payment methods, and other snake_case tags across admin panel lists and badges.
+
+---
+
+## 2026-06-19 — Resend notification on notification request list
+
+Move **Resend notification** from the offers list to each published notification request in the notification requests list. Reschedules `offer_push_jobs` for that request’s offer/line and invokes `sendOfferPush`.
+
+---
+
+## 2026-06-24 — Resend notification button on offer list (superseded)
+
+~~Each published offer in the offers list shows a **Resend notification** action~~ — moved to notification requests listing (see 2026-06-19 entry above).
+
+---
+
+## 2026-06-19 — Firestore app features catalog and per-user access
+
+Seed `app_features` for admin panel and mobile app modules. Owners assign `featureIds` when registering or editing users. Navigation and routing respect assigned features; owners keep full access.
+
+---
+
+## 2026-06-19 — Mobile users default to all mobile app features
+
+Mobile-only users receive every mobile feature on app signup/login and when resolving access, so older profiles without `featureIds` still see the full app.
+
+---
+
+## 2026-06-19 — User-friendly error messages across admin panel
+
+Centralized friendly error text for lists, forms, dashboard, profile, diagnostics, and inline field loads. Raw Firebase/exception strings are no longer shown in the UI.
+
+---
+
+## 2026-06-19 — Branded AppLoader on all list and CRUD loading states
+
+Unified loading UX to use the mobile-style `AppLoader` for Firebase/list fetches and CRUD operations, with a shared overlay on screens during async actions.
+
+---
+
+Moved page titles from the scaffold header slot into the body on all list screens. Notification requests list now has offers-style search. Published offers remain editable until their end date passes.
+
+---
+
+Expanded list search to match names, ids, sort order, status flags, and other metadata across catalog screens. List pages now show only the branded mobile-style loader until data is ready. Users list redesigned with summary chips, search, responsive grid, and rich user tiles.
+
+---
+
+Redesigned brands list with summary stat chips, responsive card grid, and rich brand tiles (logo, metadata badges, status labels).
+
+---
+
+## 2026-06-19 — List search on offers, brands, cities, and categories
+
+Added a shared search field to offers, brands, cities, and categories list screens. Search filters client-side by name, id, related metadata, and stored search keywords.
+
+---
+
+## 2026-06-19 — Cities and categories listing UI polish
+
+Redesigned city and category list screens with summary stat chips, responsive card grid layout, and richer tiles (color accents, metadata badges, improved actions).
+
+---
+
+## 2026-06-19 — Offers filter loading fix and stats-only dashboard
+
+Fixed offers list stuck loading when filters change by decoupling the Firestore stream from filter state (client-side filtering). Dashboard now shows statistics-only with charts and animated count transitions; recent offers section removed.
+
+---
+
+Create-offer drafts persist in browser storage per user so accidental navigation does not lose in-progress cards. Notification requests list uses the same brand-grouped card layout as the offers list.
+
+---
+
+Each offer card on the create/edit form now includes its own status, verification, lifecycle, brand, cities, dates, featured flag, and image display settings. Batch create saves one Firestore offer per card. Offers list filters use dropdown multi-select instead of chips.
+
+---
+
+Grouped offer creation now uses complete per-offer cards (title, description, category, discount, multiple images, multiple link sources) instead of shared images/URLs with discount-only lines. One Firestore offer document stores enriched `offerLines`; mobile detail switches title, images, and links per selected line.
+
+Schema: `docs/firestore-schema.md` (Offers `offerLines`).
+
+---
+
+## 2026-06-23 — Offer Multiple Images and Mobile Display Settings
+
+Offers now support multiple uploaded image URLs while keeping `imageUrl` as the primary fallback. Added offer-level mobile image settings for slider auto-advance and detail image view mode (`carousel` or `grid`).
+
+Schema: `docs/firestore-schema.md` (Offers).
+
+---
+
+## 2026-06-23 — Offer and Notification Card Polish
+
+Improved offer listing cards with richer image/status presentation, added brand labeling to notification request cards, and hid publish-all actions when there are no pending requests to publish.
+
+---
+
+## 2026-06-23 — Grouped Offer and Notification Admin Lists
+
+Updated offer administration so create can submit multiple single-line offers, edit stays focused on the current offer, offers and notification requests use brand/offer grouped card layouts, offer filters support multi-selection, and notification requests support top-level and group-level publish-all actions.
+
+---
+
+## 2026-06-23 — Shared keys & secrets document
+
+`docs/keys-and-secrets.md` (gitignored, team local) and `docs/keys-and-secrets.template.md` (tracked) centralize Firebase, reCAPTCHA SaleSiren, Google/Apple sign-in OAuth, and deploy keys for admin + mobile.
+
+---
+
+## 2026-06-19 — Grouped mall offers with multiple offer lines
+
+Offers can contain multiple `offerLines` (category + discount per line) under one brand/city/date group. Admin form uses an offer-lines editor; notification requests are created per line with publish-one or publish-all; mobile detail shows line picker and “Other offers” when grouped. Schema: `docs/firestore-schema.md` (Offers, Notification Requests, Offer Push Jobs).
+
+---
+
+## 2026-06-19 — Manager offers default to pending review
+
+New offers default to `pending_review` / unpublished. Managers cannot set Published on the offer form; they publish via **Notification Requests**. Repository and Firestore rules enforce pending-only saves for managers. Brand admins may still publish directly from the form.
+
+---
+
+## 2026-06-19 — Firestore rules & indexes sync workflow
+
+Added `docs/firestore-rules-sync.md`. Canonical rules live in `apps/adminpanel/firestore.rules`; mobile copy must stay identical. Merged `firestore.indexes.json` (offers composite indexes + `saved_brands` / `selected_categories` collection-group overrides) in both apps.
+
+---
+
+## 2026-06-19 — User doc: drop legacy `selectedCategories` and `favoriteBrands`
+
+Mobile and admin no longer write `selectedCategories` or `favoriteBrands` on `users/{uid}`. Categories live in `selected_categories` subcollection; brand favorites in `saved_brands` subcollection. Legacy array fields are deleted on sync and still read once for migration.
+
+---
+
+## 2026-06-19 — Selected categories subcollection
+
+User catalog preferences moved from `users/{uid}.selectedCategories` array to `users/{uid}/selected_categories/{categoryId}` (`categoryId`, `createdAt`). Admin panel `SelectedCategoriesSync`, Cloud Functions `userCategoryIdsForUser()`, Firestore rules, and collection-group index updated.
+
+---
+
+## 2026-06-19 — Favorite brands subcollection only
+
+Brand favorites stored in `users/{uid}/saved_brands/{docId}` (`categoryId`, `brandName`, `createdAt`). Removed `favoriteBrands` array from user document.
+
+---
+
+## 2026-06-19 — Multiple roles per user
+
+Users support `roles: string[]` (plus legacy single `role`). Admin registration/edit shows role chips from seeded `roles` collection. Firestore rules use `userRoleList()` / `hasUserRole()`. Settings seeds roles with auto-generated document IDs.
+
+---
+
+## 2026-06-19 — User notification toggle (`notificationEnabled`)
+
+Admin user add/edit exposes `notificationEnabled` (single field). Mobile app syncs the same field to Firestore preferences.
+
+---
+
+## 2026-06-19 — Push targeting by user preferences (no FCM topics)
+
+Removed mobile FCM category-topic subscription. Cloud Function matches published offers to users via `selected_categories` subcollection and `saved_brands` / `brandIds` filters.
+
+---
+
+## 2026-06-19 — Mobile: dashboard category tabs from user catalog
+
+Home feed category chips show only categories the user selected in onboarding/settings, not the full catalog.
+
+---
+
+## 2026-06-19 — Mobile: settings “Pick your catalog”
+
+Renamed interests copy to catalog-focused label (`pickYourCatalog`).
+
+---
+
+## 2026-06-19 — Admin: brand logos in list
+
+Brands list shows `logoUrl` via `AppAvatar` / `BrandModel` (supports `logoUrl`, `logurl`, `logUrl`).
+
+---
+
+## 2026-06-19 — Mobile: guest favorites sync on sign-in
+
+Local saved offers/brands merge to Firestore when a guest signs in.
+
+---
+
+## 2026-06-19 — Firebase Functions deployment guide
+
+Added `docs/firebase-functions-deployment.md` with deploy steps and the build service account IAM fix for `salesiren-5539c`.
+
+---
+
+## 2026-06-19 — FCM push to matching users when offer is published
+
+Cloud Function `dispatchOfferPushOnPublish` runs when an offer becomes published. It finds mobile users whose selected categories and brands match the offer, reads their `fcmTokens`, sends FCM notifications, and updates the linked `notification_requests` record with `sent` status and counts.
+
+---
+
+## 2026-06-19 — Remove role label under Sale Siren in sidebar
+
+Removed Owner/Admin subtitle from the sidebar brand mark on dashboard and all shell views.
+
 ---
 
 ## 2026-06-18 — Brand Topic Field for Future Subscriptions
@@ -19,6 +265,96 @@ Updated offer notification request creation so selected offer categories resolve
 ## 2026-06-18 — Category Topic Seed Field
 
 Added a short unique category `topic` value generated during category seeding from the category name plus a short unique suffix.
+
+---
+
+## 2026-06-19 — Manager can add brand but not register brand
+
+Managers can create brands via New brand; Register brand (with login account) remains owner-only.
+
+---
+
+## 2026-06-19 — Admin profile view for owner, manager, and brand admin
+
+Added a My Profile screen with prefilled account details and editable contact/preferences; profile menu opens it instead of Settings.
+
+---
+
+## 2026-06-19 — Restrict master data seeding to owners
+
+Managers and brand admins can no longer seed cities, categories, brands, or roles from Settings.
+
+---
+
+## 2026-06-19 — User registration waits for seeded roles
+
+Removed hardcoded fallback roles from user registration; role chips appear only after the owner seeds roles in Settings.
+
+---
+
+## 2026-06-19 — User catalog preferences on registration and edit
+
+Users can be assigned `categoryIds`, `cityIds`, and `brandIds` at registration and updated later from the user edit screen.
+
+---
+
+## 2026-06-19 — Auto-generated role document IDs on seed
+
+Role seeding now upserts by `slug` and assigns Firestore auto-generated document IDs; the stored `id` field matches the document ID. User assignment still uses role slugs for auth.
+
+---
+
+## 2026-06-19 — Firestore rules owner role only
+
+Removed legacy `user_owner` and `super_admin` role slugs from Firestore rules; owner checks use `owner` only.
+
+---
+
+## 2026-06-19 — Rename User Owner role to Owner
+
+Renamed `user_owner` role slug, labels, providers, and Firestore rules to `owner` / Owner across admin panel and mobile app rules. Legacy `user_owner` and `super_admin` values still accepted for existing data.
+
+---
+
+## 2026-06-18 — Rename Super Admin role to User Owner
+
+Renamed `super_admin` role slug, labels, providers, and Firestore rules to `user_owner` / User Owner across admin panel and mobile app rules. Legacy `super_admin` values still accepted for existing data.
+
+---
+
+## 2026-06-18 — Mobile app open signup and sign-in Firestore rules
+
+Allow any authenticated mobile user to create their own `users/{uid}` profile on signup (mobile_user only) and read/update their own profile. Synced rules to the mobile app copy.
+
+---
+
+## 2026-06-18 — Managers see users except super admins
+
+Managers can list and view non–super-admin users only. Super-admin profiles are hidden in the users provider and blocked by Firestore read rules for managers.
+
+---
+
+## 2026-06-18 — Super admins in users table; admins as id/role reference
+
+Super admins are stored in `users` with full profile. On register, email is checked against `users` before creating Auth. When role includes `super_admin`, a matching `admins/{uid}` reference doc is written with only `id` and `role`. User edit/delete keeps the reference in sync.
+
+---
+
+## 2026-06-18 — First-login temporary password change prompt
+
+Users registered with a temporary password are prompted to set a new password on first sign-in. They can skip with a security warning and will be prompted again on the next login until the password is changed.
+
+---
+
+## 2026-06-18 — Super-admin-only user management; managers view-only
+
+Restricted user create, edit, delete, and profile mutations to super admins. Managers can open the Users list and view details only. Updated router, nav, UI, providers, and Firestore rules.
+
+---
+
+## 2026-06-18 — User admin/mobile access flags and login gate
+
+Added `isAdminEnabled` and `isMobileAppEnabled` on user profiles. Admin login and routing now require `isAdminEnabled` (super admins always allowed). User create/edit screens expose both toggles; mobile-only users cannot enable admin access; managers default to admin disabled.
 
 ---
 

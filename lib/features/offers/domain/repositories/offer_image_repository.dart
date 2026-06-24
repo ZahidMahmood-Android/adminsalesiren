@@ -5,4 +5,9 @@ abstract class OfferImageRepository {
     required List<int> bytes,
     required String contentType,
   });
+
+  Future<void> deleteImagesForOffer({
+    required String offerId,
+    Iterable<String> imageUrls = const [],
+  });
 }

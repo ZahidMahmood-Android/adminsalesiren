@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
@@ -23,6 +24,10 @@ final categoriesProvider = StreamProvider.autoDispose<List<Category>>((ref) {
   return ref.watch(categoriesRepositoryProvider).watchCategories();
 });
 
+final categoriesListSearchQueryProvider = StateProvider.autoDispose<String>(
+  (ref) => '',
+);
+
 final activeCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
   ref,
 ) {
@@ -39,7 +44,7 @@ final visibleCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
   final categories = ref.watch(categoriesProvider);
   return categories.when(
     data: (items) {
-      if (!_isBrandScopedRole(user?.role)) {
+      if (!_isBrandScopedRole(user?.roles)) {
         return Stream.value(items);
       }
       final brands = ref.watch(brandsProvider);
@@ -60,7 +65,12 @@ final visibleCategoriesProvider = StreamProvider.autoDispose<List<Category>>((
   );
 });
 
-bool _isBrandScopedRole(String? role) => role == UserRoles.brandAdmin;
+bool _isBrandScopedRole(List<String>? roles) {
+  if (roles == null) {
+    return false;
+  }
+  return roles.contains(UserRoles.brandAdmin);
+}
 
 Brand? _findBrand(Iterable<Brand> brands, String id) {
   for (final brand in brands) {

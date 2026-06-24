@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/animated_content.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_status_chip.dart';
 import '../../../../core/widgets/app_text_view.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../providers/subscription_providers.dart';
@@ -22,17 +23,14 @@ class BrandSubscriptionsListScreen extends ConsumerWidget {
 
     return ScreenScaffold(
       loading: actionState.isLoading,
-      header: ScreenHeader(
-        title: 'Brand Subscriptions',
-        actions: [
-          FilledButton.icon(
-            onPressed: () =>
-                context.go('/subscriptions/brand-subscriptions/new'),
-            icon: const Icon(Icons.add),
-            label: const Text('Assign plan'),
-          ),
-        ],
-      ),
+      title: 'Brand Subscriptions',
+      actions: [
+        FilledButton.icon(
+          onPressed: () => context.go('/subscriptions/brand-subscriptions/new'),
+          icon: const Icon(Icons.add),
+          label: const Text('Assign plan'),
+        ),
+      ],
       child: AnimatedContent(
         child: subscriptions.when(
           data: (items) {
@@ -54,7 +52,8 @@ class BrandSubscriptionsListScreen extends ConsumerWidget {
                   final sub = items[index];
                   return FadeIn(
                     delay: Duration(milliseconds: index * 30),
-                    child: ListTile(
+                    child: AppListTileMaterial(
+                      child: ListTile(
                       title: AppTextView.title(
                         '${sub.planName} · ${sub.brandId}',
                         fontWeight: FontWeight.w700,
@@ -68,14 +67,15 @@ class BrandSubscriptionsListScreen extends ConsumerWidget {
                                   'Payment: ${sub.paymentStatus}',
                       ),
                       trailing: AppStatusChip(status: sub.status),
+                      ),
                     ),
                   );
                 },
               ),
             );
           },
-          loading: () => const AppLoadingView(label: 'Loading subscriptions'),
-          error: (error, _) => AppErrorView(message: error.toString()),
+          loading: () => const AppLoader(),
+          error: (error, _) => AppErrorView(error: error),
         ),
       ),
     );

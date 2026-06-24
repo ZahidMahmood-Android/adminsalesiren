@@ -7,13 +7,13 @@ import '../../domain/repositories/notifications_repository.dart';
 class FirebaseNotificationsRepository implements NotificationsRepository {
   FirebaseNotificationsRepository(
     this._firestore,
-    this._currentUserId,
-    String _,
-    String __,
-  );
+    this._currentUserId, {
+    required this.canSeeAllRequests,
+  });
 
   final FirebaseFirestore _firestore;
   final String _currentUserId;
+  final bool canSeeAllRequests;
   final _log = AppLogger.get('FirebaseNotificationsRepository');
 
   CollectionReference<Map<String, dynamic>> get _requests =>
@@ -24,10 +24,9 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
     if (_currentUserId.isEmpty) {
       return Stream.value(const <NotificationRequest>[]);
     }
-    final query = _requests.where(
-      'requestedByUserId',
-      isEqualTo: _currentUserId,
-    );
+    final query = canSeeAllRequests
+        ? _requests
+        : _requests.where('requestedByUserId', isEqualTo: _currentUserId);
     return query.snapshots().map((snapshot) {
       final requests =
           snapshot.docs
@@ -52,6 +51,7 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
       'title': request.title,
       'body': request.body,
       'brandId': request.brandId,
+      'brandName': request.brandName,
       'offerId': request.offerId,
       'requestedByUserId': request.requestedByUserId,
       'targetCityIds': request.targetCityIds,
@@ -71,6 +71,9 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
           : Timestamp.fromDate(request.sentAt!),
       'sentCount': request.sentCount,
       'openCount': request.openCount,
+      'offerLineId': request.offerLineId,
+      'groupTitle': request.groupTitle,
+      'includeImage': request.includeImage,
       'createdAt': Timestamp.fromDate(request.createdAt),
       'updatedAt': Timestamp.now(),
     });
@@ -85,6 +88,7 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
       'targetCityIds': request.targetCityIds,
       'targetCategoryIds': request.targetCategoryIds,
       'targetTopics': request.targetTopics,
+      'includeImage': request.includeImage,
       'updatedAt': Timestamp.now(),
     });
   }
@@ -148,6 +152,10 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
       status: data['status'] as String? ?? 'pending',
       createdAt: _readDate(data['createdAt']),
       brandId: data['brandId'] as String? ?? '',
+      brandName:
+          data['brandName'] as String? ??
+          (data['data'] as Map?)?['brandName']?.toString() ??
+          '',
       offerId: data['offerId'] as String? ?? '',
       requestedByUserId: data['requestedByUserId'] as String? ?? '',
       targetCityIds: _readStringList(data['targetCityIds']),
@@ -159,6 +167,9 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
       sentAt: _readOptionalDate(data['sentAt']),
       sentCount: data['sentCount'] as int? ?? 0,
       openCount: data['openCount'] as int? ?? 0,
+      offerLineId: data['offerLineId'] as String? ?? '',
+      groupTitle: data['groupTitle'] as String? ?? '',
+      includeImage: data['includeImage'] as bool? ?? true,
     );
   }
 

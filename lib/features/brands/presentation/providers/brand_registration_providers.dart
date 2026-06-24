@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/errors/error_messages.dart';
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
 import '../../../../firebase_options.dart';
@@ -40,14 +41,19 @@ class BrandRegistrationController extends AsyncNotifier<String?> {
     required String loginPhone,
     required String notes,
   }) async {
-    final firestore = ref.read(firestoreProvider);
-    final adminId = ref.read(currentUserProvider)?.id ?? '';
-    final brandId = existingBrandId?.trim().isNotEmpty == true
-        ? existingBrandId!.trim()
-        : _slug(brandName);
-
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
+      if (ref.read(isManagerProvider)) {
+        throw AppException(
+          'Managers cannot register brands with login accounts. Use New brand instead.',
+        );
+      }
+
+      final firestore = ref.read(firestoreProvider);
+      final adminId = ref.read(currentUserProvider)?.id ?? '';
+      final brandId = existingBrandId?.trim().isNotEmpty == true
+          ? existingBrandId!.trim()
+          : _slug(brandName);
       final brandRef = firestore.collection('brands').doc(brandId);
       final now = FieldValue.serverTimestamp();
       await brandRef.set({
@@ -123,11 +129,7 @@ class BrandRegistrationController extends AsyncNotifier<String?> {
       throw AppException(_authErrorMessage(error.code, error.message));
     } catch (error) {
       _log.warning('_createBrandAuthUser unexpected error', error);
-      // Surface the raw message so the admin knows what happened.
-      throw AppException(
-        'Failed to create the brand admin account: '
-        '${error.toString().replaceFirst(RegExp(r'^\[.*?\]\s*'), '')}',
-      );
+      throw AppException(ErrorMessages.friendly(error));
     } finally {
       await app?.delete();
     }
@@ -136,23 +138,20 @@ class BrandRegistrationController extends AsyncNotifier<String?> {
   static String _authErrorMessage(String code, String? fallback) {
     return switch (code) {
       'email-already-in-use' =>
-        'This email is already registered in Firebase Auth.\n'
-            'Either use a different login email, or enter the existing user\'s UID '
-            'directly on the "Link existing user" field.',
+        'This email is already registered. Use a different login email, or link '
+            'the existing user in the "Link existing user" field.',
       'invalid-email' => 'The login email address is not valid.',
-      'weak-password' =>
-        'The password is too weak — Firebase requires at least 6 characters.',
+      'weak-password' => 'The password is too weak. Use at least 6 characters.',
       'operation-not-allowed' =>
-        'Email/password sign-in is not enabled in this Firebase project. '
-            'Enable it in the Firebase Console › Authentication › Sign-in methods.',
+        'Email sign-in is not enabled. Please contact support.',
       'network-request-failed' =>
-        'Network error while creating the account. Check your internet connection.',
+        'We could not connect right now. Please check your internet and try again.',
       'too-many-requests' =>
         'Too many account-creation attempts. Please wait a moment and try again.',
       _ =>
-        fallback?.isNotEmpty == true
-            ? fallback!
-            : 'Failed to create the brand admin account (code: $code).',
+        fallback?.trim().isNotEmpty == true
+            ? ErrorMessages.friendly(fallback)
+            : 'Unable to create the brand admin account. Please try again.',
     };
   }
 

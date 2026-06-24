@@ -4,8 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/category.dart';
@@ -203,11 +204,13 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      SwitchListTile(
+                      AppListTileMaterial(
+                        child: SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Active category'),
                         value: _isActive,
                         onChanged: (value) => setState(() => _isActive = value),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       Row(
@@ -241,8 +244,8 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
           ),
         );
       },
-      loading: () => const AppLoadingView(label: 'Loading category'),
-      error: (error, _) => AppErrorView(message: error.toString()),
+      loading: () => const AppLoader(),
+      error: (error, _) => AppErrorView(error: error),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 
 class MetricCard extends StatelessWidget {
@@ -25,7 +26,9 @@ class MetricCard extends StatelessWidget {
     return SizedBox(
       width: 260,
       child: Tooltip(
-        message: errorMessage ?? '',
+        message: errorMessage == null
+            ? ''
+            : ErrorMessages.friendly(errorMessage),
         child: AppCard(
           child: Column(
             mainAxisSize: MainAxisSize.min,

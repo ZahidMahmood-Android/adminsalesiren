@@ -133,7 +133,7 @@ class _BrandPaymentFormScreenState
     final busy = _uploading || actionState.isLoading;
 
     return ScreenScaffold(
-      header: const ScreenHeader(title: 'Submit Payment'),
+      title: 'Submit Payment',
       child: SingleChildScrollView(
         padding: screenPadding(context),
         child: Form(

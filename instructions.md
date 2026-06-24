@@ -14,9 +14,10 @@ Before making code changes:
 2. Write the planned change summary first:
    - **New features / updates** → `docs/updates-and-features.md`
    - **Bug fixes only** → `docs/bug-fixes.md`
-3. Make the smallest safe code change.
-4. Run `dart format` after Dart edits.
-5. Respond using the response format in section 2.
+3. Update **all related docs** for the change (see section 15) — not only the changelog.
+4. Make the smallest safe code change.
+5. Run `dart format` after Dart edits.
+6. Respond using the response format in section 2.
 
 Do **not** create other markdown files unless the user asks.
 
@@ -266,12 +267,31 @@ Logging details: `docs/logging.md`. Build/run: `docs/BUILD_AND_RUN.md`.
 
 ## 15. Change Documents
 
-| Document | Use for |
-|----------|---------|
-| `docs/updates-and-features.md` | New features, enhancements, schema changes, refactors requested as features |
-| `docs/bug-fixes.md` | Bug fixes, permission errors, performance fixes, console/runtime issues |
+Always log the change **before** implementing. Also update every **related** doc below when the task touches that area — do not stop at the changelog alone.
 
-Always append to the correct document **before** implementing.
+| Document | Use for | Update when you change… |
+|----------|---------|-------------------------|
+| `docs/updates-and-features.md` | New features, enhancements, refactors requested as features | Any non-bug product or engineering work |
+| `docs/bug-fixes.md` | Bug fixes, permission errors, runtime/console issues | Any defect fix |
+| `docs/firestore-schema.md` | Collection/field shapes, subcollections, data conventions | Firestore models, new fields, grouped/nested data |
+| `docs/firestore-rules-sync.md` | Rules/indexes sync between admin panel and mobile app | `firestore.rules`, `firestore.indexes.json` |
+| `docs/firebase-functions-deployment.md` | Cloud Functions triggers, deploy steps, push/matching behavior | `functions/`, offer push, notification dispatch |
+| `docs/firebase-setup.md` | Project setup, env, initial Firebase config | Setup steps, project IDs, console configuration |
+| `docs/keys-and-secrets.template.md` | Secret key **structure** (tracked; no real secrets) | New keys, env vars, OAuth, reCAPTCHA |
+| `docs/keys-and-secrets.md` | **Local only** (gitignored) — real keys & secrets | Copy from template; never commit |
+| `docs/logging.md` | Logging conventions | Logger setup or log-level policy |
+| `docs/BUILD_AND_RUN.md` | Local build/run commands | Build flags, run targets, platform setup |
+
+**Checklist (apply what fits):**
+
+1. Changelog first (`updates-and-features.md` or `bug-fixes.md`).
+2. Schema doc if Firestore read/write shape changed.
+3. Rules sync doc + copy rules/indexes to `apps/mobileapp` if security or indexes changed.
+4. Functions deployment doc if Cloud Functions behavior or deploy commands changed.
+5. Cross-link between changelog entry and detailed docs (e.g. “Schema: `docs/firestore-schema.md`”).
+6. New keys or secrets → copy `docs/keys-and-secrets.template.md` to `docs/keys-and-secrets.md` (gitignored) and update both; never commit real secrets to tracked files.
+
+Do **not** create other markdown files unless the user asks.
 
 ---
 

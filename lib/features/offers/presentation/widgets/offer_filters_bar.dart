@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/multi_select_field.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
 import '../../../categories/presentation/providers/category_providers.dart';
@@ -27,72 +28,41 @@ class OfferFiltersBar extends ConsumerWidget {
         runSpacing: 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          SizedBox(
-            width: 190,
-            child: DropdownButtonFormField<String>(
-              initialValue: filters.cityId,
-              decoration: const InputDecoration(labelText: 'City'),
-              items: [
-                const DropdownMenuItem<String>(
-                  value: null,
-                  child: Text('All cities'),
-                ),
-                ...cities.map(
-                  (city) =>
-                      DropdownMenuItem(value: city.id, child: Text(city.name)),
-                ),
-              ],
-              onChanged: (value) => controller.update(
-                filters.copyWith(cityId: value, clearCity: value == null),
-              ),
+          MultiSelectField(
+            label: 'Cities',
+            options: cities
+                .map((city) => MultiSelectOption(id: city.id, label: city.name))
+                .toList(),
+            selectedIds: filters.cityIds,
+            onChanged: (ids) => controller.update(
+              filters.copyWith(cityIds: ids, clearCity: true),
             ),
           ),
-          SizedBox(
-            width: 210,
-            child: DropdownButtonFormField<String>(
-              initialValue: filters.categoryId,
-              decoration: const InputDecoration(labelText: 'Category'),
-              items: [
-                const DropdownMenuItem<String>(
-                  value: null,
-                  child: Text('All categories'),
-                ),
-                ...categories.map(
-                  (category) => DropdownMenuItem(
-                    value: category.id,
-                    child: Text(category.name),
-                  ),
-                ),
-              ],
-              onChanged: (value) => controller.update(
-                filters.copyWith(
-                  categoryId: value,
-                  clearCategory: value == null,
-                ),
-              ),
+          MultiSelectField(
+            label: 'Categories',
+            options: categories
+                .map(
+                  (category) =>
+                      MultiSelectOption(id: category.id, label: category.name),
+                )
+                .toList(),
+            selectedIds: filters.categoryIds,
+            onChanged: (ids) => controller.update(
+              filters.copyWith(categoryIds: ids, clearCategory: true),
             ),
           ),
           if (!isBrandScopedUser)
-            SizedBox(
-              width: 220,
-              child: DropdownButtonFormField<String>(
-                initialValue: filters.brandId,
-                decoration: const InputDecoration(labelText: 'Brand'),
-                items: [
-                  const DropdownMenuItem<String>(
-                    value: null,
-                    child: Text('All brands'),
-                  ),
-                  ...brands.map(
-                    (brand) => DropdownMenuItem(
-                      value: brand.id,
-                      child: Text(brand.name),
-                    ),
-                  ),
-                ],
-                onChanged: (value) => controller.update(
-                  filters.copyWith(brandId: value, clearBrand: value == null),
-                ),
+            MultiSelectField(
+              label: 'Brands',
+              options: brands
+                  .map(
+                    (brand) =>
+                        MultiSelectOption(id: brand.id, label: brand.name),
+                  )
+                  .toList(),
+              selectedIds: filters.brandIds,
+              onChanged: (ids) => controller.update(
+                filters.copyWith(brandIds: ids, clearBrand: true),
               ),
             ),
           SizedBox(

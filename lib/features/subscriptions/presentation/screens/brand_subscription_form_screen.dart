@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
+import '../../../../core/widgets/app_inline_error.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../brands/presentation/providers/brand_providers.dart'
     show registeredBrandsProvider;
 import '../providers/subscription_providers.dart';
@@ -120,8 +122,9 @@ class _BrandSubscriptionFormScreenState
                         .toList(),
                     onChanged: (value) => setState(() => _brandId = value),
                   ),
-                  loading: () => const LinearProgressIndicator(),
-                  error: (error, _) => Text(error.toString()),
+                  loading: () =>
+                      const SizedBox(height: 72, child: AppLoader(size: 56)),
+                  error: (error, _) => AppInlineError(error),
                 ),
                 const SizedBox(height: 12),
                 plans.when(
@@ -141,8 +144,9 @@ class _BrandSubscriptionFormScreenState
                         .toList(),
                     onChanged: (value) => setState(() => _planId = value),
                   ),
-                  loading: () => const LinearProgressIndicator(),
-                  error: (error, _) => Text(error.toString()),
+                  loading: () =>
+                      const SizedBox(height: 72, child: AppLoader(size: 56)),
+                  error: (error, _) => AppInlineError(error),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
@@ -184,11 +188,13 @@ class _BrandSubscriptionFormScreenState
                 ),
                 const Divider(),
                 const SizedBox(height: 4),
-                SwitchListTile(
+                AppListTileMaterial(
+                  child: SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Auto renew'),
                   value: _autoRenew,
                   onChanged: (value) => setState(() => _autoRenew = value),
+                  ),
                 ),
                 Row(
                   children: [

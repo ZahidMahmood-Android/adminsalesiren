@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'dart:async';
 
+import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
+import '../../../../core/errors/app_exception.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../../core/services/offer_push_dispatch_service.dart';
 import '../../../offers/presentation/providers/offer_providers.dart';
 import '../../data/repositories/firebase_notifications_repository.dart';
 import '../../domain/entities/notification_request.dart';
@@ -12,11 +16,12 @@ final notificationsRepositoryProvider = Provider<NotificationsRepository>((
   ref,
 ) {
   final user = ref.watch(currentUserProvider);
+  final isOwner = ref.watch(isOwnerProvider);
+  final isManager = ref.watch(isManagerProvider);
   return FirebaseNotificationsRepository(
     ref.watch(firestoreProvider),
     user?.id ?? '',
-    user?.role ?? 'super_admin',
-    user?.brandId ?? '',
+    canSeeAllRequests: isOwner || isManager,
   );
 });
 
@@ -24,6 +29,9 @@ final notificationRequestsProvider =
     StreamProvider.autoDispose<List<NotificationRequest>>((ref) {
       return ref.watch(notificationsRepositoryProvider).watchRequests();
     });
+
+final notificationRequestsListSearchQueryProvider =
+      StateProvider.autoDispose<String>((ref) => '');
 
 final createNotificationRequestProvider =
     Provider<Future<String> Function(NotificationRequest)>((ref) {
@@ -37,6 +45,8 @@ final notificationRequestActionsProvider =
     >(NotificationRequestActionsController.new);
 
 class NotificationRequestActionsController extends AsyncNotifier<void> {
+  static final _log = AppLogger.get('NotificationRequestActions');
+
   @override
   FutureOr<void> build() {}
 
@@ -62,11 +72,15 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
   Future<void> publishRequest({
     required String requestId,
     required String offerId,
+    String offerLineId = '',
   }) async {
     final user = ref.read(currentUserProvider);
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref.read(offersRepositoryProvider).publishOffer(offerId, true);
+      _log.info(
+        'Publishing notification request requestId=$requestId '
+        'offerId=$offerId offerLineId=${offerLineId.isEmpty ? '' : offerLineId}',
+      );
       await ref
           .read(notificationsRepositoryProvider)
           .updateRequestStatus(
@@ -74,7 +88,55 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
             'approved',
             approvedBy: user?.id ?? '',
           );
+      if (offerLineId.isNotEmpty) {
+        await ref
+            .read(offersRepositoryProvider)
+            .publishOfferLine(offerId, offerLineId, requestId: requestId);
+      } else {
+        await ref
+            .read(offersRepositoryProvider)
+            .publishOffer(offerId, true, requestId: requestId);
+      }
+      _log.info(
+        'Notification request publish finished requestId=$requestId offerId=$offerId',
+      );
     });
+  }
+
+  Future<void> publishAllForOffer(String offerId) async {
+    final requests = await ref.read(notificationRequestsProvider.future);
+    final pending = requests
+        .where(
+          (request) =>
+              request.offerId == offerId &&
+              request.status == 'pending' &&
+              request.offerId.isNotEmpty,
+        )
+        .toList();
+    for (final request in pending) {
+      await publishRequest(
+        requestId: request.id,
+        offerId: request.offerId,
+        offerLineId: request.offerLineId,
+      );
+    }
+  }
+
+  Future<void> publishAllPending() async {
+    final requests = await ref.read(notificationRequestsProvider.future);
+    final pending = requests
+        .where(
+          (request) =>
+              request.status == 'pending' && request.offerId.isNotEmpty,
+        )
+        .toList();
+    for (final request in pending) {
+      await publishRequest(
+        requestId: request.id,
+        offerId: request.offerId,
+        offerLineId: request.offerLineId,
+      );
+    }
   }
 
   Future<void> saveRequest(NotificationRequest request) async {
@@ -89,5 +151,34 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
     state = await AsyncValue.guard(
       () => ref.read(notificationsRepositoryProvider).deleteRequest(id),
     );
+  }
+
+  Future<OfferPushDispatchResult> resendNotification(
+    NotificationRequest request,
+  ) async {
+    if (request.offerId.isEmpty) {
+      throw const AppException(
+        'This request is not linked to an offer.',
+        code: 'notification-request-missing-offer',
+      );
+    }
+    state = const AsyncLoading();
+    try {
+      _log.info(
+        'Resend notification requestId=${request.id} offerId=${request.offerId}',
+      );
+      final result = await ref
+          .read(offersRepositoryProvider)
+          .resendOfferNotification(
+            offerId: request.offerId,
+            offerLineId: request.offerLineId,
+            requestId: request.id,
+          );
+      state = const AsyncData(null);
+      return result;
+    } catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+      rethrow;
+    }
   }
 }

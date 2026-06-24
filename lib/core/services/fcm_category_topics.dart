@@ -5,10 +5,10 @@ class FcmCategoryTopics {
   static const prefix = 'category_';
 
   static String forCategoryId(String categoryId) {
-    final sanitized = categoryId
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9-_.~%]'), '_');
+    final sanitized = categoryId.trim().toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9-_.~%]'),
+      '_',
+    );
     return '$prefix$sanitized';
   }
 

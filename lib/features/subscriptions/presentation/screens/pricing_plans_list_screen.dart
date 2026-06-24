@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/animated_content.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/widgets/app_badge.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/utils/display_label_utils.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -20,36 +22,34 @@ class PricingPlansListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final plans = ref.watch(pricingPlansProvider);
     final actions = ref.watch(subscriptionActionsProvider);
-    final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final isOwner = ref.watch(isOwnerProvider);
 
     return ScreenScaffold(
       loading: actions.isLoading,
-      header: ScreenHeader(
-        title: 'Pricing Plans',
-        actions: isSuperAdmin
-            ? [
-                OutlinedButton.icon(
-                  onPressed: actions.isLoading
-                      ? null
-                      : () async {
-                          final count = await ref
-                              .read(subscriptionActionsProvider.notifier)
-                              .seedPricingPlans();
-                          if (context.mounted) {
-                            showAppSuccess(context, 'Seeded $count plans.');
-                          }
-                        },
-                  icon: const Icon(Icons.grass_outlined),
-                  label: const Text('Seed plans'),
-                ),
-                FilledButton.icon(
-                  onPressed: () => context.go('/subscriptions/plans/new'),
-                  icon: const Icon(Icons.add),
-                  label: const Text('New plan'),
-                ),
-              ]
-            : [],
-      ),
+      title: 'Pricing Plans',
+      actions: isOwner
+          ? [
+              OutlinedButton.icon(
+                onPressed: actions.isLoading
+                    ? null
+                    : () async {
+                        final count = await ref
+                            .read(subscriptionActionsProvider.notifier)
+                            .seedPricingPlans();
+                        if (context.mounted) {
+                          showAppSuccess(context, 'Seeded $count plans.');
+                        }
+                      },
+                icon: const Icon(Icons.grass_outlined),
+                label: const Text('Seed plans'),
+              ),
+              FilledButton.icon(
+                onPressed: () => context.go('/subscriptions/plans/new'),
+                icon: const Icon(Icons.add),
+                label: const Text('New plan'),
+              ),
+            ]
+          : [],
       child: AnimatedContent(
         child: plans.when(
           data: (items) {
@@ -76,7 +76,8 @@ class PricingPlansListScreen extends ConsumerWidget {
                   final plan = items[index];
                   return FadeIn(
                     delay: Duration(milliseconds: index * 30),
-                    child: ListTile(
+                    child: AppListTileMaterial(
+                      child: ListTile(
                       title: Text(
                         plan.name,
                         style: const TextStyle(fontWeight: FontWeight.w700),
@@ -100,21 +101,22 @@ class PricingPlansListScreen extends ConsumerWidget {
                               color: Colors.red,
                             ),
                           AppBadge(
-                            label: plan.analyticsLevel,
+                            label: DisplayLabelUtils.slug(plan.analyticsLevel),
                             color: Colors.blue,
                           ),
                         ],
                       ),
                       onTap: () =>
                           context.go('/subscriptions/plans/${plan.id}'),
+                      ),
                     ),
                   );
                 },
               ),
             );
           },
-          loading: () => const AppLoadingView(label: 'Loading plans'),
-          error: (error, _) => AppErrorView(message: error.toString()),
+          loading: () => const AppLoader(),
+          error: (error, _) => AppErrorView(error: error),
         ),
       ),
     );

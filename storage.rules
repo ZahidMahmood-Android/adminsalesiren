@@ -6,17 +6,69 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isSignedIn()
-        && firestore.exists(/databases/default/documents/admins/$(request.auth.uid));
+    function userDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
     }
 
-    // Offer images: public read, admin write (size and type restricted)
+    function hasUserDoc() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function userRoleList() {
+      return hasUserDoc() && userDoc().data.roles is list && userDoc().data.roles.size() > 0
+        ? userDoc().data.roles
+        : (hasUserDoc()
+          && userDoc().data.role is string
+          && userDoc().data.role != ''
+            ? [userDoc().data.role]
+            : []);
+    }
+
+    function hasUserRole(r) {
+      return r in userRoleList()
+        || (hasUserDoc() && userDoc().data.role == r);
+    }
+
+    function adminDocExists() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner() {
+      return (hasUserDoc()
+          && hasUserRole('owner')
+          && userDoc().data.isActive == true)
+        || (adminDocExists()
+          && firestore.get(/databases/(default)/documents/admins/$(request.auth.uid)).data.role == 'owner');
+    }
+
+    function isManager() {
+      return hasUserDoc()
+        && hasUserRole('manager')
+        && userDoc().data.isActive == true;
+    }
+
+    function isBrandAdmin() {
+      return hasUserDoc()
+        && hasUserRole('brand_admin')
+        && userDoc().data.isActive == true;
+    }
+
+    function canUploadOfferImage() {
+      return isOwner()
+        || isManager()
+        || isBrandAdmin()
+        || adminDocExists();
+    }
+
+    // Offer images: public read; admin-panel roles may upload/delete (size/type on create/update)
     match /offers/{allPaths=**} {
       allow read: if true;
-      allow write: if isAdmin()
+      allow create, update: if canUploadOfferImage()
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if canUploadOfferImage();
     }
 
     // Payment proof screenshots: any signed-in user can upload/read their own proofs.

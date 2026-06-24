@@ -5,12 +5,18 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/data/firebase/selected_categories_sync.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
 import '../../../../firebase_options.dart';
+import '../../../auth/domain/entities/user_role_utils.dart';
 import '../../../auth/domain/entities/user_roles.dart';
+import '../../../../core/errors/error_messages.dart';
+import '../../../access/domain/app_feature_seed_data.dart';
+import '../../../access/domain/feature_access_utils.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../data/admin_reference_sync.dart';
 
 final userRegistrationProvider =
     AsyncNotifierProvider.autoDispose<UserRegistrationController, String?>(
@@ -28,27 +34,74 @@ class UserRegistrationController extends AsyncNotifier<String?> {
     required String email,
     required String password,
     required String phoneNumber,
-    required String role,
+    required List<String> roles,
     required String brandId,
+    required List<String> categoryIds,
+    required List<String> cityIds,
+    required List<String> brandIds,
+    required bool notificationEnabled,
+    required bool isAdminEnabled,
+    required bool isMobileAppEnabled,
+    required List<String> featureIds,
   }) async {
     final firestore = ref.read(firestoreProvider);
     final adminId = ref.read(currentUserProvider)?.id ?? '';
-    final normalizedEmail = email.trim().toLowerCase();
-    final normalizedRole = role.trim();
-    final normalizedBrandId = brandId.trim();
-
-    final needsBrand = normalizedRole == UserRoles.brandAdmin;
-    if (needsBrand && normalizedBrandId.isEmpty) {
-      throw AppException('Brand is required for brand admin users.');
-    }
-    if (!needsBrand && normalizedBrandId.isNotEmpty) {
-      throw AppException('Brand can only be selected for brand admin users.');
-    }
 
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
+      if (!ref.read(isOwnerProvider)) {
+        throw AppException('Only owners can register users.');
+      }
+
+      final normalizedEmail = email.trim().toLowerCase();
+      final normalizedRoles = roles.toSet().toList();
+      final normalizedBrandId = brandId.trim();
+
+      if (normalizedRoles.isEmpty) {
+        throw AppException('Select at least one role.');
+      }
+
+      final needsBrand = UserRoleUtils.requiresBrand(normalizedRoles);
+      if (needsBrand && normalizedBrandId.isEmpty) {
+        throw AppException('Brand is required for brand admin users.');
+      }
+      if (!needsBrand && normalizedBrandId.isNotEmpty) {
+        throw AppException('Brand can only be selected for brand admin users.');
+      }
+      if (UserRoleUtils.isMobileUserOnly(normalizedRoles) && isAdminEnabled) {
+        throw AppException('Mobile users cannot have admin panel access.');
+      }
+
+      final resolvedFeatureIds = UserRoleUtils.isMobileUserOnly(normalizedRoles)
+          ? AppFeatureIds.allMobile
+          : featureIds.isNotEmpty
+          ? featureIds
+          : FeatureAccessUtils.defaultFeatureIdsForRoles(normalizedRoles);
+      if (resolvedFeatureIds.isEmpty) {
+        throw AppException('Select at least one feature for this user.');
+      }
+
+      final resolvedAdminEnabled = UserRoleUtils.resolvesAdminEnabled(
+        normalizedRoles,
+        isAdminEnabled,
+      );
+      final resolvedMobileAppEnabled = UserRoleUtils.resolvesMobileAppEnabled(
+        normalizedRoles,
+        isMobileAppEnabled,
+      );
+
+      final existingUser = await firestore
+          .collection('users')
+          .where('email', isEqualTo: normalizedEmail)
+          .limit(1)
+          .get();
+      if (existingUser.docs.isNotEmpty) {
+        throw AppException('A user profile with this email already exists.');
+      }
+
       final userId = await _createAuthUser(normalizedEmail, password);
       final now = FieldValue.serverTimestamp();
+      final primaryRole = UserRoleUtils.primaryRole(normalizedRoles);
 
       await firestore.collection('users').doc(userId).set({
         'id': userId,
@@ -56,13 +109,26 @@ class UserRegistrationController extends AsyncNotifier<String?> {
         'displayName': fullName.trim(),
         'email': normalizedEmail,
         'phoneNumber': phoneNumber.trim(),
-        'role': normalizedRole,
+        'roles': normalizedRoles,
+        'role': primaryRole,
         'brandId': needsBrand ? normalizedBrandId : '',
+        'categoryIds': categoryIds,
+        'cityIds': cityIds,
+        'brandIds': brandIds,
         'isActive': true,
+        'notificationEnabled': notificationEnabled,
+        'isAdminEnabled': resolvedAdminEnabled,
+        'isMobileAppEnabled': resolvedMobileAppEnabled,
+        'featureIds': resolvedFeatureIds,
+        'mustChangePassword': true,
         'createdByAdminId': adminId,
         'createdAt': now,
         'updatedAt': now,
       }, SetOptions(merge: true));
+
+      await SelectedCategoriesSync.sync(firestore, userId, categoryIds);
+
+      await AdminReferenceSync.syncForRoles(firestore, userId, normalizedRoles);
 
       if (needsBrand) {
         await firestore.collection('brands').doc(normalizedBrandId).set({
@@ -72,7 +138,7 @@ class UserRegistrationController extends AsyncNotifier<String?> {
       }
 
       _log.info(
-        'Registered user id=$userId role=$normalizedRole email=$normalizedEmail',
+        'Registered user id=$userId roles=$normalizedRoles email=$normalizedEmail',
       );
       return 'User registered successfully.';
     });
@@ -98,10 +164,7 @@ class UserRegistrationController extends AsyncNotifier<String?> {
       throw AppException(_authErrorMessage(error.code, error.message));
     } catch (error) {
       _log.warning('_createAuthUser unexpected error', error);
-      throw AppException(
-        'Failed to create user account: '
-        '${error.toString().replaceFirst(RegExp(r'^\[.*?\]\s*'), '')}',
-      );
+      throw AppException(ErrorMessages.friendly(error));
     } finally {
       await app?.delete();
     }
@@ -110,19 +173,19 @@ class UserRegistrationController extends AsyncNotifier<String?> {
   static String _authErrorMessage(String code, String? fallback) {
     return switch (code) {
       'email-already-in-use' =>
-        'This email is already registered in Firebase Auth.',
+        'This email is already registered. Use a different email address.',
       'invalid-email' => 'The email address is not valid.',
       'weak-password' => 'The password is too weak. Use at least 6 characters.',
       'operation-not-allowed' =>
-        'Email/password sign-in is not enabled in Firebase Authentication.',
+        'Email sign-in is not enabled. Please contact support.',
       'network-request-failed' =>
-        'Network error while creating the user account.',
+        'We could not connect right now. Please check your internet and try again.',
       'too-many-requests' =>
         'Too many attempts. Please wait a moment and try again.',
       _ =>
-        fallback?.isNotEmpty == true
-            ? fallback!
-            : 'Failed to create user account (code: $code).',
+        fallback?.trim().isNotEmpty == true
+            ? ErrorMessages.friendly(fallback)
+            : 'Unable to create the user account. Please try again.',
     };
   }
 }

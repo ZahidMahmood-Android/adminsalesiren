@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
@@ -17,7 +18,7 @@ final brandsRepositoryProvider = Provider<BrandsRepository>((ref) {
   return FirebaseBrandsRepository(
     ref.watch(firestoreProvider),
     user?.id ?? ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
-    user?.role ?? 'super_admin',
+    user?.role ?? 'owner',
     user?.brandId ?? '',
   );
 });
@@ -38,6 +39,10 @@ final brandsProvider = StreamProvider.autoDispose<List<Brand>>((ref) async* {
   yield const <Brand>[];
   yield* ref.watch(brandsRepositoryProvider).watchBrands();
 });
+
+final brandsListSearchQueryProvider = StateProvider.autoDispose<String>(
+  (ref) => '',
+);
 
 final activeBrandsProvider = StreamProvider.autoDispose<List<Brand>>((
   ref,

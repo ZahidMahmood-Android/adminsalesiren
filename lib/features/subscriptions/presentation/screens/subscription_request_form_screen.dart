@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/errors/error_messages.dart';
+import '../../../../core/widgets/app_inline_error.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/subscription_request.dart';
 import '../providers/subscription_providers.dart';
@@ -128,8 +129,9 @@ class _SubscriptionRequestFormScreenState
                     onChanged: (value) =>
                         setState(() => _requestedPlanId = value),
                   ),
-                  loading: () => const LinearProgressIndicator(),
-                  error: (error, _) => Text(error.toString()),
+                  loading: () =>
+                      const SizedBox(height: 72, child: AppLoader(size: 56)),
+                  error: (error, _) => AppInlineError(error),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(

@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/animated_content.dart';
+import '../../../../core/widgets/app_avatar.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_text_view.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/screen_layout.dart';
@@ -35,50 +36,48 @@ class _BrandUsageListScreenState extends ConsumerState<BrandUsageListScreen> {
     );
 
     return ScreenScaffold(
-      header: ScreenHeader(
-        title: 'Brand Usage',
-        actions: [
-          // Brand filter dropdown
-          brandsAsync.maybeWhen(
-            data: (brands) {
-              final usedIds = usage.maybeWhen(
-                data: (rows) => rows.map((r) => r.brandId).toSet(),
-                orElse: () => <String>{},
-              );
-              final relevant =
-                  brands.where((b) => usedIds.contains(b.id)).toList()
-                    ..sort((a, b) => a.name.compareTo(b.name));
-              if (relevant.isEmpty) return const SizedBox.shrink();
-              return ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 220),
-                child: DropdownButtonFormField<String?>(
-                  value: _selectedBrandId,
-                  isDense: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Filter by brand',
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    isDense: true,
+      title: 'Brand Usage',
+      actions: [
+        // Brand filter dropdown
+        brandsAsync.maybeWhen(
+          data: (brands) {
+            final usedIds = usage.maybeWhen(
+              data: (rows) => rows.map((r) => r.brandId).toSet(),
+              orElse: () => <String>{},
+            );
+            final relevant =
+                brands.where((b) => usedIds.contains(b.id)).toList()
+                  ..sort((a, b) => a.name.compareTo(b.name));
+            if (relevant.isEmpty) return const SizedBox.shrink();
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220),
+              child: DropdownButtonFormField<String?>(
+                value: _selectedBrandId,
+                isDense: true,
+                decoration: const InputDecoration(
+                  labelText: 'Filter by brand',
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
                   ),
-                  items: [
-                    const DropdownMenuItem<String?>(child: Text('All brands')),
-                    ...relevant.map(
-                      (b) => DropdownMenuItem<String?>(
-                        value: b.id,
-                        child: Text(b.name, overflow: TextOverflow.ellipsis),
-                      ),
-                    ),
-                  ],
-                  onChanged: (v) => setState(() => _selectedBrandId = v),
+                  isDense: true,
                 ),
-              );
-            },
-            orElse: () => const SizedBox.shrink(),
-          ),
-        ],
-      ),
+                items: [
+                  const DropdownMenuItem<String?>(child: Text('All brands')),
+                  ...relevant.map(
+                    (b) => DropdownMenuItem<String?>(
+                      value: b.id,
+                      child: Text(b.name, overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ],
+                onChanged: (v) => setState(() => _selectedBrandId = v),
+              ),
+            );
+          },
+          orElse: () => const SizedBox.shrink(),
+        ),
+      ],
       child: AnimatedContent(
         child: usage.when(
           data: (List<BrandUsage> rows) {
@@ -140,21 +139,10 @@ class _BrandUsageListScreenState extends ConsumerState<BrandUsageListScreen> {
                           child: Row(
                             children: [
                               // Logo or avatar
-                              CircleAvatar(
+                              AppAvatar(
+                                name: brandName,
+                                imageUrl: logoUrl,
                                 radius: 18,
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                backgroundImage: logoUrl.isNotEmpty
-                                    ? NetworkImage(logoUrl)
-                                    : null,
-                                child: logoUrl.isEmpty
-                                    ? AppTextView(
-                                        brandName.characters.first
-                                            .toUpperCase(),
-                                        fontWeight: FontWeight.w900,
-                                      )
-                                    : null,
                               ),
                               const SizedBox(width: 10),
                               Expanded(
@@ -196,8 +184,8 @@ class _BrandUsageListScreenState extends ConsumerState<BrandUsageListScreen> {
               },
             );
           },
-          loading: () => const AppLoadingView(label: 'Loading usage'),
-          error: (error, _) => AppErrorView(message: error.toString()),
+          loading: () => const AppLoader(),
+          error: (error, _) => AppErrorView(error: error),
         ),
       ),
     );

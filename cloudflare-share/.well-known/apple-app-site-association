@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["L5QNMXR5WU.com.bytecinch.salesiren"],
+        "paths": ["/o/*"]
+      }
+    ]
+  }
+}

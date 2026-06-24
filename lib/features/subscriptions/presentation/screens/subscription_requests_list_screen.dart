@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/widgets/animated_content.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_status_chip.dart';
 import '../../../../core/widgets/app_text_view.dart';
+import '../../../../core/utils/display_label_utils.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -18,12 +20,12 @@ class SubscriptionRequestsListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final requests = ref.watch(subscriptionRequestsProvider);
-    final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final isOwner = ref.watch(isOwnerProvider);
     final actions = ref.watch(subscriptionActionsProvider);
 
     return ScreenScaffold(
       loading: actions.isLoading,
-      header: const ScreenHeader(title: 'Subscription Requests'),
+      title: 'Subscription Requests',
       child: AnimatedContent(
         child: requests.when(
           data: (items) {
@@ -45,9 +47,10 @@ class SubscriptionRequestsListScreen extends ConsumerWidget {
                   final request = items[index];
                   return FadeIn(
                     delay: Duration(milliseconds: index * 30),
-                    child: ListTile(
+                    child: AppListTileMaterial(
+                      child: ListTile(
                       title: AppTextView.title(
-                        '${request.type} · ${request.requestedPlanId}',
+                        '${DisplayLabelUtils.slug(request.type)} · ${request.requestedPlanId}',
                         fontWeight: FontWeight.w700,
                       ),
                       subtitle: AppTextView.body(
@@ -59,7 +62,7 @@ class SubscriptionRequestsListScreen extends ConsumerWidget {
                         spacing: 8,
                         children: [
                           AppStatusChip(status: request.status),
-                          if (isSuperAdmin && request.status == 'pending')
+                          if (isOwner && request.status == 'pending')
                             IconButton(
                               tooltip: 'Approve & assign plan',
                               onPressed: actions.isLoading
@@ -73,14 +76,15 @@ class SubscriptionRequestsListScreen extends ConsumerWidget {
                             ),
                         ],
                       ),
+                      ),
                     ),
                   );
                 },
               ),
             );
           },
-          loading: () => const AppLoadingView(label: 'Loading requests'),
-          error: (error, _) => AppErrorView(message: error.toString()),
+          loading: () => const AppLoader(),
+          error: (error, _) => AppErrorView(error: error),
         ),
       ),
     );

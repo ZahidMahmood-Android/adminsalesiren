@@ -4,8 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../domain/entities/pricing_plan.dart';
 import '../providers/subscription_providers.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
@@ -148,9 +149,8 @@ class _PricingPlanFormScreenState extends ConsumerState<PricingPlanFormScreen> {
     if (_isEditing) {
       final planAsync = ref.watch(pricingPlanProvider(widget.planId!));
       return planAsync.when(
-        loading: () => const Scaffold(body: AppLoadingView()),
-        error: (error, _) =>
-            Scaffold(body: AppErrorView(message: error.toString())),
+        loading: () => const Scaffold(body: AppLoader()),
+        error: (error, _) => Scaffold(body: AppErrorView(error: error)),
         data: (plan) {
           if (plan != null) {
             _hydrate(plan);
@@ -287,26 +287,34 @@ class _PricingPlanFormScreenState extends ConsumerState<PricingPlanFormScreen> {
                           }
                         },
                       ),
-                      SwitchListTile(
+                      AppListTileMaterial(
+                        child: SwitchListTile(
                         title: const Text('Active'),
                         value: _isActive,
                         onChanged: (value) => setState(() => _isActive = value),
+                        ),
                       ),
-                      SwitchListTile(
+                      AppListTileMaterial(
+                        child: SwitchListTile(
                         title: const Text('Public'),
                         value: _isPublic,
                         onChanged: (value) => setState(() => _isPublic = value),
+                        ),
                       ),
-                      SwitchListTile(
+                      AppListTileMaterial(
+                        child: SwitchListTile(
                         title: const Text('Can request push notifications'),
                         value: _canPush,
                         onChanged: (value) => setState(() => _canPush = value),
+                        ),
                       ),
-                      SwitchListTile(
+                      AppListTileMaterial(
+                        child: SwitchListTile(
                         title: const Text('Can use featured offers'),
                         value: _canFeatured,
                         onChanged: (value) =>
                             setState(() => _canFeatured = value),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(

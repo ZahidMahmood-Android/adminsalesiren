@@ -45,36 +45,60 @@ class AppAvatar extends StatelessWidget {
         backgroundColor ?? (isDark ? AppColors.darkCard : AppColors.greenTint);
     final fg =
         foregroundColor ?? (isDark ? AppColors.freshGreen : AppTheme.deepGreen);
+    final size = radius * 2;
+    final fallback = _buildFallback(fg);
 
-    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
+    final url = imageUrl;
+    if (url != null && url.isNotEmpty) {
+      return CircleAvatar(
+        radius: radius,
+        backgroundColor: bg,
+        child: ClipOval(
+          child: Image.network(
+            url,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _fallbackSurface(bg, size, fallback),
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) {
+                return child;
+              }
+              return _fallbackSurface(bg, size, fallback);
+            },
+          ),
+        ),
+      );
+    }
+
+    return CircleAvatar(radius: radius, backgroundColor: bg, child: fallback);
+  }
+
+  Widget _buildFallback(Color fg) {
     final initial = name.isEmpty
         ? ''
         : name.trim().characters.first.toUpperCase();
-    final fallback = _icon != null
-        ? Icon(_icon, size: radius * 0.9, color: fg)
-        : Text(
-            initial,
-            style: TextStyle(
-              color: fg,
-              fontWeight: FontWeight.w900,
-              fontSize: radius * 0.75,
-            ),
-          );
+    if (_icon != null) {
+      return Icon(_icon, size: radius * 0.9, color: fg);
+    }
+    return Text(
+      initial,
+      style: TextStyle(
+        color: fg,
+        fontWeight: FontWeight.w900,
+        fontSize: radius * 0.75,
+      ),
+    );
+  }
 
-    return CircleAvatar(
-      radius: radius,
-      backgroundColor: bg,
-      child: hasImage
-          ? ClipOval(
-              child: Image.network(
-                imageUrl!,
-                width: radius * 2,
-                height: radius * 2,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Center(child: fallback),
-              ),
-            )
-          : fallback,
+  Widget _fallbackSurface(Color bg, double size, Widget child) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ColoredBox(
+        color: bg,
+        child: Center(child: child),
+      ),
     );
   }
 }

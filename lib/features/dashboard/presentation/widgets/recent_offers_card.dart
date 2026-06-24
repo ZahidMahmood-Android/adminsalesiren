@@ -4,8 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../offers/domain/entities/offer.dart';
 
 class RecentOffersCard extends StatelessWidget {
@@ -38,7 +39,8 @@ class RecentOffersCard extends StatelessWidget {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: items.take(6).map((offer) {
-                  return ListTile(
+                  return AppListTileMaterial(
+                    child: ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundColor: AppTheme.paper,
@@ -64,15 +66,14 @@ class RecentOffersCard extends StatelessWidget {
                       onPressed: () => context.go('/offers/${offer.id}'),
                       icon: const Icon(Icons.arrow_forward),
                     ),
+                    ),
                   );
                 }).toList(),
               );
             },
-            loading: () => const SizedBox(
-              height: 180,
-              child: AppLoadingView(label: 'Loading offers'),
-            ),
-            error: (error, _) => AppErrorView(message: error.toString()),
+            loading: () =>
+                const SizedBox(height: 180, child: AppLoader(size: 72)),
+            error: (error, _) => AppErrorView(error: error),
           ),
         ],
       ),

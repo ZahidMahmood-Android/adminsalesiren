@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/widgets/app_inline_error.dart';
+import '../../../../core/widgets/app_loader.dart';
+
 class SelectionBlock<T> extends StatelessWidget {
   const SelectionBlock({
     required this.title,
@@ -57,8 +60,8 @@ class SelectionBlock<T> extends StatelessWidget {
               }).toList(),
             );
           },
-          loading: () => const LinearProgressIndicator(),
-          error: (error, _) => Text(error.toString()),
+          loading: () => const SizedBox(height: 72, child: AppLoader(size: 56)),
+          error: (error, _) => AppInlineError(error),
         ),
       ],
     );

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/app_network_image.dart';
+
 class DropdownBox extends StatelessWidget {
   const DropdownBox({required this.child, super.key});
 
@@ -41,14 +43,14 @@ class DateButton extends StatelessWidget {
 
 class ImagePickerPanel extends StatelessWidget {
   const ImagePickerPanel({
-    required this.imageUrl,
-    required this.pickedImageName,
+    required this.imageUrls,
+    required this.pickedImageNames,
     required this.onPick,
     super.key,
   });
 
-  final String imageUrl;
-  final String? pickedImageName;
+  final List<String> imageUrls;
+  final List<String> pickedImageNames;
   final VoidCallback onPick;
 
   @override
@@ -63,26 +65,37 @@ class ImagePickerPanel extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 84,
-                height: 64,
-                child: imageUrl.isEmpty
-                    ? ColoredBox(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.surfaceContainerHighest,
-                        child: const Icon(Icons.image_outlined),
-                      )
-                    : Image.network(imageUrl, fit: BoxFit.cover),
-              ),
+            SizedBox(
+              width: 160,
+              height: 72,
+              child: imageUrls.isEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: const AppNetworkImage(imageUrl: ''),
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: imageUrls.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(width: 8),
+                      itemBuilder: (context, index) => ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 84,
+                          height: 64,
+                          child: AppNetworkImage(imageUrl: imageUrls[index]),
+                        ),
+                      ),
+                    ),
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
-                pickedImageName ??
-                    (imageUrl.isEmpty ? 'No image selected' : 'Current image'),
+                pickedImageNames.isNotEmpty
+                    ? pickedImageNames.join(', ')
+                    : (imageUrls.isEmpty
+                          ? 'No images selected'
+                          : '${imageUrls.length} current image${imageUrls.length == 1 ? '' : 's'}'),
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -91,7 +104,7 @@ class ImagePickerPanel extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onPick,
               icon: const Icon(Icons.upload_file_outlined),
-              label: const Text('Upload'),
+              label: const Text('Upload images'),
             ),
           ],
         ),

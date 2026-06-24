@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sale Siren — Opening offer…</title>
+    <meta name="description" content="Open this verified sale offer in Sale Siren." />
+    <meta property="og:title" content="Sale Siren — Verified Offer" />
+    <meta property="og:description" content="Open this offer in the Sale Siren app." />
+    <meta property="og:type" content="website" />
+    <style>
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #f7f9f8;
+        color: #17201d;
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        padding: 24px;
+      }
+      .card {
+        max-width: 420px;
+        background: #fff;
+        border: 1px solid #e3e8e5;
+        border-radius: 16px;
+        padding: 28px 24px;
+        text-align: center;
+        box-shadow: 0 8px 24px rgba(15, 118, 110, 0.08);
+      }
+      h1 {
+        font-size: 1.35rem;
+        margin: 0 0 8px;
+      }
+      p {
+        color: #6b7280;
+        line-height: 1.5;
+        margin: 0 0 20px;
+      }
+      a.btn {
+        display: inline-block;
+        margin: 6px;
+        background: #0f766e;
+        color: #fff;
+        text-decoration: none;
+        padding: 12px 18px;
+        border-radius: 999px;
+        font-weight: 700;
+      }
+      a.secondary {
+        background: transparent;
+        color: #0f766e;
+        border: 1px solid rgba(15, 118, 110, 0.35);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Opening Sale Siren…</h1>
+      <p id="message">Launching the app for this offer.</p>
+      <a id="open-app" class="btn" href="#">Open app</a>
+      <a id="fallback" class="btn secondary" href="#">Get Sale Siren</a>
+    </div>
+    <script>
+      (function () {
+        var PLAY_STORE =
+          "https://play.google.com/store/apps/details?id=com.bytecinch.salesiren";
+        var APP_STORE =
+          "https://apps.apple.com/search?term=Sale+Siren+ByteCinch";
+        var parts = window.location.pathname.split("/").filter(Boolean);
+        var offerId =
+          parts.length >= 2 && parts[0] === "o"
+            ? decodeURIComponent(parts[1])
+            : "";
+        var ua = navigator.userAgent || "";
+        var isAndroid = /android/i.test(ua);
+        var isIOS = /iphone|ipad|ipod/i.test(ua);
+        var httpsUrl =
+          "https://salesiren.bytecinch.com/o/" + encodeURIComponent(offerId);
+        var customSchemeUrl =
+          "salesiren://o/" + encodeURIComponent(offerId);
+        var storeUrl = isIOS ? APP_STORE : PLAY_STORE;
+        var message = document.getElementById("message");
+        var openApp = document.getElementById("open-app");
+        var fallback = document.getElementById("fallback");
+
+        fallback.href = storeUrl;
+        openApp.href = httpsUrl;
+
+        function openInApp() {
+          if (!offerId) {
+            message.textContent =
+              "Install Sale Siren to browse verified offers near you.";
+            window.setTimeout(function () {
+              window.location.replace(storeUrl);
+            }, 1200);
+            return;
+          }
+
+          if (isAndroid) {
+            var intent =
+              "intent://o/" +
+              encodeURIComponent(offerId) +
+              "#Intent;scheme=salesiren;package=com.bytecinch.salesiren;S.browser_fallback_url=" +
+              encodeURIComponent(PLAY_STORE) +
+              ";end";
+            window.location.replace(intent);
+            return;
+          }
+
+          if (isIOS) {
+            window.location.replace(customSchemeUrl);
+            window.setTimeout(function () {
+              window.location.replace(storeUrl);
+            }, 1600);
+            return;
+          }
+
+          window.location.replace(storeUrl);
+        }
+
+        if (!offerId) {
+          openApp.style.display = "none";
+        }
+
+        openApp.addEventListener("click", function (event) {
+          event.preventDefault();
+          openInApp();
+        });
+
+        window.setTimeout(openInApp, 250);
+      })();
+    </script>
+  </body>
+</html>

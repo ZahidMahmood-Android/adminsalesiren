@@ -1,3 +1,5 @@
+import 'brand_url_source.dart';
+
 class Brand {
   const Brand({
     required this.id,
@@ -11,6 +13,7 @@ class Brand {
     required this.isActive,
     required this.createdAt,
     required this.updatedAt,
+    this.urlSources = const [],
     this.slug = '',
     this.topic = '',
     this.description = '',
@@ -37,6 +40,7 @@ class Brand {
   final String websiteUrl;
   final String instagramUrl;
   final String facebookUrl;
+  final List<BrandUrlSource> urlSources;
   final List<String> categoryIds;
   final List<String> cityIds;
   final bool isActive;
@@ -68,6 +72,7 @@ class Brand {
     String? websiteUrl,
     String? instagramUrl,
     String? facebookUrl,
+    List<BrandUrlSource>? urlSources,
     List<String>? categoryIds,
     List<String>? cityIds,
     bool? isActive,
@@ -99,6 +104,7 @@ class Brand {
       websiteUrl: websiteUrl ?? this.websiteUrl,
       instagramUrl: instagramUrl ?? this.instagramUrl,
       facebookUrl: facebookUrl ?? this.facebookUrl,
+      urlSources: urlSources ?? this.urlSources,
       categoryIds: categoryIds ?? this.categoryIds,
       cityIds: cityIds ?? this.cityIds,
       isActive: isActive ?? this.isActive,

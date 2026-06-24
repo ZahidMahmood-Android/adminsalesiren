@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../errors/error_messages.dart';
 
 class AppErrorView extends StatelessWidget {
-  const AppErrorView({required this.message, super.key, this.onRetry});
+  const AppErrorView({this.error, this.message, super.key, this.onRetry})
+    : assert(error != null || message != null);
 
-  final String message;
+  final Object? error;
+  final String? message;
   final VoidCallback? onRetry;
 
   @override
@@ -23,7 +25,7 @@ class AppErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              ErrorMessages.friendly(message),
+              ErrorMessages.friendly(error ?? message),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge,
             ),

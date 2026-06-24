@@ -39,6 +39,16 @@ class MasterDataSeedActionsController extends AsyncNotifier<String?> {
     action: ref.read(masterDataSeedRepositoryProvider).seedBrands,
   );
 
+  Future<void> seedRoles() => _seed(
+    label: 'Roles',
+    action: ref.read(masterDataSeedRepositoryProvider).seedRoles,
+  );
+
+  Future<void> seedAppFeatures() => _seed(
+    label: 'App features',
+    action: ref.read(masterDataSeedRepositoryProvider).seedAppFeatures,
+  );
+
   Future<void> _seed({
     required String label,
     required Future<int> Function() action,

@@ -1,3 +1,6 @@
+// Canonical Firestore rules for Sale Siren (admin panel + mobile app).
+// After any edit here, copy this file to apps/mobileapp/firestore.rules
+// (keep the mobileapp line-1 sync comment). Both files must stay identical.
 rules_version = '2';
 
 service cloud.firestore {
@@ -6,9 +9,19 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isSelf(docId) {
+      return isSignedIn() && request.auth.uid == docId;
+    }
+
     function adminDocExists() {
       return isSignedIn()
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function adminReferenceRole() {
+      return adminDocExists()
+        ? get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role
+        : null;
     }
 
     function userDoc() {
@@ -20,31 +33,50 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function userRoleList() {
+      return hasUserDoc() && userDoc().data.roles is list && userDoc().data.roles.size() > 0
+        ? userDoc().data.roles
+        : (hasUserDoc()
+          && userDoc().data.role is string
+          && userDoc().data.role != ''
+            ? [userDoc().data.role]
+            : []);
+    }
+
+    function hasUserRole(r) {
+      return r in userRoleList()
+        || (hasUserDoc() && userDoc().data.role == r);
+    }
+
     function role() {
       return hasUserDoc() ? userDoc().data.role : null;
     }
 
-    function isSuperAdmin() {
-      return adminDocExists()
+    function hasOwnerRole() {
+      return hasUserRole('owner');
+    }
+
+    function isOwner() {
+      return (hasUserDoc()
+          && hasOwnerRole()
+          && userDoc().data.isActive == true)
+        || (adminDocExists() && adminReferenceRole() == 'owner');
+    }
+
+    function isAdminOrOwner() {
+      return isOwner()
         || (hasUserDoc()
-          && userDoc().data.role == 'super_admin'
+          && hasUserRole('admin')
           && userDoc().data.isActive == true);
     }
 
-    function isAdminOrSuperAdmin() {
-      return isSuperAdmin()
-        || (hasUserDoc()
-          && userDoc().data.role == 'admin'
-          && userDoc().data.isActive == true);
-    }
-
-    function isManagerOrAdminOrSuperAdmin() {
-      return isAdminOrSuperAdmin() || isManager();
+    function isManagerOrAdminOrOwner() {
+      return isAdminOrOwner() || isManager();
     }
 
     function isBrandAdmin() {
       return hasUserDoc()
-        && userDoc().data.role == 'brand_admin'
+        && hasUserRole('brand_admin')
         && userDoc().data.isActive == true
         && userDoc().data.brandId is string
         && userDoc().data.brandId != '';
@@ -52,13 +84,13 @@ service cloud.firestore {
 
     function isManager() {
       return hasUserDoc()
-        && userDoc().data.role == 'manager'
+        && hasUserRole('manager')
         && userDoc().data.isActive == true;
     }
 
     function isMobileUser() {
       return hasUserDoc()
-        && userDoc().data.role == 'mobile_user'
+        && hasUserRole('mobile_user')
         && userDoc().data.isActive == true;
     }
 
@@ -81,6 +113,15 @@ service cloud.firestore {
 
     function createsOwnOffer() {
       let d = request.resource.data;
+      let pendingPath =
+        d.status == 'pending_review'
+        && d.approvalStatus == 'pending'
+        && d.isPublished == false;
+      let publishedPath =
+        d.status == 'published'
+        && d.approvalStatus == 'approved'
+        && d.isPublished == true
+        && d.approvedBy == request.auth.uid;
       return isBrandScopedUser()
         && (
           isManager()
@@ -89,19 +130,8 @@ service cloud.firestore {
         && d.createdByUserId == request.auth.uid
         && d.createdByRole in ['brand_admin', 'manager']
         && (
-          // Saved as pending review (default path)
-          (
-            d.status == 'pending_review'
-            && d.approvalStatus == 'pending'
-            && d.isPublished == false
-          )
-          // Saved as published directly by brand admin
-          || (
-            d.status == 'published'
-            && d.approvalStatus == 'approved'
-            && d.isPublished == true
-            && d.approvedBy == request.auth.uid
-          )
+          (isManager() && pendingPath)
+          || (isBrandAdmin() && (pendingPath || publishedPath))
         );
     }
 
@@ -119,44 +149,166 @@ service cloud.firestore {
         && request.resource.data.name != '';
     }
 
+    function targetIsOwner() {
+      return resource != null
+        && (
+          resource.data.role == 'owner'
+          || (resource.data.roles is list && 'owner' in resource.data.roles)
+        );
+    }
+
+    function requestIsMobileUserOnly() {
+      return dataIsMobileUserOnly(request.resource.data);
+    }
+
+    function dataIsMobileUserOnly(data) {
+      return !existingHasPrivilegedRole(data)
+        && (
+          data.role == 'mobile_user'
+          || (data.roles is list && 'mobile_user' in data.roles)
+          || (!('role' in data) && !('roles' in data))
+        );
+    }
+
+    function existingHasPrivilegedRole(data) {
+      return data.get('role', '') in ['owner', 'admin', 'brand_admin', 'manager']
+        || (data.roles is list && (
+          'owner' in data.roles
+          || 'admin' in data.roles
+          || 'brand_admin' in data.roles
+          || 'manager' in data.roles
+        ));
+    }
+
+    // Mobile app signup/sign-in: user creates or updates their own mobile profile.
+    function mobileOwnUserWrite(userId) {
+      let d = request.resource.data;
+      return isSignedIn()
+        && request.auth.uid == userId
+        && dataIsMobileUserOnly(d)
+        && d.get('brandId', '') == ''
+        && d.get('isActive', true) == true
+        && d.get('isAdminEnabled', false) == false;
+    }
+
+    // Mobile app: merge updates for notification/profile prefs on own user doc.
+    function mobileOwnProfilePatch(userId) {
+      return isSignedIn()
+        && request.auth.uid == userId
+        && !existingHasPrivilegedRole(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName',
+          'fullName',
+          'phoneNumber',
+          'photoUrl',
+          'notificationEnabled',
+          'fcmTokens',
+          'updatedAt',
+          'selectedCategories',
+          'favoriteBrands',
+        ]);
+    }
+
+    // Privileged admin users may update their own contact info and preferences only.
+    function privilegedOwnProfileWrite(userId) {
+      let d = request.resource.data;
+      return isSignedIn()
+        && request.auth.uid == userId
+        && existingHasPrivilegedRole(resource.data)
+        && d.get('email', '') == resource.data.get('email', '')
+        && d.get('role', '') == resource.data.get('role', '')
+        && d.get('brandId', '') == resource.data.get('brandId', '')
+        && d.get('isActive', true) == resource.data.get('isActive', true)
+        && d.get('isAdminEnabled', false) == resource.data.get('isAdminEnabled', false)
+        && d.get('isMobileAppEnabled', true) == resource.data.get('isMobileAppEnabled', true)
+        && d.get('mustChangePassword', false) == resource.data.get('mustChangePassword', false)
+        && d.get('roles', []) == resource.data.get('roles', []);
+    }
+
     match /admins/{adminId} {
-      allow read: if isAdminOrSuperAdmin()
-        || (isSignedIn() && request.auth.uid == adminId);
-      allow write: if isAdminOrSuperAdmin();
+      // Reference only: { id, role } for owner access checks and storage rules.
+      allow get: if isSignedIn() && request.auth.uid == adminId;
+      allow get: if isAdminOrOwner() || isManager();
+      allow list: if isAdminOrOwner() || isManager();
+      allow create, update: if isOwner()
+        && request.resource.data.id == adminId
+        && request.resource.data.role == 'owner';
+      allow delete: if isOwner();
     }
 
     match /users/{userId} {
-      allow read: if isAdminOrSuperAdmin()
-        || (isSignedIn() && request.auth.uid == userId);
-      allow create, update: if isAdminOrSuperAdmin()
-        || (isSignedIn() && request.auth.uid == userId);
-      allow delete: if isAdminOrSuperAdmin();
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow get: if isOwner()
+        || (isAdminOrOwner() && !isManager())
+        || (isManager() && !targetIsOwner());
+      allow list: if isOwner()
+        || isManager()
+        || (isAdminOrOwner() && !isManager());
+      allow create: if isOwner() || mobileOwnUserWrite(userId);
+      allow update: if isOwner()
+        || privilegedOwnProfileWrite(userId)
+        || mobileOwnProfilePatch(userId)
+        || (mobileOwnUserWrite(userId) && !existingHasPrivilegedRole(resource.data));
+      allow delete: if isOwner();
 
       // Mobile app: each signed-in user owns their saved offers.
       match /saved_offers/{offerId} {
         allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
+
+      // Mobile app: each signed-in user owns their saved brands.
+      match /saved_brands/{brandId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      // Mobile app: each signed-in user owns their selected categories.
+      match /selected_categories/{categoryId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      // Mobile app: in-app notification history for the signed-in user.
+      match /alerts/{alertId} {
+        allow read, update: if isSignedIn() && request.auth.uid == userId;
+        allow create: if false;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     match /cities/{cityId} {
       allow read: if true;
-      allow write: if isManagerOrAdminOrSuperAdmin();
+      allow write: if isManagerOrAdminOrOwner();
+    }
+
+    match /roles/{roleId} {
+      allow read: if true;
+      allow write: if isAdminOrOwner();
+    }
+
+    match /app_features/{featureId} {
+      allow read: if true;
+      allow write: if isAdminOrOwner();
+    }
+
+    match /app_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdminOrOwner();
     }
 
     match /categories/{categoryId} {
       allow read: if true;
-      allow create: if isManagerOrAdminOrSuperAdmin() || createsOwnCategory();
-      allow update: if isManagerOrAdminOrSuperAdmin()
+      allow create: if isManagerOrAdminOrOwner() || createsOwnCategory();
+      allow update: if isManagerOrAdminOrOwner()
         || (ownsCategory()
           && request.resource.data.userId == resource.data.userId
           && request.resource.data.id == resource.data.id);
-      allow delete: if isManagerOrAdminOrSuperAdmin() || ownsCategory();
+      allow delete: if isManagerOrAdminOrOwner() || ownsCategory();
     }
 
     match /brands/{targetBrandId} {
       allow read: if true;
-      allow create, delete: if isAdminOrSuperAdmin();
-      allow update: if isAdminOrSuperAdmin()
+      allow create: if isAdminOrOwner() || isManager();
+      allow delete: if isAdminOrOwner();
+      allow update: if isAdminOrOwner() || isManager()
         || (ownsBrand(targetBrandId)
           && request.resource.data.id == resource.data.id
           && request.resource.data.name == resource.data.name
@@ -173,16 +325,16 @@ service cloud.firestore {
       allow get: if (resource.data.isPublished == true
           && resource.data.isVerified == true
           && resource.data.status != 'expired')
-        || isManagerOrAdminOrSuperAdmin()
+        || isManagerOrAdminOrOwner()
         || ownsOffer();
-      allow list: if isManagerOrAdminOrSuperAdmin()
+      allow list: if isManagerOrAdminOrOwner()
         || isBrandScopedUser()
         || (resource.data.isPublished == true
           && resource.data.isVerified == true
           && resource.data.status != 'expired');
-      allow create: if isManagerOrAdminOrSuperAdmin() || createsOwnOffer();
+      allow create: if isManagerOrAdminOrOwner() || createsOwnOffer();
       allow update: if (
-          isManagerOrAdminOrSuperAdmin()
+          isManagerOrAdminOrOwner()
           && (
             (resource.data.status != 'published' && resource.data.isPublished != true)
             || (
@@ -210,7 +362,8 @@ service cloud.firestore {
               && request.resource.data.approvalStatus == 'expired'
             )
             || (
-              resource.data.status in ['pending', 'pending_review']
+              isBrandAdmin()
+              && resource.data.status in ['pending', 'pending_review']
               && request.resource.data.isPublished == true
               && request.resource.data.status == 'published'
               && request.resource.data.approvalStatus == 'approved'
@@ -231,7 +384,7 @@ service cloud.firestore {
       allow delete: if resource.data.status != 'published'
         && resource.data.isPublished != true
         && (
-          isManagerOrAdminOrSuperAdmin()
+          isManagerOrAdminOrOwner()
           || (ownsOffer() && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected'])
         );
     }
@@ -240,97 +393,108 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;
       // list: resource.data unavailable for queries; brand admin filters by brandId in code
-      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
-      allow get: if isAdminOrSuperAdmin()
+      allow list: if isAdminOrOwner() || isBrandScopedUser();
+      allow get: if isAdminOrOwner()
         || (isBrandAdmin() && resource.data.brandId == brandId());
-      allow update, delete: if isAdminOrSuperAdmin();
+      allow update, delete: if isAdminOrOwner();
     }
 
     match /notification_requests/{requestId} {
-      allow get: if isManagerOrAdminOrSuperAdmin()
+      allow get: if isManagerOrAdminOrOwner()
         || (isBrandScopedUser()
           && (resource == null || resource.data.brandId == brandId()));
-      allow list: if isManagerOrAdminOrSuperAdmin() || isBrandScopedUser();
-      allow create: if isManagerOrAdminOrSuperAdmin()
+      allow list: if isManagerOrAdminOrOwner() || isBrandScopedUser();
+      allow create: if isManagerOrAdminOrOwner()
         || (isBrandScopedUser()
           && (isManager() || request.resource.data.brandId == brandId())
           && request.resource.data.requestedByUserId == request.auth.uid
           && request.resource.data.status == 'pending');
-      allow update: if isManagerOrAdminOrSuperAdmin()
+      allow update: if isManagerOrAdminOrOwner()
         || (isBrandScopedUser()
           && (isManager() || resource.data.brandId == brandId())
-          && resource.data.status == 'pending'
-          && request.resource.data.status in ['approved', 'pending', 'cancelled']
+          && resource.data.status in ['pending', 'sent']
+          && (
+            (resource.data.status == 'sent'
+              && request.resource.data.status == resource.data.status)
+            || (resource.data.status == 'pending'
+              && request.resource.data.status in ['approved', 'pending', 'cancelled'])
+          )
           && (
             request.resource.data.status != 'approved'
             || request.resource.data.approvedBy == request.auth.uid
           ));
-      allow delete: if isManagerOrAdminOrSuperAdmin()
+      allow delete: if isManagerOrAdminOrOwner()
         || (isBrandScopedUser()
           && (isManager() || resource.data.brandId == brandId())
           && resource.data.status in ['pending', 'cancelled', 'rejected']);
     }
 
+    match /offer_push_jobs/{jobId} {
+      allow read: if isManagerOrAdminOrOwner();
+      allow create, update: if isManagerOrAdminOrOwner() || isBrandScopedUser();
+      allow delete: if isAdminOrOwner();
+    }
+
     match /notification_campaigns/{campaignId} {
-      allow read, write: if isAdminOrSuperAdmin();
+      allow read, write: if isAdminOrOwner();
     }
 
     match /subscription_requests/{requestId} {
-      allow get: if isAdminOrSuperAdmin()
+      allow get: if isAdminOrOwner()
         || (isBrandAdmin()
           && (resource == null || resource.data.brandId == brandId()));
-      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
-      allow create: if isAdminOrSuperAdmin()
+      allow list: if isAdminOrOwner() || isBrandScopedUser();
+      allow create: if isAdminOrOwner()
         || (isBrandAdmin()
           && request.resource.data.brandId == brandId());
-      allow update: if isAdminOrSuperAdmin();
-      allow delete: if isAdminOrSuperAdmin();
+      allow update: if isAdminOrOwner();
+      allow delete: if isAdminOrOwner();
     }
 
     match /pricing_plans/{planId} {
       allow read: if true;
-      allow write: if isAdminOrSuperAdmin();
+      allow write: if isAdminOrOwner();
     }
 
     match /brand_subscriptions/{subscriptionId} {
       // list: resource.data unavailable for queries; brand admin filters by their own brandId in code
-      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
-      allow get: if isAdminOrSuperAdmin()
+      allow list: if isAdminOrOwner() || isBrandScopedUser();
+      allow get: if isAdminOrOwner()
         || (isBrandAdmin() && (resource == null || resource.data.brandId == brandId()));
-      allow write: if isAdminOrSuperAdmin();
+      allow write: if isAdminOrOwner();
     }
 
     match /brand_usage/{usageId} {
-      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
+      allow list: if isAdminOrOwner() || isBrandScopedUser();
       // resource == null guard: getOrCreateCurrentUsage does a doc.get() before creating;
       // when the doc doesn't exist resource is null, so resource.data.brandId would be null
       // and deny the read even for the owning brand admin.
-      allow get: if isAdminOrSuperAdmin()
+      allow get: if isAdminOrOwner()
         || (isBrandAdmin() && (resource == null || resource.data.brandId == brandId()));
-      allow create, update: if isAdminOrSuperAdmin()
+      allow create, update: if isAdminOrOwner()
         || (isBrandAdmin()
           && request.resource.data.brandId == brandId());
-      allow delete: if isAdminOrSuperAdmin();
+      allow delete: if isAdminOrOwner();
     }
 
     match /brand_payments/{paymentId} {
-      allow list: if isAdminOrSuperAdmin() || isBrandScopedUser();
-      allow get: if isAdminOrSuperAdmin()
+      allow list: if isAdminOrOwner() || isBrandScopedUser();
+      allow get: if isAdminOrOwner()
         || (isBrandAdmin() && (resource == null || resource.data.brandId == brandId()));
-      allow create: if isAdminOrSuperAdmin()
+      allow create: if isAdminOrOwner()
         || (isBrandAdmin()
           && request.resource.data.brandId == brandId()
           && request.resource.data.paymentStatus == 'pending');
-      allow update: if isAdminOrSuperAdmin();
+      allow update: if isAdminOrOwner();
       // Verified payment records are immutable — they cannot be deleted by anyone.
-      allow delete: if isAdminOrSuperAdmin()
+      allow delete: if isAdminOrOwner()
         && resource.data.paymentStatus != 'verified';
     }
 
-    // Catch-all: super admin can read any unlisted collection (e.g. future collections).
+    // Catch-all: owner can read any unlisted collection (e.g. future collections).
     // Write access requires an explicit rule above.
     match /{document=**} {
-      allow read: if isAdminOrSuperAdmin();
+      allow read: if isAdminOrOwner();
     }
   }
 }

@@ -9,6 +9,7 @@ class NotificationRequest {
     required this.status,
     required this.createdAt,
     this.brandId = '',
+    this.brandName = '',
     this.offerId = '',
     this.requestedByUserId = '',
     this.targetCityIds = const [],
@@ -20,6 +21,9 @@ class NotificationRequest {
     this.sentAt,
     this.sentCount = 0,
     this.openCount = 0,
+    this.offerLineId = '',
+    this.groupTitle = '',
+    this.includeImage = true,
   });
 
   final String id;
@@ -31,6 +35,7 @@ class NotificationRequest {
   final String status;
   final DateTime createdAt;
   final String brandId;
+  final String brandName;
   final String offerId;
   final String requestedByUserId;
   final List<String> targetCityIds;
@@ -42,4 +47,7 @@ class NotificationRequest {
   final DateTime? sentAt;
   final int sentCount;
   final int openCount;
+  final String offerLineId;
+  final String groupTitle;
+  final bool includeImage;
 }

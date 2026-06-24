@@ -3,21 +3,26 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/list_search.dart';
+import '../../../../core/widgets/app_error_dialog.dart';
+import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/animated_content.dart';
 import '../../../../core/widgets/app_avatar.dart';
-import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_info_row.dart';
-import '../../../../core/widgets/app_loading_view.dart';
 import '../../../../core/widgets/app_status_chip.dart';
 import '../../../../core/widgets/app_text_view.dart';
+import '../../../../core/widgets/catalog_list_summary.dart';
 import '../../../../core/widgets/empty_state.dart';
+import '../../../../core/widgets/list_screen_body.dart';
+import '../../../../core/widgets/list_search_field.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../auth/domain/entities/app_user.dart';
+import '../../../auth/domain/entities/user_role_utils.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/user_management_providers.dart';
+import '../widgets/user_tile.dart';
 
 class UsersListScreen extends ConsumerWidget {
   const UsersListScreen({super.key});
@@ -25,129 +30,207 @@ class UsersListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final users = ref.watch(managedUsersProvider);
+    final searchQuery = ref.watch(usersListSearchQueryProvider);
     final actionState = ref.watch(userManagementActionsProvider);
-    final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final isOwner = ref.watch(isOwnerProvider);
+    final actionsEnabled = isOwner && !actionState.isLoading;
+
+    ref.listen(userManagementActionsProvider, (previous, next) {
+      if (next.hasError && context.mounted) {
+        showAppError(context, next.error, title: 'Could Not Update User');
+      }
+    });
 
     return ScreenScaffold(
       loading: actionState.isLoading,
-      header: ScreenHeader(
-        title: 'Users',
-        actions: [
-          if (isSuperAdmin)
-            FilledButton.icon(
-              onPressed: () => context.go('/users/new'),
-              icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: const Text('Register User'),
-            ),
-        ],
-      ),
-      child: AnimatedContent(
-        child: users.when(
-          skipLoadingOnRefresh: true,
-          data: (items) {
-            if (items.isEmpty) {
-              return const EmptyState(
-                key: ValueKey('users-empty'),
-                icon: Icons.people_outline,
-                title: 'No users found',
-                message: 'User profiles will appear here once created.',
-              );
-            }
-            return AppCard(
-              key: const ValueKey('users-list'),
-              padding: EdgeInsets.zero,
-              child: ListView.separated(
-                itemCount: items.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final user = items[index];
-                  return FadeIn(
-                    delay: Duration(milliseconds: index * 30),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
-                      leading: AppAvatar(
-                        name: user.email.isEmpty ? user.id : user.email,
-                        radius: 22,
-                      ),
-                      title: AppTextView.title(
-                        user.email.isEmpty ? user.id : user.email,
-                        fontWeight: FontWeight.w800,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: AppTextView.body(
-                        [
-                          user.role,
-                          if (user.brandId.isNotEmpty) user.brandId,
-                        ].join(' · '),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: Wrap(
-                        spacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          AppStatusChip(
-                            status: user.isActive ? 'active' : 'inactive',
-                          ),
-                          Switch(
-                            value: user.isActive,
-                            onChanged: actionState.isLoading
-                                ? null
-                                : (value) => ref
-                                      .read(
-                                        userManagementActionsProvider.notifier,
-                                      )
-                                      .setActive(user.id, value),
-                          ),
-                          IconButton(
-                            tooltip: 'View user details',
-                            onPressed: () => _showUserDetails(context, user),
-                            icon: const Icon(Icons.visibility_outlined),
-                          ),
-                          IconButton(
-                            tooltip: 'Delete user profile',
-                            onPressed: actionState.isLoading
-                                ? null
-                                : () async {
-                                    final confirmed =
-                                        await showSweetConfirmationDialog(
-                                          context: context,
-                                          title: 'Delete user profile?',
-                                          message:
-                                              'This removes this user profile from Firestore.',
-                                          confirmLabel: 'Delete',
-                                        );
-                                    if (!confirmed || !context.mounted) {
-                                      return;
-                                    }
-                                    await ref
-                                        .read(
-                                          userManagementActionsProvider
-                                              .notifier,
-                                        )
-                                        .deleteUserProfile(user.id);
-                                  },
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
-          },
-          loading: () => const AppLoadingView(label: 'Loading users'),
-          error: (error, _) => AppErrorView(
-            message: error.toString(),
-            onRetry: () => ref.invalidate(managedUsersProvider),
+      title: 'Users',
+      actions: [
+        if (isOwner)
+          FilledButton.icon(
+            onPressed: () => context.go('/users/new'),
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            label: const Text('Register User'),
           ),
-        ),
+      ],
+      child: ListScreenBody<List<AppUser>>(
+        asyncValue: users,
+        onRetry: () => ref.invalidate(managedUsersProvider),
+        builder: (items) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!isOwner)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 14),
+                  child: AppErrorView(
+                    message:
+                        'Only owners can edit, delete, or change user accounts. '
+                        'You can view user details.',
+                  ),
+                ),
+              ListSearchField(
+                hintText:
+                    'Search users by name, email, role, brand, phone, status…',
+                queryProvider: usersListSearchQueryProvider,
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: AnimatedContent(
+                  child: _buildUsersContent(
+                    context,
+                    ref,
+                    items,
+                    searchQuery,
+                    actionsEnabled,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+
+  Widget _buildUsersContent(
+    BuildContext context,
+    WidgetRef ref,
+    List<AppUser> items,
+    String searchQuery,
+    bool actionsEnabled,
+  ) {
+    if (items.isEmpty) {
+      return const EmptyState(
+        key: ValueKey('users-empty'),
+        icon: Icons.people_outline,
+        title: 'No users found',
+        message: 'User profiles will appear here once created.',
+      );
+    }
+
+    final filteredItems = items
+        .where((user) => _userMatchesSearch(user, searchQuery))
+        .toList();
+    if (filteredItems.isEmpty) {
+      return EmptyState(
+        key: const ValueKey('users-search-empty'),
+        icon: Icons.search_off_outlined,
+        title: 'No matching users',
+        message: 'Try a different search term.',
+        action: OutlinedButton.icon(
+          onPressed: () =>
+              ref.read(usersListSearchQueryProvider.notifier).state = '',
+          icon: const Icon(Icons.close),
+          label: const Text('Clear search'),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CatalogListSummary(
+          total: filteredItems.length,
+          active: filteredItems.where((user) => user.isActive).length,
+          inactive: filteredItems.where((user) => !user.isActive).length,
+          extra: CatalogSummaryChip(
+            label: 'Admin access',
+            value: filteredItems
+                .where((user) => user.effectiveIsAdminEnabled)
+                .length,
+            icon: Icons.admin_panel_settings_outlined,
+            color: AppTheme.freshGreen,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth >= 980
+                  ? 2
+                  : constraints.maxWidth >= 640
+                  ? 2
+                  : 1;
+              return GridView.builder(
+                key: const ValueKey('users-list'),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: columns == 1 ? 2.15 : 1.75,
+                ),
+                itemCount: filteredItems.length,
+                itemBuilder: (context, index) {
+                  final user = filteredItems[index];
+                  return FadeIn(
+                    delay: Duration(milliseconds: index * 35),
+                    child: UserTile(
+                      user: user,
+                      actionsEnabled: actionsEnabled,
+                      onActiveChanged: (value) => ref
+                          .read(userManagementActionsProvider.notifier)
+                          .setActive(user.id, value),
+                      onEdit: () => context.go('/users/${user.id}'),
+                      onViewDetails: () => _showUserDetails(context, user),
+                      onDelete: () => _deleteUser(context, ref, user),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _deleteUser(
+    BuildContext context,
+    WidgetRef ref,
+    AppUser user,
+  ) async {
+    final confirmed = await showSweetConfirmationDialog(
+      context: context,
+      title: 'Delete user profile?',
+      message: 'This removes this user profile from Firestore.',
+      confirmLabel: 'Delete',
+    );
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    await ref
+        .read(userManagementActionsProvider.notifier)
+        .deleteUserProfile(user.id);
+  }
+}
+
+bool _userMatchesSearch(AppUser user, String query) {
+  return matchesSearchQuery(
+    query,
+    fields: [
+      user.id,
+      user.email,
+      user.displayName,
+      user.fullName,
+      user.phoneNumber,
+      user.brandId,
+      UserRoleUtils.labelsFor(user.roles),
+      ...user.roles,
+      ...user.categoryIds,
+      ...user.cityIds,
+      ...user.brandIds,
+    ],
+    values: [
+      user.isActive,
+      user.notificationEnabled,
+      user.effectiveIsAdminEnabled,
+      user.effectiveIsMobileAppEnabled,
+      user.mustChangePassword,
+      user.categoryIds.length,
+      user.cityIds.length,
+      user.brandIds.length,
+    ],
+  );
 }
 
 void _showUserDetails(BuildContext context, AppUser user) {
@@ -168,7 +251,6 @@ class _UserDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).colorScheme.brightness;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -181,7 +263,7 @@ class _UserDetailSheet extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.border(brightness),
+                  color: Theme.of(context).dividerColor,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -204,7 +286,6 @@ class _UserDetailSheet extends StatelessWidget {
                       ),
                       AppTextView.body(
                         user.email.isEmpty ? 'No email' : user.email,
-                        color: AppColors.textMuted(brightness),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
@@ -228,8 +309,8 @@ class _UserDetailSheet extends StatelessWidget {
             ),
             const AppInfoRow.divider(),
             AppInfoRow(
-              label: 'Role',
-              value: user.role,
+              label: 'Roles',
+              value: UserRoleUtils.labelsFor(user.roles),
               icon: Icons.badge_outlined,
             ),
             if (user.brandId.isNotEmpty) ...[
@@ -254,6 +335,12 @@ class _UserDetailSheet extends StatelessWidget {
                 icon: Icons.phone_outlined,
               ),
             ],
+            const AppInfoRow.divider(),
+            AppInfoRow(
+              label: 'Notifications',
+              value: user.notificationEnabled ? 'Enabled' : 'Disabled',
+              icon: Icons.notifications_outlined,
+            ),
             const AppInfoRow.divider(),
             AppInfoRow(
               label: 'Status',

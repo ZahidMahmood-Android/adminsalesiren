@@ -74,7 +74,7 @@ class BrandModel extends Brand {
     return BrandModel(
       id: data['id'] as String? ?? doc.id,
       name: data['name'] as String? ?? '',
-      logoUrl: data['logoUrl'] as String? ?? '',
+      logoUrl: _readLogoUrl(data),
       websiteUrl: data['websiteUrl'] as String? ?? '',
       instagramUrl: data['instagramUrl'] as String? ?? '',
       facebookUrl: data['facebookUrl'] as String? ?? '',
@@ -153,5 +153,15 @@ class BrandModel extends Brand {
       return value.whereType<String>().toList();
     }
     return const [];
+  }
+
+  static String _readLogoUrl(Map<String, dynamic> data) {
+    for (final key in ['logoUrl', 'logurl', 'logUrl']) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return '';
   }
 }

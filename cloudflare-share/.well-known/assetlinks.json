@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.bytecinch.salesiren",
+      "sha256_cert_fingerprints": [
+        "AA:62:20:6C:84:A1:8C:25:40:C3:05:A4:C9:53:37:AE:A3:54:03:CD:42:F8:66:2C:5D:37:2F:F3:B0:D1:C1:FB"
+      ]
+    }
+  }
+]

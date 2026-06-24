@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/animated_content.dart';
 import '../../../../core/widgets/app_badge.dart';
+import '../../../../core/widgets/app_status_chip.dart';
+import '../../../../core/utils/display_label_utils.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/brand_usage.dart';
@@ -35,16 +37,14 @@ class MySubscriptionScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
 
     return ScreenScaffold(
-      header: ScreenHeader(
-        title: 'My Subscription',
-        actions: [
-          FilledButton.icon(
-            onPressed: () => context.go('/subscriptions/request'),
-            icon: const Icon(Icons.upgrade),
-            label: const Text('Upgrade / Renew'),
-          ),
-        ],
-      ),
+      title: 'My Subscription',
+      actions: [
+        FilledButton.icon(
+          onPressed: () => context.go('/subscriptions/request'),
+          icon: const Icon(Icons.upgrade),
+          label: const Text('Upgrade / Renew'),
+        ),
+      ],
       child: AnimatedContent(
         child: subscription.when(
           data: (sub) {
@@ -84,9 +84,9 @@ class MySubscriptionScreen extends ConsumerWidget {
                                 ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           const Spacer(),
-                          AppBadge(
-                            label: sub.status,
-                            color: sub.isUsable ? Colors.green : Colors.orange,
+                          AppStatusChip(
+                            status: sub.status,
+                            customColor: sub.isUsable ? Colors.green : Colors.orange,
                           ),
                         ],
                       ),
@@ -97,7 +97,9 @@ class MySubscriptionScreen extends ConsumerWidget {
                                   '(${sub.discountPercent}% discount applied)'
                             : '${sub.currency} ${sub.monthlyPrice}/${sub.billingCycle}',
                       ),
-                      Text('Payment: ${sub.paymentStatus}'),
+                      Text(
+                        'Payment: ${DisplayLabelUtils.slug(sub.paymentStatus)}',
+                      ),
                       if (sub.endDate != null)
                         Text(
                           'Ends: ${sub.endDate!.toLocal().toString().split(' ').first}',
@@ -109,7 +111,9 @@ class MySubscriptionScreen extends ConsumerWidget {
                         '${sub.pushNotificationLimitPerMonth} push · '
                         '${sub.featuredOfferLimitPerMonth} featured',
                       ),
-                      Text('Analytics: ${sub.analyticsLevel}'),
+                      Text(
+                        'Analytics: ${DisplayLabelUtils.slug(sub.analyticsLevel)}',
+                      ),
                     ],
                   ),
                 ),
@@ -156,8 +160,8 @@ class MySubscriptionScreen extends ConsumerWidget {
               ],
             );
           },
-          loading: () => const AppLoadingView(label: 'Loading subscription'),
-          error: (error, _) => AppErrorView(message: error.toString()),
+          loading: () => const AppLoader(),
+          error: (error, _) => AppErrorView(error: error),
         ),
       ),
     );

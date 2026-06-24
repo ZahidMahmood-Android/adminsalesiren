@@ -33,7 +33,9 @@ class FirebaseAuthRepository implements AuthRepository {
       );
       final user = credential.user;
       if (user == null) {
-        throw const AppException('No user returned by Firebase Auth.');
+        throw const AppException(
+          'Sign-in could not be completed. Please try again.',
+        );
       }
       _log.info('Admin sign-in succeeded for uid=${user.uid}');
       return user.toAppUser();
@@ -55,6 +57,37 @@ class FirebaseAuthRepository implements AuthRepository {
     _log.info('Admin sign-out completed');
   }
 
+  @override
+  Future<void> updatePassword(String newPassword) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const AppException(
+        'You must be signed in to change your password.',
+      );
+    }
+    _log.info('Password update started for uid=${user.uid}');
+    try {
+      await user.updatePassword(newPassword);
+      _log.info('Password update succeeded for uid=${user.uid}');
+    } on FirebaseAuthException catch (error) {
+      _log.warning(
+        'Password update failed for uid=${user.uid} with code=${error.code}',
+        error,
+        error.stackTrace,
+      );
+      throw AppException(_passwordUpdateMessage(error.code), code: error.code);
+    }
+  }
+
+  String _passwordUpdateMessage(String code) {
+    return switch (code) {
+      'weak-password' => 'The password is too weak. Use at least 6 characters.',
+      'requires-recent-login' =>
+        'Please sign out, sign in again, and retry changing your password.',
+      _ => 'Unable to update password. Please try again.',
+    };
+  }
+
   String _authMessage(String code) {
     return switch (code) {
       'invalid-email' => 'Enter a valid admin email address.',
@@ -63,7 +96,7 @@ class FirebaseAuthRepository implements AuthRepository {
       'wrong-password' => 'The password is incorrect.',
       'invalid-credential' => 'The email or password is incorrect.',
       'configuration-not-found' =>
-        'Firebase Auth is not configured for this app. Check Firebase web config and enable Email/Password sign-in.',
+        'Sign-in is not available right now. Please contact support.',
       _ => 'Unable to sign in. Please try again.',
     };
   }

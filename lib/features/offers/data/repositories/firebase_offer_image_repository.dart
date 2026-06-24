@@ -45,4 +45,42 @@ class FirebaseOfferImageRepository implements OfferImageRepository {
       rethrow;
     }
   }
+
+  @override
+  Future<void> deleteImagesForOffer({
+    required String offerId,
+    Iterable<String> imageUrls = const [],
+  }) async {
+    _log.info('Deleting offer images offerId=$offerId');
+    try {
+      await _deleteStorageFolder(_storage.ref('offers/$offerId'));
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to delete offer image folder offerId=$offerId',
+        error,
+        stackTrace,
+      );
+    }
+
+    for (final url in imageUrls
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()) {
+      try {
+        await _storage.refFromURL(url).delete();
+      } catch (error) {
+        _log.fine('Could not delete image url (may already be gone): $url');
+      }
+    }
+  }
+
+  Future<void> _deleteStorageFolder(Reference ref) async {
+    final list = await ref.listAll();
+    for (final item in list.items) {
+      await item.delete();
+    }
+    for (final prefix in list.prefixes) {
+      await _deleteStorageFolder(prefix);
+    }
+  }
 }

@@ -44,9 +44,8 @@ class CityModel extends City {
     return CityModel(
       id: data['id'] as String? ?? doc.id,
       name: data['name'] as String? ?? '',
-      country: data['country'] as String? ??
-          data['countryName'] as String? ??
-          '',
+      country:
+          data['country'] as String? ?? data['countryName'] as String? ?? '',
       isActive: data['isActive'] as bool? ?? false,
       createdAt: _readDate(data['createdAt']),
       updatedAt: _readDate(data['updatedAt']),

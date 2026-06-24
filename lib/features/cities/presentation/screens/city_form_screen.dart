@@ -4,8 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../domain/entities/city.dart';
 import '../providers/city_providers.dart';
@@ -181,11 +182,13 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
                             : null,
                       ),
                       const SizedBox(height: 16),
-                      SwitchListTile(
+                      AppListTileMaterial(
+                        child: SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('Active city'),
                         value: _isActive,
                         onChanged: (value) => setState(() => _isActive = value),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       Row(
@@ -219,8 +222,8 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
           ),
         );
       },
-      loading: () => const AppLoadingView(label: 'Loading city'),
-      error: (error, _) => AppErrorView(message: error.toString()),
+      loading: () => const AppLoader(),
+      error: (error, _) => AppErrorView(error: error),
     );
   }
 }

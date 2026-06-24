@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/access/domain/feature_access_utils.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/admin_access_diagnostics_screen.dart';
 import '../../features/notifications/domain/entities/notification_request.dart';
@@ -16,10 +17,12 @@ import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_providers.dart';
 import '../utils/copy_utils.dart';
+import '../utils/display_label_utils.dart';
 import 'app_background.dart';
 import 'app_card.dart';
+import 'app_list_tile_material.dart';
 import 'app_error_view.dart';
-import 'app_loading_view.dart';
+import 'app_loader.dart';
 import 'sweet_confirmation_dialog.dart';
 
 class AppShell extends ConsumerWidget {
@@ -35,20 +38,34 @@ class AppShell extends ConsumerWidget {
     final adminAccess = ref.watch(adminAccessProvider);
     final isBrandAdmin = ref.watch(isBrandAdminProvider);
     final isManager = ref.watch(isManagerProvider);
+
+    if (userProfile.isLoading || adminAccess.isLoading) {
+      return const Scaffold(body: AppLoader());
+    }
+
+    final hasAccess = adminAccess.maybeWhen(
+      data: (value) => value,
+      orElse: () => false,
+    );
+    if (!hasAccess) {
+      return Scaffold(
+        body: AppBackground(
+          child: _AccessContent(
+            adminAccess: adminAccess,
+            isBrandAdmin: isBrandAdmin,
+            isManager: isManager,
+            child: child,
+          ),
+        ),
+      );
+    }
+
     final accessContent = _AccessContent(
       adminAccess: adminAccess,
       isBrandAdmin: isBrandAdmin,
       isManager: isManager,
       child: child,
     );
-
-    if (userProfile.isLoading || adminAccess.isLoading) {
-      return const Scaffold(
-        body: AppLoadingView(
-          label: 'Checking admin access\n(may take a moment)',
-        ),
-      );
-    }
 
     if (isCompact) {
       return Scaffold(
@@ -106,9 +123,7 @@ class _AccessContent extends ConsumerWidget {
         }
         return child;
       },
-      loading: () => const AppLoadingView(
-        label: 'Checking admin access\n(may take a moment)',
-      ),
+      loading: () => const AppLoader(),
       error: (error, _) {
         if (error.toString().contains('timeout')) {
           return const AppErrorView(
@@ -118,7 +133,7 @@ class _AccessContent extends ConsumerWidget {
                 'Try refreshing the page.',
           );
         }
-        return AppErrorView(message: error.toString());
+        return AppErrorView(error: error);
       },
     );
   }
@@ -136,6 +151,7 @@ class _SubscriptionGate extends ConsumerWidget {
     '/subscriptions/payments',
     '/subscriptions/my-usage',
     '/dashboard',
+    '/profile',
     '/settings',
   };
 
@@ -257,6 +273,7 @@ Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
     html.window.localStorage.clear();
     html.window.sessionStorage.clear();
     await ref.read(authRepositoryProvider).signOut();
+    ref.read(passwordChangeSkippedProvider.notifier).state = false;
     ref.invalidate(authStateProvider);
     ref.invalidate(currentUserProfileProvider);
     ref.invalidate(adminAccessProvider);
@@ -286,7 +303,7 @@ class _InactiveAccountView extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Your account has been deactivated by the super admin.\n'
+                'Your account has been deactivated by the owner.\n'
                 'Please contact customer support to request reactivation.',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -453,13 +470,13 @@ class _MissingAdminAccessView extends ConsumerWidget {
 }
 
 int _bellCount(WidgetRef ref) {
-  final isSuperAdmin = ref.watch(isSuperAdminProvider);
+  final isOwner = ref.watch(isOwnerProvider);
   final isManager = ref.watch(isManagerProvider);
   if (isManager) {
     return 0;
   }
   final subRequests = ref.watch(subscriptionRequestsProvider);
-  if (isSuperAdmin) {
+  if (isOwner) {
     final notifRequests = ref.watch(notificationRequestsProvider);
     final subPending = subRequests.maybeWhen(
       data: (items) => items.where((r) => r.status == 'pending').length,
@@ -483,20 +500,20 @@ class _BellButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final isOwner = ref.watch(isOwnerProvider);
     final isManager = ref.watch(isManagerProvider);
     if (isManager) {
       return const SizedBox.shrink();
     }
     final count = _bellCount(ref);
-    return _BellPopup(isSuperAdmin: isSuperAdmin, count: count);
+    return _BellPopup(isOwner: isOwner, count: count);
   }
 }
 
 class _BellPopup extends ConsumerWidget {
-  const _BellPopup({required this.isSuperAdmin, required this.count});
+  const _BellPopup({required this.isOwner, required this.count});
 
-  final bool isSuperAdmin;
+  final bool isOwner;
   final int count;
 
   @override
@@ -538,7 +555,7 @@ class _BellPopup extends ConsumerWidget {
     );
     entries.add(const PopupMenuDivider());
 
-    if (isSuperAdmin) {
+    if (isOwner) {
       final subRequests = ref.watch(subscriptionRequestsProvider);
       final notifRequests = ref.watch(notificationRequestsProvider);
 
@@ -561,8 +578,7 @@ class _BellPopup extends ConsumerWidget {
               child: _NotifTile(
                 icon: Icons.upgrade_outlined,
                 iconColor: Colors.blue,
-                title:
-                    '${r.type[0].toUpperCase()}${r.type.substring(1)} request',
+                title: '${DisplayLabelUtils.slug(r.type)} request',
                 subtitle: 'Brand: ${r.brandId} · Plan: ${r.requestedPlanId}',
               ),
             ),
@@ -619,7 +635,7 @@ class _BellPopup extends ConsumerWidget {
         entries.add(_emptyItem(context, 'No new notifications right now.'));
       } else {
         for (final r in approved.take(5)) {
-          final typeLabel = '${r.type[0].toUpperCase()}${r.type.substring(1)}';
+          final typeLabel = DisplayLabelUtils.slug(r.type);
           entries.add(
             PopupMenuItem<String>(
               value: '/subscriptions/my',
@@ -650,7 +666,7 @@ class _BellPopup extends ConsumerWidget {
     entries.add(const PopupMenuDivider());
     entries.add(
       PopupMenuItem<String>(
-        value: isSuperAdmin ? '/subscriptions/requests' : '/subscriptions/my',
+        value: isOwner ? '/subscriptions/requests' : '/subscriptions/my',
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -848,7 +864,7 @@ class _ProfileMenu extends ConsumerWidget {
           return;
         }
         if (value == 'profile') {
-          context.go('/settings');
+          context.go('/profile');
         }
         if (value == 'logout') {
           _confirmLogout(context, ref);
@@ -915,20 +931,24 @@ class _ProfileMenu extends ConsumerWidget {
         const PopupMenuDivider(),
         const PopupMenuItem<String>(
           value: 'profile',
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.manage_accounts_outlined),
-            title: Text('Profile settings'),
-            contentPadding: EdgeInsets.zero,
+          child: AppListTileMaterial(
+            child: ListTile(
+              dense: true,
+              leading: Icon(Icons.manage_accounts_outlined),
+              title: Text('My profile'),
+              contentPadding: EdgeInsets.zero,
+            ),
           ),
         ),
         const PopupMenuItem<String>(
           value: 'logout',
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.logout),
-            title: Text('Logout'),
-            contentPadding: EdgeInsets.zero,
+          child: AppListTileMaterial(
+            child: ListTile(
+              dense: true,
+              leading: Icon(Icons.logout),
+              title: Text('Logout'),
+              contentPadding: EdgeInsets.zero,
+            ),
           ),
         ),
       ],
@@ -1024,12 +1044,11 @@ class _MobileDrawer extends ConsumerWidget {
   }
 }
 
-class _BrandMark extends ConsumerWidget {
+class _BrandMark extends StatelessWidget {
   const _BrandMark();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final subtitle = ref.watch(isSuperAdminProvider) ? 'Super Admin' : 'Admin';
+  Widget build(BuildContext context) {
     return Row(
       children: [
         Container(
@@ -1047,23 +1066,11 @@ class _BrandMark extends ConsumerWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              AppConstants.appName,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-            ),
-            Text(
-              subtitle,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
+        Text(
+          AppConstants.appName,
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
         ),
       ],
     );
@@ -1205,6 +1212,20 @@ const _items = [
   _NavItem('Settings', '/settings', Icons.settings_outlined),
 ];
 
+const _managerItems = [
+  _NavItem('Dashboard', '/dashboard', Icons.dashboard_outlined),
+  _NavItem('Cities', '/cities', Icons.location_city_outlined),
+  _NavItem('Categories', '/categories', Icons.category_outlined),
+  _NavItem('Brands', '/brands', Icons.storefront_outlined),
+  _NavItem('Offers', '/offers', Icons.local_offer_outlined),
+  _NavItem(
+    'Notification Requests',
+    '/notifications',
+    Icons.notifications_outlined,
+  ),
+  _NavItem('Users', '/users', Icons.people_outline),
+];
+
 const _brandItems = [
   _NavItem('Dashboard', '/dashboard', Icons.dashboard_outlined),
   _NavItem('Cities', '/cities', Icons.location_city_outlined),
@@ -1215,6 +1236,7 @@ const _brandItems = [
     '/notifications',
     Icons.notifications_outlined,
   ),
+  _NavItem('Users', '/users', Icons.people_outline),
 ];
 
 const _brandAdminItems = [
@@ -1229,11 +1251,22 @@ const _brandAdminItems = [
 ];
 
 List<_NavItem> _visibleItems(WidgetRef ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) {
+    return const [];
+  }
+  final List<_NavItem> items;
   if (ref.watch(isBrandAdminProvider)) {
-    return _brandAdminItems;
+    items = _brandAdminItems;
+  } else if (ref.watch(isManagerProvider)) {
+    items = _managerItems;
+  } else {
+    items = _items;
   }
-  if (ref.watch(isManagerProvider)) {
-    return _brandItems;
+  if (FeatureAccessUtils.grantsAllFeatures(user)) {
+    return items;
   }
-  return _items;
+  return items
+      .where((item) => FeatureAccessUtils.canAccessAdminRoute(user, item.route))
+      .toList();
 }

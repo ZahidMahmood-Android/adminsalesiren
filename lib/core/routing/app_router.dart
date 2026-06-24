@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/access/domain/feature_access_utils.dart';
 import '../../features/auth/domain/entities/user_roles.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/brands/presentation/screens/brand_form_screen.dart';
@@ -34,6 +35,7 @@ import '../../features/subscriptions/presentation/screens/pricing_plan_form_scre
 import '../../features/subscriptions/presentation/screens/pricing_plans_list_screen.dart';
 import '../../features/subscriptions/presentation/screens/subscription_request_form_screen.dart';
 import '../../features/subscriptions/presentation/screens/subscription_requests_list_screen.dart';
+import '../../features/users/presentation/screens/user_edit_screen.dart';
 import '../../features/users/presentation/screens/user_registration_screen.dart';
 import '../../features/users/presentation/screens/users_list_screen.dart';
 import '../services/firebase_providers.dart';
@@ -56,7 +58,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (loggingIn) {
         return '/dashboard';
       }
-      if (profile?.role == UserRoles.superAdmin) {
+      if (profile != null && !profile.hasRole(UserRoles.owner)) {
+        final location = state.matchedLocation;
+        if (!FeatureAccessUtils.canAccessAdminRoute(profile, location)) {
+          return '/dashboard';
+        }
+      }
+      if (profile?.hasRole(UserRoles.superAdmin) ?? false) {
         final location = state.matchedLocation;
         if (location == '/offers' ||
             location.startsWith('/offers/') ||
@@ -64,10 +72,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return '/dashboard';
         }
       }
-      if (profile?.role == UserRoles.brandAdmin ||
-          profile?.role == UserRoles.manager) {
+      if (!(profile?.hasRole(UserRoles.owner) ?? false) &&
+          ((profile?.hasRole(UserRoles.brandAdmin) ?? false) ||
+              (profile?.hasRole(UserRoles.manager) ?? false))) {
         final location = state.matchedLocation;
-        final isManager = profile?.role == UserRoles.manager;
+        final isManager = profile?.hasRole(UserRoles.manager) ?? false;
         final citiesAllowed = isManager
             ? location == '/cities' || location.startsWith('/cities/')
             : location == '/cities';
@@ -89,10 +98,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             location == '/offers' ||
             location.startsWith('/offers/') ||
             location == '/notifications' ||
+            location == '/users' ||
+            location.startsWith('/users/') ||
             (!isManager && brandSubscriptionAllowed);
         if (!allowed ||
-            location == '/brands/new' ||
             location == '/brands/register' ||
+            (location == '/brands/new' && !isManager) ||
             (isManager && location.startsWith('/subscriptions/')) ||
             (location.startsWith('/cities/') &&
                 !isManager &&
@@ -221,6 +232,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'new',
                 pageBuilder: (context, state) =>
                     _fadePage(state, const UserRegistrationScreen()),
+              ),
+              GoRoute(
+                path: ':userId',
+                pageBuilder: (context, state) => _fadePage(
+                  state,
+                  UserEditScreen(userId: state.pathParameters['userId']!),
+                ),
               ),
             ],
           ),

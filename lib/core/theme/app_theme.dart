@@ -142,6 +142,10 @@ class AppTheme {
       listTileTheme: ListTileThemeData(
         textColor: textColor,
         iconColor: AppColors.textMuted(brightness),
+        tileColor: Colors.transparent,
+        selectedTileColor: isDark
+            ? primary.withValues(alpha: 0.14)
+            : AppColors.greenTint,
       ),
       iconTheme: IconThemeData(color: AppColors.textMuted(brightness)),
       switchTheme: SwitchThemeData(

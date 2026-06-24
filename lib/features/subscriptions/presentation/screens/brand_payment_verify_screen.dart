@@ -4,10 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/widgets/app_badge.dart';
+import '../../../../core/utils/display_label_utils.dart';
+import '../../../../core/widgets/app_status_chip.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -23,9 +24,8 @@ class BrandPaymentVerifyScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final paymentAsync = ref.watch(brandPaymentProvider(paymentId));
     return paymentAsync.when(
-      loading: () => const Scaffold(body: AppLoadingView()),
-      error: (error, _) =>
-          Scaffold(body: AppErrorView(message: error.toString())),
+      loading: () => const Scaffold(body: AppLoader()),
+      error: (error, _) => Scaffold(body: AppErrorView(error: error)),
       data: (payment) {
         if (payment == null) {
           return const Scaffold(
@@ -114,11 +114,11 @@ class _PaymentDetailViewState extends ConsumerState<_PaymentDetailView> {
   Widget build(BuildContext context) {
     final payment = widget.payment;
     final actionState = ref.watch(subscriptionActionsProvider);
-    final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final isOwner = ref.watch(isOwnerProvider);
 
     final isVerified = payment.paymentStatus == 'verified';
     final isCancelled = payment.paymentStatus == 'cancelled';
-    final canAct = isSuperAdmin && !isVerified && !isCancelled;
+    final canAct = isOwner && !isVerified && !isCancelled;
 
     final statusColor = isVerified
         ? Colors.green
@@ -127,7 +127,7 @@ class _PaymentDetailViewState extends ConsumerState<_PaymentDetailView> {
         : Colors.orange;
 
     return ScreenScaffold(
-      header: ScreenHeader(title: 'Payment Details'),
+      title: 'Payment Details',
       child: SingleChildScrollView(
         padding: screenPadding(context),
         child: Column(
@@ -151,9 +151,9 @@ class _PaymentDetailViewState extends ConsumerState<_PaymentDetailView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        AppBadge(
-                          label: payment.paymentStatus.toUpperCase(),
-                          color: statusColor,
+                        AppStatusChip(
+                          status: payment.paymentStatus,
+                          customColor: statusColor,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -252,7 +252,7 @@ class _PaymentDetailViewState extends ConsumerState<_PaymentDetailView> {
               ),
             if (payment.proofImageUrl.isNotEmpty) const SizedBox(height: 16),
 
-            // Admin action section (super admin only, for non-finalised payments)
+            // Admin action section (owner only, for non-finalised payments)
             if (canAct)
               AppCard(
                 child: Column(
@@ -316,20 +316,7 @@ class _PaymentDetailViewState extends ConsumerState<_PaymentDetailView> {
     );
   }
 
-  String _methodLabel(String method) {
-    switch (method) {
-      case 'bank_transfer':
-        return 'Bank Transfer';
-      case 'cash':
-        return 'Cash';
-      case 'easypaisa':
-        return 'Easypaisa';
-      case 'jazzcash':
-        return 'JazzCash';
-      default:
-        return method;
-    }
-  }
+  String _methodLabel(String method) => DisplayLabelUtils.slug(method);
 
   String _dateLabel(DateTime dt) {
     return dt.toLocal().toString().split('.').first;

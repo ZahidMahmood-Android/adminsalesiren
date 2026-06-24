@@ -1,9 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/services/app_logger.dart';
+import '../../../../core/services/offer_push_dispatch_service.dart';
+import '../../../../core/services/push_dispatch_debug_logger.dart';
+import '../../../../core/services/push_dispatch_user_messages.dart';
 import '../../../auth/domain/entities/user_roles.dart';
 import '../../domain/entities/offer.dart';
 import '../../domain/entities/offer_filters.dart';
+import '../../domain/repositories/offer_image_repository.dart';
 import '../../domain/repositories/offers_repository.dart';
 import '../models/offer_model.dart';
 
@@ -13,21 +17,36 @@ class FirebaseOffersRepository implements OffersRepository {
     this._currentUserId,
     this._currentUserRole,
     this._currentBrandId,
+    this._offerImageRepository,
   );
 
   final FirebaseFirestore _firestore;
   final String _currentUserId;
   final String _currentUserRole;
   final String _currentBrandId;
+  final OfferImageRepository _offerImageRepository;
   final _log = AppLogger.get('FirebaseOffersRepository');
 
   CollectionReference<Map<String, dynamic>> get _offers =>
       _firestore.collection('offers');
 
   bool get _isBrandScopedUser => _currentUserRole == UserRoles.brandAdmin;
-  bool get _isSuperAdmin => _currentUserRole == UserRoles.superAdmin;
-  bool get _hasFullAccess =>
-      _isSuperAdmin || _currentUserRole == UserRoles.manager;
+  bool get _isManager => _currentUserRole == UserRoles.manager;
+  bool get _isOwner => _currentUserRole == UserRoles.owner;
+  bool get _hasFullAccess => _isOwner || _isManager;
+
+  Offer _enforcePendingForManager(Offer offer) {
+    if (!_isManager) {
+      return offer;
+    }
+    return offer.copyWith(
+      isPublished: false,
+      status: 'pending_review',
+      approvalStatus: 'pending',
+      approvedBy: '',
+      approvedAt: null,
+    );
+  }
 
   @override
   Stream<List<Offer>> watchOffers(OfferFilters filters) {
@@ -39,21 +58,12 @@ class FirebaseOffersRepository implements OffersRepository {
     if (!_hasFullAccess) {
       query = query.where('createdByUserId', isEqualTo: _currentUserId);
     }
-    if (filters.brandId != null && filters.brandId!.isNotEmpty) {
-      query = query.where('brandId', isEqualTo: filters.brandId);
-    }
-    if (filters.isPublished != null) {
-      query = query.where('isPublished', isEqualTo: filters.isPublished);
-    }
-    if (filters.isVerified != null) {
-      query = query.where('isVerified', isEqualTo: filters.isVerified);
-    }
 
     return query.snapshots().map((snapshot) {
       final offers = snapshot.docs
           .map(OfferModel.fromSnapshot)
           .where(_canReadOffer)
-          .where((offer) => _matchesFilters(offer, filters))
+          .where((offer) => filters.matchesOffer(offer))
           .toList();
       return offers;
     });
@@ -74,74 +84,277 @@ class FirebaseOffersRepository implements OffersRepository {
 
   @override
   Future<String> createOffer(Offer offer) async {
-    final doc = offer.id.isEmpty ? _offers.doc() : _offers.doc(offer.id);
+    final pendingOffer = _enforcePendingForManager(offer);
+    final doc = pendingOffer.id.isEmpty
+        ? _offers.doc()
+        : _offers.doc(pendingOffer.id);
     final now = DateTime.now();
-    final brandStatus = offer.isPublished ? 'published' : offer.status;
+    final brandStatus = pendingOffer.isPublished
+        ? 'published'
+        : pendingOffer.status;
     final model = OfferModel.fromEntity(
-      offer.copyWith(
+      pendingOffer.copyWith(
         id: doc.id,
         createdAt: now,
         updatedAt: now,
         createdBy: _currentUserId,
         createdByUserId: _currentUserId,
         createdByRole: _currentUserRole,
-        status: _isBrandScopedUser ? brandStatus : offer.status,
-        approvalStatus: _isBrandScopedUser
-            ? offer.isPublished
+        status: _isBrandScopedUser || _isManager
+            ? brandStatus
+            : pendingOffer.status,
+        approvalStatus: _isBrandScopedUser || _isManager
+            ? pendingOffer.isPublished
                   ? 'approved'
                   : 'pending'
-            : offer.approvalStatus,
-        isPublished: offer.isPublished,
-        isVerified: offer.isVerified,
-        approvedBy: _isBrandScopedUser
-            ? offer.isPublished
+            : pendingOffer.approvalStatus,
+        isPublished: pendingOffer.isPublished,
+        isVerified: pendingOffer.isVerified,
+        approvedBy: _isBrandScopedUser || _isManager
+            ? pendingOffer.isPublished
                   ? _currentUserId
                   : ''
-            : offer.approvedBy,
-        approvedAt: _isBrandScopedUser
-            ? offer.isPublished
+            : pendingOffer.approvedBy,
+        approvedAt: _isBrandScopedUser || _isManager
+            ? pendingOffer.isPublished
                   ? now
                   : null
-            : offer.approvedAt,
+            : pendingOffer.approvedAt,
       ),
     );
-    _log.info('Creating offer id=${doc.id} title=${offer.title}');
+    _log.info('Creating offer id=${doc.id} title=${pendingOffer.title}');
     final data = model.toFirestore()
       ..['createdAt'] = FieldValue.serverTimestamp()
       ..['updatedAt'] = FieldValue.serverTimestamp();
     await doc.set(data);
+    if (pendingOffer.isPublished) {
+      await _scheduleOfferPush(doc.id);
+    }
     _log.info('Created offer id=${doc.id}');
     return doc.id;
   }
 
   @override
-  Future<void> updateOffer(Offer offer) {
-    final model = OfferModel.fromEntity(
-      offer.copyWith(updatedAt: DateTime.now(), createdBy: _currentUserId),
+  Future<String> duplicateOffer(String id) async {
+    final snapshot = await _offers.doc(id).get();
+    if (!snapshot.exists) {
+      throw StateError('Offer not found.');
+    }
+    final source = OfferModel.fromSnapshot(snapshot);
+    if (!_canReadOffer(source)) {
+      throw StateError('Offer not found.');
+    }
+    final now = DateTime.now();
+    final duplicate = source.copyWith(
+      id: '',
+      title: '${source.title} Copy',
+      startDate: now,
+      endDate: now.add(const Duration(days: 7)),
+      imageUrl: '',
+      imageUrls: const [],
+      isPublished: false,
+      isVerified: false,
+      isFeatured: false,
+      status: _isBrandScopedUser || _isManager ? 'pending_review' : 'draft',
+      approvalStatus: _isBrandScopedUser || _isManager ? 'pending' : 'draft',
+      approvalNotes: '',
+      approvedBy: '',
+      approvedAt: null,
+      viewCount: 0,
+      saveCount: 0,
+      shareCount: 0,
+      clickCount: 0,
+      reportCount: 0,
+      createdBy: _currentUserId,
+      createdByUserId: _currentUserId,
+      createdByRole: _currentUserRole,
+      createdAt: now,
+      updatedAt: now,
+      offerLines: source.offerLines
+          .map(
+            (line) => line.copyWith(
+              imageUrl: '',
+              imageUrls: const [],
+              notificationRequestId: '',
+              published: false,
+            ),
+          )
+          .toList(),
     );
-    _log.info('Updating offer id=${offer.id} title=${offer.title}');
+    final duplicateId = await createOffer(duplicate);
+    await _offers.doc(duplicateId).update({
+      'approvedAt': null,
+      'approvedBy': '',
+      'approvalNotes': '',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    return duplicateId;
+  }
+
+  @override
+  Future<void> updateOffer(Offer offer) async {
+    final pendingOffer = _enforcePendingForManager(offer);
+    final model = OfferModel.fromEntity(
+      pendingOffer.copyWith(
+        updatedAt: DateTime.now(),
+        createdBy: _currentUserId,
+      ),
+    );
+    _log.info(
+      'Updating offer id=${pendingOffer.id} title=${pendingOffer.title}',
+    );
     final data = model.toFirestore(includeCreatedAt: false)
       ..['updatedAt'] = FieldValue.serverTimestamp();
-    return _offers.doc(offer.id).update(data);
+    await _offers.doc(pendingOffer.id).update(data);
+    if (pendingOffer.isPublished) {
+      await _scheduleOfferPush(pendingOffer.id);
+    }
+  }
+
+  Future<OfferPushDispatchResult> _scheduleOfferPush(
+    String offerId, {
+    String? lineId,
+    String? requestId,
+  }) async {
+    final jobId = lineId != null && lineId.isNotEmpty
+        ? '$offerId-$lineId'
+        : offerId;
+    try {
+      await _firestore.collection('offer_push_jobs').doc(jobId).set({
+        'offerId': offerId,
+        if (lineId != null && lineId.isNotEmpty) 'offerLineId': lineId,
+        if (requestId != null && requestId.isNotEmpty) 'requestId': requestId,
+        'requestedByUserId': _currentUserId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'pushNonce': FieldValue.serverTimestamp(),
+        'dispatchInProgress': FieldValue.delete(),
+        'dispatchCompletedAt': FieldValue.delete(),
+        'lastError': FieldValue.delete(),
+      }, SetOptions(merge: true));
+      PushDispatchDebugLogger.logScheduledJob(
+        jobId: jobId,
+        offerId: offerId,
+        offerLineId: lineId,
+        requestId: requestId,
+        requestedByUserId: _currentUserId,
+      );
+      await PushDispatchDebugLogger.logMobileRecipients(_firestore);
+      final result = await OfferPushDispatchService.create().dispatchNow(
+        firestore: _firestore,
+        offerId: offerId,
+        jobId: jobId,
+        offerLineId: lineId,
+        requestId: requestId,
+      );
+      PushDispatchUserMessages.ensureDelivered(result);
+      return result!;
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to schedule offer_push_jobs/$jobId for offerId=$offerId',
+        error,
+        stackTrace,
+      );
+      rethrow;
+    }
   }
 
   @override
-  Future<void> deleteOffer(String id) {
+  Future<void> deleteOffer(String id) async {
     _log.warning('Deleting offer id=$id');
-    return _offers.doc(id).delete();
+    try {
+      final snapshot = await _offers.doc(id).get();
+      final imageUrls = <String>{};
+      if (snapshot.exists) {
+        final offer = OfferModel.fromSnapshot(snapshot);
+        if (offer.imageUrl.trim().isNotEmpty) {
+          imageUrls.add(offer.imageUrl.trim());
+        }
+        imageUrls.addAll(
+          offer.imageUrls
+              .map((url) => url.trim())
+              .where((url) => url.isNotEmpty),
+        );
+        for (final line in offer.resolvedLines) {
+          imageUrls.addAll(line.resolvedImageUrls());
+        }
+      }
+      await _offerImageRepository.deleteImagesForOffer(
+        offerId: id,
+        imageUrls: imageUrls,
+      );
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Offer image cleanup failed for id=$id; deleting Firestore doc anyway',
+        error,
+        stackTrace,
+      );
+    }
+    await _offers.doc(id).delete();
   }
 
   @override
-  Future<void> publishOffer(String id, bool isPublished) {
-    _log.info('Setting offer published id=$id value=$isPublished');
-    return _offers.doc(id).update({
+  Future<void> publishOfferLine(
+    String offerId,
+    String lineId, {
+    required String requestId,
+  }) async {
+    _log.info(
+      'Publishing offer line offerId=$offerId lineId=$lineId requestId=$requestId',
+    );
+    final snapshot = await _offers.doc(offerId).get();
+    if (!snapshot.exists) {
+      _log.warning(
+        'Publish offer line aborted: offer not found offerId=$offerId',
+      );
+      return;
+    }
+    final offer = OfferModel.fromSnapshot(snapshot);
+    final lines = offer.offerLines.isEmpty
+        ? offer.resolvedLines
+        : offer.offerLines;
+    final updatedLines = lines
+        .map(
+          (line) => line.id == lineId ? line.copyWith(published: true) : line,
+        )
+        .map((line) => line.toMap())
+        .toList();
+    await _offers.doc(offerId).update({
+      'offerLines': updatedLines,
+      'isPublished': true,
+      'isVerified': true,
+      'status': 'published',
+      'approvalStatus': 'approved',
+      'approvedBy': _currentUserId,
+      'approvedAt': Timestamp.now(),
+      'updatedAt': Timestamp.now(),
+    });
+    await _scheduleOfferPush(offerId, lineId: lineId, requestId: requestId);
+    _log.info(
+      'Published offer line offerId=$offerId lineId=$lineId requestId=$requestId',
+    );
+  }
+
+  @override
+  Future<void> publishOffer(
+    String id,
+    bool isPublished, {
+    String? requestId,
+  }) async {
+    _log.info(
+      'Setting offer published id=$id value=$isPublished requestId=${requestId ?? ''}',
+    );
+    await _offers.doc(id).update({
       'isPublished': isPublished,
       'status': isPublished ? 'published' : 'approved',
       'approvalStatus': 'approved',
+      if (isPublished) 'isVerified': true,
       'approvedBy': isPublished ? _currentUserId : '',
       'approvedAt': isPublished ? Timestamp.now() : null,
       'updatedAt': Timestamp.now(),
     });
+    if (isPublished) {
+      await _scheduleOfferPush(id, requestId: requestId);
+    }
   }
 
   @override
@@ -210,28 +423,33 @@ class FirebaseOffersRepository implements OffersRepository {
     });
   }
 
-  bool _matchesFilters(Offer offer, OfferFilters filters) {
-    if (filters.cityId != null &&
-        offer.cityId != filters.cityId &&
-        !offer.cityIds.contains(filters.cityId)) {
-      return false;
+  @override
+  Future<OfferPushDispatchResult> resendOfferNotification({
+    required String offerId,
+    String offerLineId = '',
+    String requestId = '',
+  }) async {
+    final snapshot = await _offers.doc(offerId).get();
+    if (!snapshot.exists) {
+      throw StateError('Offer not found.');
     }
-    if (filters.categoryId != null &&
-        offer.categoryId != filters.categoryId &&
-        !offer.categoryIds.contains(filters.categoryId)) {
-      return false;
+    final offer = OfferModel.fromSnapshot(snapshot);
+    if (!offer.isPublished) {
+      throw StateError('Only published offers can resend notifications.');
     }
-    if (filters.brandId != null && offer.brandId != filters.brandId) {
-      return false;
+    if (offer.isExpired) {
+      throw StateError('Expired offers cannot resend notifications.');
     }
-    if (filters.isPublished != null &&
-        offer.isPublished != filters.isPublished) {
-      return false;
-    }
-    if (filters.isVerified != null && offer.isVerified != filters.isVerified) {
-      return false;
-    }
-    return true;
+
+    _log.info(
+      'Resending notification offerId=$offerId '
+      'offerLineId=$offerLineId requestId=$requestId',
+    );
+    return _scheduleOfferPush(
+      offerId,
+      lineId: offerLineId.isEmpty ? null : offerLineId,
+      requestId: requestId.isEmpty ? null : requestId,
+    );
   }
 
   bool _canReadOffer(Offer offer) {

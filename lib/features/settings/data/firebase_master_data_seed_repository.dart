@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/services/app_logger.dart';
+import '../../access/domain/app_feature_seed_data.dart';
 import '../domain/repositories/master_data_seed_repository.dart';
 import 'master_seed_data.dart';
 
@@ -106,6 +107,36 @@ class FirebaseMasterDataSeedRepository implements MasterDataSeedRepository {
     }
     _log.info('Seeded brands count=${MasterSeedData.brands.length}');
     return MasterSeedData.brands.length;
+  }
+
+  @override
+  Future<int> seedRoles() async {
+    var sortOrder = 1;
+    for (final role in MasterSeedData.roles) {
+      final id = role['id'] as String;
+      await _firestore.collection('roles').doc(id).set({
+        ...role,
+        'sortOrder': sortOrder,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      sortOrder++;
+    }
+    _log.info('Seeded roles count=${MasterSeedData.roles.length}');
+    return MasterSeedData.roles.length;
+  }
+
+  @override
+  Future<int> seedAppFeatures() async {
+    for (final feature in AppFeatureSeedData.records) {
+      await _firestore.collection('app_features').doc(feature.id).set({
+        ...AppFeatureSeedData.toFirestoreMap(feature),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+    _log.info('Seeded app features count=${AppFeatureSeedData.records.length}');
+    return AppFeatureSeedData.records.length;
   }
 
   /// Loads all documents in [collection] and returns a map of slug → doc ID.

@@ -7,10 +7,11 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loading_view.dart';
+import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
 import '../../data/master_seed_data.dart';
+import '../providers/app_settings_providers.dart';
 import '../providers/master_data_seed_providers.dart';
 
 /// Byte Cinch company contact card — shown in super admin settings only.
@@ -264,7 +265,7 @@ class SettingsSeedScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Create or safely update Firestore cities, categories, and brands.',
+                'Create or safely update Firestore cities, categories, brands, roles, and app features.',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
@@ -291,6 +292,18 @@ class SettingsSeedScreen extends ConsumerWidget {
                     icon: const Icon(Icons.storefront_outlined),
                     label: const Text('Seed Brands'),
                   ),
+                  FilledButton.icon(
+                    onPressed: state.isLoading ? null : controller.seedRoles,
+                    icon: const Icon(Icons.badge_outlined),
+                    label: const Text('Seed Roles'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: state.isLoading
+                        ? null
+                        : controller.seedAppFeatures,
+                    icon: const Icon(Icons.apps_outlined),
+                    label: const Text('Seed App Features'),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -301,10 +314,11 @@ class SettingsSeedScreen extends ConsumerWidget {
                         message,
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
-                loading: () => const AppLoadingView(label: 'Seeding data'),
-                error: (error, _) =>
-                    AppErrorView(message: ErrorMessages.friendly(error)),
+                loading: () => const AppLoader(),
+                error: (error, _) => AppErrorView(error: error),
               ),
+              const SizedBox(height: 28),
+              const _MobileAdsSettingsCard(),
               const SizedBox(height: 28),
               const _BrandSeedPreview(),
               const SizedBox(height: 32),
@@ -313,6 +327,47 @@ class SettingsSeedScreen extends ConsumerWidget {
               const _CompanyInfoCard(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MobileAdsSettingsCard extends ConsumerWidget {
+  const _MobileAdsSettingsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(mobileAdsSettingsProvider);
+    final actionState = ref.watch(appSettingsActionsProvider);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: settings.when(
+          data: (value) => SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.ads_click_outlined),
+            title: const Text('Mobile app ads'),
+            subtitle: Text(
+              value.enabled
+                  ? 'Ads are enabled for mobile app users.'
+                  : 'Ads are disabled for mobile app users.',
+            ),
+            value: value.enabled,
+            onChanged: actionState.isLoading
+                ? null
+                : (enabled) => ref
+                      .read(appSettingsActionsProvider.notifier)
+                      .setMobileAdsEnabled(enabled),
+          ),
+          loading: () => const AppLoader(),
+          error: (error, _) => AppErrorView(error: error),
         ),
       ),
     );

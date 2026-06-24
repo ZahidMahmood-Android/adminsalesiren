@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/extensions/date_time_extensions.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/display_label_utils.dart';
 import '../../../../core/widgets/app_badge.dart';
+import '../../../../core/widgets/app_network_image.dart';
 import '../../../../core/widgets/app_text_view.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -19,127 +21,175 @@ class OfferTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final actionState = ref.watch(offerActionsProvider);
-    final isSuperAdmin = ref.watch(isSuperAdminProvider);
+    final isOwner = ref.watch(isOwnerProvider);
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: SizedBox(
-          width: 58,
-          height: 58,
-          child: offer.imageUrl.isEmpty
-              ? ColoredBox(
-                  color: AppColors.background(
-                    Theme.of(context).colorScheme.brightness,
-                  ),
-                  child: Icon(
-                    Icons.local_offer_outlined,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                )
-              : Image.network(offer.imageUrl, fit: BoxFit.cover),
-        ),
-      ),
-      title: AppTextView.title(
-        offer.title,
-        fontWeight: FontWeight.w800,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            AppTextView.body(offer.brandName),
-            AppTextView.body(
-              offer.cityNames.isEmpty
-                  ? offer.cityName
-                  : offer.cityNames.join(', '),
-            ),
-            AppTextView.body(offer.discountText),
-            AppTextView.label(
-              '${offer.startDate.shortDate} – ${offer.endDate.shortDate}',
-              color: AppColors.textMuted(
-                Theme.of(context).colorScheme.brightness,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              width: 92,
+              height: 74,
+              child: AppNetworkImage(
+                imageUrl: offer.imageUrl,
+                icon: Icons.local_offer_outlined,
               ),
             ),
-          ],
-        ),
-      ),
-      trailing: Wrap(
-        spacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          AppBadge(
-            label: _statusPillLabel(offer),
-            color: _statusPillColor(offer),
           ),
-          AppBadge(
-            label: offer.isVerified ? 'Verified' : 'Unverified',
-            color: offer.isVerified ? Colors.green : Colors.orange,
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppTextView.title(
+                  offer.title,
+                  fontWeight: FontWeight.w900,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    AppTextView.body(offer.discountText),
+                    AppTextView.label(
+                      offer.cityNames.isEmpty
+                          ? offer.cityName
+                          : offer.cityNames.join(', '),
+                      color: AppColors.textMuted(
+                        Theme.of(context).colorScheme.brightness,
+                      ),
+                    ),
+                    AppTextView.label(
+                      '${offer.startDate.shortDate} - ${offer.endDate.shortDate}',
+                      color: AppColors.textMuted(
+                        Theme.of(context).colorScheme.brightness,
+                      ),
+                    ),
+                    if (offer.isGroupOffer)
+                      AppBadge(
+                        label: '${offer.resolvedLines.length} lines',
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    AppBadge(
+                      label: _statusPillLabel(offer),
+                      color: _statusPillColor(offer),
+                    ),
+                    AppBadge(
+                      label: offer.isVerified ? 'Verified' : 'Unverified',
+                      color: offer.isVerified ? Colors.green : Colors.orange,
+                    ),
+                    if (offer.isFeatured)
+                      const AppBadge(label: 'Featured', color: AppColors.coral),
+                  ],
+                ),
+              ],
+            ),
           ),
-          if (isSuperAdmin && !offer.isPublished)
-            IconButton(
-              tooltip: 'Publish',
-              onPressed: actionState.isLoading
-                  ? null
-                  : () => ref
-                        .read(offerActionsProvider.notifier)
-                        .publish(offer.id, true),
-              icon: const Icon(Icons.visibility_outlined),
-            ),
-          if (!offer.isPublished)
-            IconButton(
-              tooltip: 'Delete offer',
-              onPressed: actionState.isLoading
-                  ? null
-                  : () async {
-                      final confirmed = await showSweetConfirmationDialog(
-                        context: context,
-                        title: 'Delete offer?',
-                        message: 'This will remove ${offer.title} permanently.',
-                        confirmLabel: 'Delete',
-                      );
-                      if (!confirmed || !context.mounted) {
-                        return;
-                      }
-                      await ref
-                          .read(offerActionsProvider.notifier)
-                          .delete(offer.id);
-                    },
-              icon: const Icon(Icons.delete_outline),
-            ),
-          if (offer.isPublished && !offer.isExpired)
-            IconButton(
-              tooltip: 'Expire offer',
-              onPressed: actionState.isLoading
-                  ? null
-                  : () async {
-                      final confirmed = await showSweetConfirmationDialog(
-                        context: context,
-                        title: 'Expire offer?',
-                        message:
-                            'This will retire ${offer.title} so you can create a replacement offer.',
-                        confirmLabel: 'Expire',
-                        icon: Icons.event_busy_outlined,
-                      );
-                      if (!confirmed || !context.mounted) {
-                        return;
-                      }
-                      await ref
-                          .read(offerActionsProvider.notifier)
-                          .expire(offer.id);
-                    },
-              icon: const Icon(Icons.event_busy_outlined),
-            ),
-          IconButton(
-            tooltip: 'Open offer',
-            onPressed: () => context.go('/offers/${offer.id}'),
-            icon: const Icon(Icons.arrow_forward),
+          const SizedBox(width: 10),
+          Wrap(
+            spacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (isOwner && !offer.isPublished)
+                IconButton(
+                  tooltip: 'Publish',
+                  onPressed: actionState.isLoading
+                      ? null
+                      : () => ref
+                            .read(offerActionsProvider.notifier)
+                            .publish(offer.id, true),
+                  icon: const Icon(Icons.visibility_outlined),
+                ),
+              if (!offer.isPublished)
+                IconButton(
+                  tooltip: 'Delete offer',
+                  onPressed: actionState.isLoading
+                      ? null
+                      : () async {
+                          final confirmed = await showSweetConfirmationDialog(
+                            context: context,
+                            title: 'Delete offer?',
+                            message:
+                                'This will remove ${offer.title} permanently.',
+                            confirmLabel: 'Delete',
+                          );
+                          if (!confirmed || !context.mounted) {
+                            return;
+                          }
+                          await ref
+                              .read(offerActionsProvider.notifier)
+                              .delete(offer.id);
+                        },
+                  icon: const Icon(Icons.delete_outline),
+                ),
+              if (offer.isPublished && !offer.isExpired)
+                IconButton(
+                  tooltip: 'Expire offer',
+                  onPressed: actionState.isLoading
+                      ? null
+                      : () async {
+                          final confirmed = await showSweetConfirmationDialog(
+                            context: context,
+                            title: 'Expire offer?',
+                            message:
+                                'This will retire ${offer.title} so you can create a replacement offer.',
+                            confirmLabel: 'Expire',
+                            icon: Icons.event_busy_outlined,
+                          );
+                          if (!confirmed || !context.mounted) {
+                            return;
+                          }
+                          await ref
+                              .read(offerActionsProvider.notifier)
+                              .expire(offer.id);
+                        },
+                  icon: const Icon(Icons.event_busy_outlined),
+                ),
+              IconButton(
+                tooltip: 'Duplicate offer',
+                onPressed: actionState.isLoading
+                    ? null
+                    : () async {
+                        final confirmed = await showSweetConfirmationDialog(
+                          context: context,
+                          title: 'Duplicate offer?',
+                          message:
+                              'This will create an editable copy of ${offer.title}.',
+                          confirmLabel: 'Duplicate',
+                          icon: Icons.copy_all_outlined,
+                        );
+                        if (!confirmed || !context.mounted) {
+                          return;
+                        }
+                        final duplicateId = await ref
+                            .read(offerActionsProvider.notifier)
+                            .duplicate(offer.id);
+                        if (duplicateId == null || !context.mounted) {
+                          return;
+                        }
+                        context.go('/offers/$duplicateId/edit');
+                      },
+                icon: const Icon(Icons.copy_all_outlined),
+              ),
+              IconButton(
+                tooltip: 'Open offer',
+                onPressed: () => context.go('/offers/${offer.id}'),
+                icon: const Icon(Icons.arrow_forward),
+              ),
+            ],
           ),
         ],
       ),
@@ -155,12 +205,16 @@ String _statusPillLabel(Offer offer) {
   }
   if (offer.status == 'rejected') return 'Rejected';
   if (offer.status == 'draft') return 'Draft';
-  return offer.status.isEmpty ? 'Pending Review' : offer.status;
+  return DisplayLabelUtils.slug(offer.status, fallback: 'Pending Review');
 }
 
 Color _statusPillColor(Offer offer) {
-  if (offer.isExpired) return Colors.black45;
+  if (offer.isExpired) return AppColors.inkMuted;
   if (offer.status == 'published' || offer.isPublished) return Colors.green;
+  if (offer.status == 'pending_review' || offer.status == 'pending') {
+    return AppColors.pendingReview;
+  }
   if (offer.status == 'rejected') return Colors.red;
-  return Colors.orange;
+  if (offer.status == 'draft') return AppColors.inkMuted;
+  return AppColors.pendingReview;
 }

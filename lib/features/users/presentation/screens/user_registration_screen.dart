@@ -4,13 +4,19 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/widgets/screen_layout.dart';
+import '../../../auth/domain/entities/user_role_utils.dart';
 import '../../../auth/domain/entities/user_roles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/domain/entities/brand.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
+import '../../../access/domain/app_feature_seed_data.dart';
+import '../../../access/domain/feature_access_utils.dart';
+import '../../../access/presentation/widgets/user_features_field.dart';
 import '../providers/user_registration_providers.dart';
+import '../widgets/user_roles_field.dart';
 
 class UserRegistrationScreen extends ConsumerStatefulWidget {
   const UserRegistrationScreen({super.key});
@@ -28,8 +34,12 @@ class _UserRegistrationScreenState
   final _passwordController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  String _role = UserRoles.mobileUser;
+  final _selectedRoleIds = {UserRoles.mobileUser};
+  final _selectedFeatureIds = <String>{
+    ...AppFeatureSeedData.defaultFeaturesByRole[UserRoles.mobileUser]!,
+  };
   String _brandId = '';
+  var _notificationEnabled = true;
 
   @override
   void dispose() {
@@ -44,9 +54,23 @@ class _UserRegistrationScreenState
     if (!_formKey.currentState!.validate()) {
       return;
     }
-    if (_role == UserRoles.brandAdmin && _brandId.isEmpty) {
+    if (_selectedRoleIds.isEmpty) {
+      if (mounted) {
+        showAppError(context, null, message: 'Select at least one role.');
+      }
+      return;
+    }
+    if (UserRoleUtils.requiresBrand(_selectedRoleIds.toList()) &&
+        _brandId.isEmpty) {
       if (mounted) {
         showAppError(context, null, message: 'Please select a brand.');
+      }
+      return;
+    }
+
+    if (_selectedFeatureIds.isEmpty) {
+      if (mounted) {
+        showAppError(context, null, message: 'Select at least one feature.');
       }
       return;
     }
@@ -58,8 +82,17 @@ class _UserRegistrationScreenState
           email: _emailController.text.trim(),
           password: _passwordController.text,
           phoneNumber: _phoneController.text.trim(),
-          role: _role,
+          roles: _selectedRoleIds.toList(),
           brandId: _brandId,
+          categoryIds: const [],
+          cityIds: const [],
+          brandIds: _brandId.isEmpty ? const [] : [_brandId],
+          notificationEnabled: _notificationEnabled,
+          isAdminEnabled: !UserRoleUtils.isMobileUserOnly(
+            _selectedRoleIds.toList(),
+          ),
+          isMobileAppEnabled: true,
+          featureIds: _selectedFeatureIds.toList(),
         );
   }
 
@@ -120,71 +153,85 @@ class _UserRegistrationScreenState
                         child: _phoneField(_phoneController, 'Phone number'),
                       ),
                       SizedBox(width: 360, child: _passwordField()),
-                      SizedBox(
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  UserRolesField(
+                    selectedRoleIds: _selectedRoleIds,
+                    onChanged: (roles) => setState(() {
+                      _selectedRoleIds
+                        ..clear()
+                        ..addAll(roles);
+                      if (!UserRoleUtils.requiresBrand(
+                        _selectedRoleIds.toList(),
+                      )) {
+                        _brandId = '';
+                      }
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  UserFeaturesField(
+                    selectedFeatureIds: _selectedFeatureIds,
+                    onChanged: (features) => setState(
+                      () => _selectedFeatureIds
+                        ..clear()
+                        ..addAll(features),
+                    ),
+                    onApplyRoleDefaults: () => setState(() {
+                      _selectedFeatureIds
+                        ..clear()
+                        ..addAll(
+                          FeatureAccessUtils.defaultFeatureIdsForRoles(
+                            _selectedRoleIds,
+                          ),
+                        );
+                    }),
+                  ),
+                  if (UserRoleUtils.requiresBrand(_selectedRoleIds.toList()))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: SizedBox(
                         width: 360,
                         child: DropdownButtonFormField<String>(
-                          initialValue: _role,
+                          initialValue: _brandId.isEmpty ? null : _brandId,
                           decoration: const InputDecoration(
-                            labelText: 'Role',
-                            prefixIcon: Icon(Icons.badge_outlined),
+                            labelText: 'Brand',
+                            prefixIcon: Icon(Icons.storefront_outlined),
                           ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: UserRoles.mobileUser,
-                              child: Text('Mobile User'),
-                            ),
-                            DropdownMenuItem(
-                              value: UserRoles.brandAdmin,
-                              child: Text('Brand Admin'),
-                            ),
-                            DropdownMenuItem(
-                              value: UserRoles.manager,
-                              child: Text('Manager'),
-                            ),
-                            DropdownMenuItem(
-                              value: UserRoles.superAdmin,
-                              child: Text('Super Admin'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            setState(() {
-                              _role = value ?? UserRoles.mobileUser;
-                              if (_role != UserRoles.brandAdmin) {
-                                _brandId = '';
-                              }
-                            });
+                          items: brands
+                              .map(
+                                (brand) => DropdownMenuItem(
+                                  value: brand.id,
+                                  child: Text(brand.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _brandId = value ?? ''),
+                          validator: (value) {
+                            if (UserRoleUtils.requiresBrand(
+                                  _selectedRoleIds.toList(),
+                                ) &&
+                                (value == null || value.isEmpty)) {
+                              return 'Brand is required';
+                            }
+                            return null;
                           },
                         ),
                       ),
-                      if (_role == UserRoles.brandAdmin)
-                        SizedBox(
-                          width: 360,
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _brandId.isEmpty ? null : _brandId,
-                            decoration: const InputDecoration(
-                              labelText: 'Brand',
-                              prefixIcon: Icon(Icons.storefront_outlined),
-                            ),
-                            items: brands
-                                .map(
-                                  (brand) => DropdownMenuItem(
-                                    value: brand.id,
-                                    child: Text(brand.name),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) =>
-                                setState(() => _brandId = value ?? ''),
-                            validator: (value) {
-                              if (_role == UserRoles.brandAdmin &&
-                                  (value == null || value.isEmpty)) {
-                                return 'Brand is required';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                    ],
+                    ),
+                  const SizedBox(height: 8),
+                  AppListTileMaterial(
+                    child: SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Notifications enabled'),
+                    subtitle: const Text(
+                      'Controls whether this user receives sale alerts.',
+                    ),
+                    value: _notificationEnabled,
+                    onChanged: (value) =>
+                        setState(() => _notificationEnabled = value),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Row(

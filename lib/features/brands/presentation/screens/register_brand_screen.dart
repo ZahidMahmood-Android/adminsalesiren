@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/errors/error_messages.dart';
+import '../../../../core/widgets/app_avatar.dart';
+import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../categories/presentation/providers/category_providers.dart';
 import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/brand.dart';
@@ -138,6 +141,19 @@ class _RegisterBrandScreenState extends ConsumerState<RegisterBrandScreen> {
       }
     });
 
+    final isManager = ref.watch(isManagerProvider);
+    if (isManager) {
+      return Center(
+        child: AppCard(
+          child: Text(
+            'Managers can add brands from Brands → New brand, but cannot '
+            'register a brand with a login account.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: screenPadding(context),
       child: Center(
@@ -207,16 +223,14 @@ class _RegisterBrandScreenState extends ConsumerState<RegisterBrandScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: matches.map((brand) {
-                          return ListTile(
+                          return AppListTileMaterial(
+                            child: ListTile(
                             dense: true,
-                            leading: brand.logoUrl.isNotEmpty
-                                ? CircleAvatar(
-                                    backgroundImage: NetworkImage(
-                                      brand.logoUrl,
-                                    ),
-                                    radius: 14,
-                                  )
-                                : const Icon(Icons.storefront_outlined),
+                            leading: AppAvatar(
+                              name: brand.name,
+                              imageUrl: brand.logoUrl,
+                              radius: 14,
+                            ),
                             title: Text(brand.name),
                             subtitle: Text('ID: ${brand.id}'),
                             onTap: () => setState(() {
@@ -235,6 +249,7 @@ class _RegisterBrandScreenState extends ConsumerState<RegisterBrandScreen> {
                               _contactEmail.text = brand.businessContactEmail;
                               _marketingEmail.text = brand.marketingEmail;
                             }),
+                            ),
                           );
                         }).toList(),
                       ),
