@@ -28,6 +28,7 @@ Rules that keep schema changes backwards-compatible and non-breaking for existin
 - `offers`
 - `offer_reports`
 - `offer_push_jobs`
+- `registration_email_verification_jobs`
 - `notification_requests`
 - `notification_campaigns` (future broadcast tooling)
 - `app_settings`

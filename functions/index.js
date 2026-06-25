@@ -1,4 +1,6 @@
 const { initializeApp } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+const crypto = require('crypto');
 const {
   getFirestore,
   FieldPath,
@@ -7,7 +9,7 @@ const {
 } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { getStorage } = require('firebase-admin/storage');
-const { onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentWritten, onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -26,6 +28,23 @@ setGlobalOptions({
   region: 'us-central1',
   serviceAccount: PUSH_RUNTIME_SERVICE_ACCOUNT,
 });
+
+/** CORS for admin-panel Flutter web (localhost + production hosts). */
+const ADMIN_WEB_CALLABLE_CORS = [
+  /^https?:\/\/localhost(?::\d+)?$/,
+  /^https?:\/\/127\.0\.0\.1(?::\d+)?$/,
+  /^https:\/\/salesiren\.bytecinch\.com$/,
+  /^https:\/\/salesiren-5539c\.web\.app$/,
+  /^https:\/\/salesiren-5539c\.firebaseapp\.com$/,
+];
+
+function adminCallableOptions() {
+  return {
+    region: 'us-central1',
+    invoker: 'public',
+    cors: ADMIN_WEB_CALLABLE_CORS,
+  };
+}
 
 initializeApp();
 
@@ -244,6 +263,191 @@ async function canCallerDispatchOfferPush(db, uid) {
 
   const adminDoc = await db.collection('admins').doc(uid).get();
   return adminDoc.exists && canDispatchOfferPush(adminDoc.data());
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} uid
+ */
+async function isCallerOwner(db, uid) {
+  const userDoc = await db.collection('users').doc(uid).get();
+  if (userDoc.exists) {
+    const roles = resolveUserRoles(userDoc.data());
+    if (roles.includes('owner')) {
+      return true;
+    }
+  }
+
+  const adminDoc = await db.collection('admins').doc(uid).get();
+  return adminDoc.exists && adminDoc.data()?.role === 'owner';
+}
+
+/**
+ * @param {string} email
+ */
+function normalizeRegistrationEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} email
+ */
+async function registrationEmailProfileExists(db, email) {
+  const snapshot = await db
+    .collection('users')
+    .where('email', '==', email)
+    .limit(1)
+    .get();
+  return !snapshot.empty;
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} uid
+ */
+async function assertCallerOwner(db, uid) {
+  if (!(await isCallerOwner(db, uid))) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only owners can manage registration email verification.',
+    );
+  }
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} email
+ * @returns {Promise<{uid: string, email: string, customToken?: string, alreadyVerified?: boolean}>}
+ */
+async function startRegistrationEmailVerificationCore(db, email) {
+  const normalized = normalizeRegistrationEmail(email);
+  if (!normalized || !normalized.includes('@')) {
+    throw new HttpsError('invalid-argument', 'Enter a valid email address.');
+  }
+
+  if (await registrationEmailProfileExists(db, normalized)) {
+    throw new HttpsError(
+      'already-exists',
+      'A user profile with this email already exists.',
+    );
+  }
+
+  const auth = getAuth();
+  let uid;
+
+  try {
+    const existing = await auth.getUserByEmail(normalized);
+    if (existing.emailVerified) {
+      return {
+        uid: existing.uid,
+        email: normalized,
+        alreadyVerified: true,
+      };
+    }
+    uid = existing.uid;
+  } catch (error) {
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    if (error.code !== 'auth/user-not-found') {
+      throw error;
+    }
+
+    const password = crypto.randomBytes(24).toString('base64url');
+    const created = await auth.createUser({
+      email: normalized,
+      password,
+      emailVerified: false,
+    });
+    uid = created.uid;
+  }
+
+  const customToken = await auth.createCustomToken(uid);
+  return { uid, customToken, email: normalized };
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} email
+ */
+async function checkRegistrationEmailStatusCore(db, email) {
+  const normalized = normalizeRegistrationEmail(email);
+  if (!normalized || !normalized.includes('@')) {
+    throw new HttpsError('invalid-argument', 'Enter a valid email address.');
+  }
+
+  const hasProfile = await registrationEmailProfileExists(db, normalized);
+  const auth = getAuth();
+
+  try {
+    const user = await auth.getUserByEmail(normalized);
+    return {
+      uid: user.uid,
+      verified: user.emailVerified === true,
+      hasProfile,
+      canRegister: user.emailVerified === true && !hasProfile,
+    };
+  } catch (error) {
+    if (error.code === 'auth/user-not-found') {
+      return {
+        uid: null,
+        verified: false,
+        hasProfile,
+        canRegister: false,
+      };
+    }
+    throw error;
+  }
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} email
+ */
+async function cancelRegistrationEmailVerificationCore(db, email) {
+  const normalized = normalizeRegistrationEmail(email);
+  if (!normalized || !normalized.includes('@')) {
+    throw new HttpsError('invalid-argument', 'Enter a valid email address.');
+  }
+
+  if (await registrationEmailProfileExists(db, normalized)) {
+    return { cancelled: false, reason: 'profile_exists' };
+  }
+
+  const auth = getAuth();
+  try {
+    const user = await auth.getUserByEmail(normalized);
+    if (user.emailVerified) {
+      return { cancelled: false, reason: 'already_verified' };
+    }
+    await auth.deleteUser(user.uid);
+    return { cancelled: true, uid: user.uid, email: normalized };
+  } catch (error) {
+    if (error.code === 'auth/user-not-found') {
+      return { cancelled: true, reason: 'not_found' };
+    }
+    throw error;
+  }
+}
+
+/**
+ * @param {unknown} error
+ */
+function registrationJobErrorFields(error) {
+  if (error instanceof HttpsError) {
+    return { errorCode: error.code, errorMessage: error.message };
+  }
+  if (error && typeof error === 'object' && 'code' in error) {
+    return {
+      errorCode: String(error.code),
+      errorMessage: String(error.message || 'Unknown error'),
+    };
+  }
+  return {
+    errorCode: 'internal',
+    errorMessage: error instanceof Error ? error.message : 'Unknown error',
+  };
 }
 
 /**
@@ -1020,7 +1224,9 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
   let successCount = 0;
   let lastFcmError = null;
   const imageUrl =
-    content.includeImage === true && typeof content.imageUrl === 'string'
+    content.includeImage !== false &&
+    typeof content.imageUrl === 'string' &&
+    content.imageUrl.trim()
       ? content.imageUrl.trim()
       : '';
 
@@ -1055,6 +1261,7 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
       apns: {
         headers: {
           'apns-priority': '10',
+          ...(imageUrl ? { 'apns-push-type': 'alert' } : {}),
         },
         payload: {
           aps: {
@@ -1063,6 +1270,7 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
               body: content.body,
             },
             sound: 'default',
+            ...(imageUrl ? { 'mutable-content': 1 } : {}),
           },
         },
         ...(imageUrl ? { fcmOptions: { imageUrl } } : {}),
@@ -1244,7 +1452,7 @@ exports.dispatchOfferPushOnJob = onDocumentWritten(
 );
 
 exports.sendOfferPush = onCall(
-  { region: 'us-central1', invoker: 'public', cors: true },
+  adminCallableOptions(),
   async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -1301,3 +1509,165 @@ exports.sendOfferPush = onCall(
     invalidTokenCount: String(result.invalidTokenCount || 0),
   };
 });
+
+exports.adminStartRegistrationEmailVerification = onCall(
+  adminCallableOptions(),
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Sign in required.');
+    }
+
+    const db = getFirestore();
+    await assertCallerOwner(db, request.auth.uid);
+
+    const result = await startRegistrationEmailVerificationCore(
+      db,
+      request.data?.email,
+    );
+    logger.info('adminStartRegistrationEmailVerification', {
+      email: result.email,
+      uid: result.uid,
+      callerUid: request.auth.uid,
+    });
+
+    return { uid: result.uid, customToken: result.customToken ?? '', alreadyVerified: result.alreadyVerified === true };
+  },
+);
+
+exports.adminCheckRegistrationEmailStatus = onCall(
+  adminCallableOptions(),
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Sign in required.');
+    }
+
+    const db = getFirestore();
+    await assertCallerOwner(db, request.auth.uid);
+
+    return checkRegistrationEmailStatusCore(db, request.data?.email);
+  },
+);
+
+exports.adminCancelRegistrationEmailVerification = onCall(
+  adminCallableOptions(),
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Sign in required.');
+    }
+
+    const db = getFirestore();
+    await assertCallerOwner(db, request.auth.uid);
+
+    const result = await cancelRegistrationEmailVerificationCore(
+      db,
+      request.data?.email,
+    );
+    if (result.cancelled && result.uid) {
+      logger.info('adminCancelRegistrationEmailVerification', {
+        email: result.email,
+        uid: result.uid,
+        callerUid: request.auth.uid,
+      });
+    }
+    return {
+      cancelled: result.cancelled,
+      reason: result.reason,
+    };
+  },
+);
+
+exports.dispatchRegistrationEmailVerificationJob = onDocumentCreated(
+  'registration_email_verification_jobs/{jobId}',
+  async (event) => {
+    const snap = event.data;
+    if (!snap) {
+      return;
+    }
+
+    const data = snap.data() || {};
+    if (data.status !== 'pending') {
+      return;
+    }
+
+    const db = getFirestore();
+    const requestedByUid = String(data.requestedByUid || '').trim();
+    const action = String(data.action || '').trim();
+
+    try {
+      if (!requestedByUid) {
+        throw new HttpsError('invalid-argument', 'requestedByUid is required.');
+      }
+      await assertCallerOwner(db, requestedByUid);
+
+      if (action === 'start') {
+        const result = await startRegistrationEmailVerificationCore(db, data.email);
+        await snap.ref.update({
+          status: 'ready',
+          uid: result.uid,
+          customToken: result.customToken || '',
+          alreadyVerified: result.alreadyVerified === true,
+          completedAt: FieldValue.serverTimestamp(),
+        });
+        logger.info('registration_email_verification_jobs start', {
+          jobId: snap.id,
+          email: result.email,
+          uid: result.uid,
+          requestedByUid,
+        });
+        return;
+      }
+
+      if (action === 'check_status') {
+        const result = await checkRegistrationEmailStatusCore(db, data.email);
+        await snap.ref.update({
+          status: 'ready',
+          uid: result.uid || '',
+          verified: result.verified === true,
+          hasProfile: result.hasProfile === true,
+          canRegister: result.canRegister === true,
+          completedAt: FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+
+      if (action === 'cancel') {
+        const result = await cancelRegistrationEmailVerificationCore(
+          db,
+          data.email,
+        );
+        await snap.ref.update({
+          status: 'ready',
+          cancelled: result.cancelled === true,
+          cancelReason: result.reason || '',
+          completedAt: FieldValue.serverTimestamp(),
+        });
+        if (result.cancelled && result.uid) {
+          logger.info('registration_email_verification_jobs cancel', {
+            jobId: snap.id,
+            email: result.email,
+            uid: result.uid,
+            requestedByUid,
+          });
+        }
+        return;
+      }
+
+      throw new HttpsError('invalid-argument', `Unknown action: ${action}`);
+    } catch (error) {
+      const { errorCode, errorMessage } = registrationJobErrorFields(error);
+      await snap.ref.update({
+        status: 'failed',
+        errorCode,
+        errorMessage,
+        completedAt: FieldValue.serverTimestamp(),
+      });
+      logger.error('registration_email_verification_jobs failed', {
+        jobId: snap.id,
+        action,
+        requestedByUid,
+        errorCode,
+        errorMessage,
+      });
+    }
+  },
+);

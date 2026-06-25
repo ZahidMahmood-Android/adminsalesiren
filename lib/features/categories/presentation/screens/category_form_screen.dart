@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/category.dart';
@@ -74,12 +74,13 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
         .save(category, isEditing: _isEditing);
     final actionState = ref.read(categoryActionsProvider);
     if (actionState.hasError && mounted) {
-      if (mounted)
+      if (mounted) {
         await showAppError(
           context,
           actionState.error,
           title: 'Could Not Save Category',
         );
+      }
       return;
     }
     if (mounted) {
@@ -134,109 +135,110 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
         if (category != null) {
           _hydrate(category);
         }
-        return SingleChildScrollView(
-          padding: screenPadding(context),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: AppCard(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _isEditing ? 'Edit category' : 'New category',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w900),
+        return AppLoadingOverlay(
+          isLoading: actionState.isLoading,
+          child: SingleChildScrollView(
+            padding: screenPadding(context),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: AppCard(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _isEditing ? 'Edit category' : 'New category',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
                             ),
+                            if (_isEditing && canManageCategory)
+                              IconButton(
+                                tooltip: 'Delete category',
+                                onPressed: actionState.isLoading
+                                    ? null
+                                    : _delete,
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 22),
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Category name',
+                            prefixIcon: Icon(Icons.category_outlined),
                           ),
-                          if (_isEditing && canManageCategory)
-                            IconButton(
-                              tooltip: 'Delete category',
-                              onPressed: actionState.isLoading ? null : _delete,
-                              icon: const Icon(Icons.delete_outline),
+                          validator: (value) => (value ?? '').trim().isEmpty
+                              ? 'Category name is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _idController,
+                          enabled: !_isEditing,
+                          decoration: const InputDecoration(
+                            labelText: 'Category ID',
+                            prefixIcon: Icon(Icons.key_outlined),
+                          ),
+                          validator: (value) => (value ?? '').trim().isEmpty
+                              ? 'Category ID is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _iconController,
+                          decoration: const InputDecoration(
+                            labelText: 'Icon name',
+                            prefixIcon: Icon(Icons.image_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _sortOrderController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Sort order',
+                            prefixIcon: Icon(Icons.sort),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        AppListTileMaterial(
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Active category'),
+                            value: _isActive,
+                            onChanged: (value) =>
+                                setState(() => _isActive = value),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton(
+                              onPressed: () => context.go('/categories'),
+                              child: const Text('Cancel'),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Category name',
-                          prefixIcon: Icon(Icons.category_outlined),
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed: actionState.isLoading ? null : _submit,
+                              icon: AppAsyncButtonIcon(
+                                isLoading: actionState.isLoading,
+                                icon: Icons.save_outlined,
+                              ),
+                              label: const Text('Save category'),
+                            ),
+                          ],
                         ),
-                        validator: (value) => (value ?? '').trim().isEmpty
-                            ? 'Category name is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _idController,
-                        enabled: !_isEditing,
-                        decoration: const InputDecoration(
-                          labelText: 'Category ID',
-                          prefixIcon: Icon(Icons.key_outlined),
-                        ),
-                        validator: (value) => (value ?? '').trim().isEmpty
-                            ? 'Category ID is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _iconController,
-                        decoration: const InputDecoration(
-                          labelText: 'Icon name',
-                          prefixIcon: Icon(Icons.image_outlined),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _sortOrderController,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Sort order',
-                          prefixIcon: Icon(Icons.sort),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      AppListTileMaterial(
-                        child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Active category'),
-                        value: _isActive,
-                        onChanged: (value) => setState(() => _isActive = value),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => context.go('/categories'),
-                            child: const Text('Cancel'),
-                          ),
-                          const SizedBox(width: 12),
-                          FilledButton.icon(
-                            onPressed: actionState.isLoading ? null : _submit,
-                            icon: actionState.isLoading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save_outlined),
-                            label: const Text('Save category'),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

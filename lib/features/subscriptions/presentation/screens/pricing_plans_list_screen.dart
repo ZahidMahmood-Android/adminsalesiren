@@ -78,36 +78,38 @@ class PricingPlansListScreen extends ConsumerWidget {
                     delay: Duration(milliseconds: index * 30),
                     child: AppListTileMaterial(
                       child: ListTile(
-                      title: Text(
-                        plan.name,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        '${plan.currency} ${plan.monthlyPrice}/mo · '
-                        '${plan.offerLimitPerMonth} offers · '
-                        '${plan.activeOfferLimit} active',
-                      ),
-                      trailing: Wrap(
-                        spacing: 8,
-                        children: [
-                          if (!plan.isPublic)
-                            const AppBadge(
-                              label: 'Private',
-                              color: Colors.grey,
+                        title: Text(
+                          plan.name,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(
+                          '${plan.currency} ${plan.monthlyPrice}/mo · '
+                          '${plan.offerLimitPerMonth} offers · '
+                          '${plan.activeOfferLimit} active',
+                        ),
+                        trailing: Wrap(
+                          spacing: 8,
+                          children: [
+                            if (!plan.isPublic)
+                              const AppBadge(
+                                label: 'Private',
+                                color: Colors.grey,
+                              ),
+                            if (!plan.isActive)
+                              const AppBadge(
+                                label: 'Inactive',
+                                color: Colors.red,
+                              ),
+                            AppBadge(
+                              label: DisplayLabelUtils.slug(
+                                plan.analyticsLevel,
+                              ),
+                              color: Colors.blue,
                             ),
-                          if (!plan.isActive)
-                            const AppBadge(
-                              label: 'Inactive',
-                              color: Colors.red,
-                            ),
-                          AppBadge(
-                            label: DisplayLabelUtils.slug(plan.analyticsLevel),
-                            color: Colors.blue,
-                          ),
-                        ],
-                      ),
-                      onTap: () =>
-                          context.go('/subscriptions/plans/${plan.id}'),
+                          ],
+                        ),
+                        onTap: () =>
+                            context.go('/subscriptions/plans/${plan.id}'),
                       ),
                     ),
                   );

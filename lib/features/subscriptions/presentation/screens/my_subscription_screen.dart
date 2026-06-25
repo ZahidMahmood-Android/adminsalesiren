@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/animated_content.dart';
-import '../../../../core/widgets/app_badge.dart';
 import '../../../../core/widgets/app_status_chip.dart';
 import '../../../../core/utils/display_label_utils.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -86,7 +85,9 @@ class MySubscriptionScreen extends ConsumerWidget {
                           const Spacer(),
                           AppStatusChip(
                             status: sub.status,
-                            customColor: sub.isUsable ? Colors.green : Colors.orange,
+                            customColor: sub.isUsable
+                                ? Colors.green
+                                : Colors.orange,
                           ),
                         ],
                       ),

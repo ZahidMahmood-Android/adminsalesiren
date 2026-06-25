@@ -281,6 +281,7 @@ Always log the change **before** implementing. Also update every **related** doc
 | `docs/keys-and-secrets.md` | **Local only** (gitignored) — real keys & secrets | Copy from template; never commit |
 | `docs/logging.md` | Logging conventions | Logger setup or log-level policy |
 | `docs/BUILD_AND_RUN.md` | Local build/run commands | Build flags, run targets, platform setup |
+| `docs/release-management.md` | **Web release log** (required before release build) | Version, deploy target, release notes each build |
 
 **Checklist (apply what fits):**
 

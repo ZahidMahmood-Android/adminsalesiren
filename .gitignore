@@ -42,6 +42,26 @@ app.*.map.json
 # Local secrets (use docs/keys-and-secrets.template.md to create)
 docs/keys-and-secrets.md
 
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Firebase local tooling
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Node (Cloud Functions)
+functions/node_modules/
+
+# IDE / editor local
+.cursor/
+
+# Release / dist copies outside Flutter build/
+dist/
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

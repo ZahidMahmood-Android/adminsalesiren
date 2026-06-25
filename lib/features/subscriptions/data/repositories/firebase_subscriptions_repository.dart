@@ -12,13 +12,11 @@ import '../pricing_plan_seed_data.dart';
 class FirebaseSubscriptionsRepository implements SubscriptionsRepository {
   FirebaseSubscriptionsRepository(
     this._firestore,
-    this._userId,
     this._userRole,
     this._brandId,
   );
 
   final FirebaseFirestore _firestore;
-  final String _userId;
   final String _userRole;
   final String _brandId;
   final _log = AppLogger.get('FirebaseSubscriptionsRepository');

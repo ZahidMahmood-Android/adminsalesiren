@@ -52,7 +52,7 @@ class _BrandUsageListScreenState extends ConsumerState<BrandUsageListScreen> {
             return ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 220),
               child: DropdownButtonFormField<String?>(
-                value: _selectedBrandId,
+                initialValue: _selectedBrandId,
                 isDense: true,
                 decoration: const InputDecoration(
                   labelText: 'Filter by brand',

@@ -13,6 +13,7 @@ import '../../../brands/presentation/widgets/url_sources_field.dart';
 import '../../../categories/domain/entities/category.dart' as app_category;
 import '../../../cities/domain/entities/city.dart';
 import '../../domain/entities/offer.dart';
+import '../../domain/entities/offer_image_upload_task.dart';
 import '../../domain/entities/offer_line.dart';
 import 'offer_form_controls.dart';
 
@@ -37,12 +38,14 @@ class OfferLineDraft {
     this.imageDisplayMode = 'carousel',
     List<String>? imageUrls,
     List<XFile>? pickedImages,
+    List<OfferImageUploadTask>? imageUploads,
     List<BrandUrlSource>? linkSources,
   }) : selectedCityIds = selectedCityIds ?? <String>{},
        startDate = startDate ?? _defaultStartDate(),
        endDate = endDate ?? _defaultEndDate(),
        imageUrls = imageUrls ?? <String>[],
        pickedImages = pickedImages ?? <XFile>[],
+       imageUploads = imageUploads ?? <OfferImageUploadTask>[],
        linkSources =
            linkSources ??
            BrandUrlSourceUtils.copyList(BrandUrlSource.defaultTemplates());
@@ -66,6 +69,7 @@ class OfferLineDraft {
   String imageDisplayMode;
   List<String> imageUrls;
   List<XFile> pickedImages;
+  List<OfferImageUploadTask> imageUploads;
   List<BrandUrlSource> linkSources;
 
   static DateTime _defaultStartDate() {
@@ -181,7 +185,14 @@ class OfferLineDraft {
     );
   }
 
-  bool get hasImages => imageUrls.isNotEmpty || pickedImages.isNotEmpty;
+  bool get hasImages => imageUrls.isNotEmpty;
+
+  bool get isUploadingImages => imageUploads.any((task) => task.isActive);
+
+  bool get hasFailedUploads =>
+      imageUploads.any((task) => task.status == OfferImageUploadStatus.failed);
+
+  bool get imagesReady => hasImages && !isUploadingImages && !hasFailedUploads;
 
   bool get isEffectivelyEmpty =>
       title.trim().isEmpty &&
@@ -189,6 +200,7 @@ class OfferLineDraft {
       (categoryId == null || categoryId!.isEmpty) &&
       discountText.trim().isEmpty &&
       imageUrls.isEmpty &&
+      imageUploads.isEmpty &&
       pickedImages.isEmpty &&
       linkSources.every((source) => !source.hasUrl) &&
       (brandId == null || brandId!.isEmpty) &&
@@ -308,6 +320,8 @@ class OfferLinesEditor extends StatelessWidget {
     required this.onChanged,
     required this.onPickImages,
     required this.onPickDate,
+    required this.onRetryUpload,
+    required this.onRemoveUpload,
     this.allowMultiple = true,
     this.isBrandScopedUser = false,
     this.scopedBrandId,
@@ -324,6 +338,8 @@ class OfferLinesEditor extends StatelessWidget {
   final ValueChanged<List<OfferLineDraft>> onChanged;
   final Future<void> Function(int index) onPickImages;
   final Future<void> Function(int index, {required bool start}) onPickDate;
+  final void Function(int index, String taskId) onRetryUpload;
+  final void Function(int index, String taskId) onRemoveUpload;
   final bool allowMultiple;
   final bool isBrandScopedUser;
   final String? scopedBrandId;
@@ -406,6 +422,8 @@ class OfferLinesEditor extends StatelessWidget {
               },
               onPickImages: () => onPickImages(index),
               onPickDate: (start) => onPickDate(index, start: start),
+              onRetryUpload: (taskId) => onRetryUpload(index, taskId),
+              onRemoveUpload: (taskId) => onRemoveUpload(index, taskId),
             ),
           );
         }),
@@ -526,6 +544,8 @@ class _OfferLineCard extends StatelessWidget {
     required this.onRemove,
     required this.onPickImages,
     required this.onPickDate,
+    required this.onRetryUpload,
+    required this.onRemoveUpload,
   });
 
   final int index;
@@ -543,6 +563,8 @@ class _OfferLineCard extends StatelessWidget {
   final VoidCallback onRemove;
   final VoidCallback onPickImages;
   final Future<void> Function(bool start) onPickDate;
+  final void Function(String taskId) onRetryUpload;
+  final void Function(String taskId) onRemoveUpload;
 
   Brand? _brandById(String? id) {
     if (id == null || id.isEmpty) {
@@ -627,7 +649,7 @@ class _OfferLineCard extends StatelessWidget {
                 else
                   DropdownBox(
                     child: DropdownButtonFormField<String>(
-                      value: line.status,
+                      initialValue: line.status,
                       decoration: const InputDecoration(
                         labelText: 'Status',
                         prefixIcon: Icon(Icons.info_outline),
@@ -652,7 +674,7 @@ class _OfferLineCard extends StatelessWidget {
                   ),
                 DropdownBox(
                   child: DropdownButtonFormField<bool>(
-                    value: line.isVerified,
+                    initialValue: line.isVerified,
                     decoration: const InputDecoration(
                       labelText: 'Verification',
                       prefixIcon: Icon(Icons.verified_outlined),
@@ -674,7 +696,7 @@ class _OfferLineCard extends StatelessWidget {
                 ),
                 DropdownBox(
                   child: DropdownButtonFormField<String>(
-                    value: line.lifecycleStatus,
+                    initialValue: line.lifecycleStatus,
                     decoration: const InputDecoration(
                       labelText: 'Offer lifecycle',
                       prefixIcon: Icon(Icons.timeline_outlined),
@@ -826,7 +848,7 @@ class _OfferLineCard extends StatelessWidget {
               children: [
                 DropdownBox(
                   child: DropdownButtonFormField<String>(
-                    value: _singleMatchingValue(
+                    initialValue: _singleMatchingValue(
                       line.categoryId,
                       categories.map((item) => item.id),
                     ),
@@ -866,7 +888,7 @@ class _OfferLineCard extends StatelessWidget {
                 ),
                 DropdownBox(
                   child: DropdownButtonFormField<String>(
-                    value: line.discountType,
+                    initialValue: line.discountType,
                     decoration: const InputDecoration(
                       labelText: 'Discount type',
                     ),
@@ -930,10 +952,10 @@ class _OfferLineCard extends StatelessWidget {
             const SizedBox(height: 14),
             ImagePickerPanel(
               imageUrls: line.imageUrls,
-              pickedImageNames: line.pickedImages
-                  .map((image) => image.name)
-                  .toList(),
+              imageUploads: line.imageUploads,
               onPick: lockedOffer ? () {} : onPickImages,
+              onRetryUpload: lockedOffer ? null : onRetryUpload,
+              onRemoveUpload: lockedOffer ? null : onRemoveUpload,
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -945,24 +967,24 @@ class _OfferLineCard extends StatelessWidget {
                   width: 300,
                   child: AppListTileMaterial(
                     child: SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Auto-advance slider'),
-                    subtitle: const Text(
-                      'Mobile carousel moves to the next image automatically.',
-                    ),
-                    value: line.imageSliderAutoPlay,
-                    onChanged: lockedOffer
-                        ? null
-                        : (value) {
-                            line.imageSliderAutoPlay = value;
-                            onChanged();
-                          },
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Auto-advance slider'),
+                      subtitle: const Text(
+                        'Mobile carousel moves to the next image automatically.',
+                      ),
+                      value: line.imageSliderAutoPlay,
+                      onChanged: lockedOffer
+                          ? null
+                          : (value) {
+                              line.imageSliderAutoPlay = value;
+                              onChanged();
+                            },
                     ),
                   ),
                 ),
                 DropdownBox(
                   child: DropdownButtonFormField<String>(
-                    value: line.imageDisplayMode,
+                    initialValue: line.imageDisplayMode,
                     decoration: const InputDecoration(
                       labelText: 'Offer detail image view',
                       prefixIcon: Icon(Icons.view_carousel_outlined),
@@ -1154,7 +1176,13 @@ String? validateOfferDrafts(
     if (draft.discountText.trim().isEmpty) {
       return 'Enter discount text for $label.';
     }
-    if (!draft.hasImages) {
+    if (!draft.imagesReady) {
+      if (draft.isUploadingImages) {
+        return 'Wait for image uploads to finish for $label.';
+      }
+      if (draft.hasFailedUploads) {
+        return 'Retry or remove failed image uploads for $label.';
+      }
       return 'Upload at least one image for $label.';
     }
     if (draft.isFeatured && !draft.isVerified) {

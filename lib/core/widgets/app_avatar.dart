@@ -23,13 +23,12 @@ class AppAvatar extends StatelessWidget {
 
   const AppAvatar.icon({
     super.key,
-    required IconData icon,
+    required IconData this._icon,
     this.radius = 20,
     this.backgroundColor,
     this.foregroundColor,
   }) : name = '',
-       imageUrl = null,
-       _icon = icon;
+       imageUrl = null;
 
   final String name;
   final String? imageUrl;
@@ -59,7 +58,7 @@ class AppAvatar extends StatelessWidget {
             width: size,
             height: size,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _fallbackSurface(bg, size, fallback),
+            errorBuilder: (_, _, _) => _fallbackSurface(bg, size, fallback),
             loadingBuilder: (context, child, progress) {
               if (progress == null) {
                 return child;

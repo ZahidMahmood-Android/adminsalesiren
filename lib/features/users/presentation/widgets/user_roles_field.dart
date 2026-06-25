@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../auth/domain/entities/user_role_utils.dart';
 import '../../../roles/presentation/providers/role_providers.dart';
 
 class UserRolesField extends ConsumerWidget {
@@ -38,17 +39,20 @@ class UserRolesField extends ConsumerWidget {
           spacing: 8,
           runSpacing: 8,
           children: roles.map((role) {
-            final selected = selectedRoleIds.contains(role.id);
+            final roleKey = UserRoleUtils.normalizeRole(role.id);
+            final selected = selectedRoleIds.any(
+              (id) => UserRoleUtils.normalizeRole(id) == roleKey,
+            );
             return FilterChip(
               label: Text(role.name),
               selected: selected,
               tooltip: role.description.isEmpty ? role.name : role.description,
               onSelected: (value) {
-                final next = {...selectedRoleIds};
+                final next = selectedRoleIds
+                    .where((id) => UserRoleUtils.normalizeRole(id) != roleKey)
+                    .toSet();
                 if (value) {
-                  next.add(role.id);
-                } else {
-                  next.remove(role.id);
+                  next.add(roleKey);
                 }
                 onChanged(next);
               },

@@ -2,7 +2,7 @@
   "name": "salesiren-functions",
   "description": "Firebase Cloud Functions for Salesiren",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "dependencies": {

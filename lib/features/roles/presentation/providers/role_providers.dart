@@ -9,12 +9,13 @@ final rolesCatalogProvider = StreamProvider.autoDispose<List<AppRole>>((ref) {
   return ref.watch(firestoreProvider).collection('roles').snapshots().map((
     snapshot,
   ) {
-    final roles = snapshot.docs.map(_roleFromSnapshot).where((role) {
-      return role.isActive;
-    }).toList()..sort((a, b) {
-      final order = a.sortOrder.compareTo(b.sortOrder);
-      return order == 0 ? a.name.compareTo(b.name) : order;
-    });
+    final roles =
+        snapshot.docs.map(_roleFromSnapshot).where((role) {
+          return role.isActive;
+        }).toList()..sort((a, b) {
+          final order = a.sortOrder.compareTo(b.sortOrder);
+          return order == 0 ? a.name.compareTo(b.name) : order;
+        });
     return roles;
   });
 });

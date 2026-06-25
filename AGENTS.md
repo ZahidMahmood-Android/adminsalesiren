@@ -6,7 +6,7 @@
 
 - Log **features/updates** in `docs/updates-and-features.md` before coding.
 - Log **bug fixes** in `docs/bug-fixes.md` before coding.
-- Update **all related docs** when the task needs it (schema, rules sync, functions deploy, keys, etc.) — see `instructions.md` section 15.
+- Update **all related docs** when the task needs it (schema, rules sync, functions deploy, keys, **release-management** for web builds, etc.) — see `instructions.md` section 15.
 - Complete only the requested task; smallest safe change.
 - Do not run, build, test, deploy, or git-commit unless explicitly asked.
 

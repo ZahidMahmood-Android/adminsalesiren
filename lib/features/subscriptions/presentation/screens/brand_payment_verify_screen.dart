@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/display_label_utils.dart';
@@ -128,6 +129,7 @@ class _PaymentDetailViewState extends ConsumerState<_PaymentDetailView> {
 
     return ScreenScaffold(
       title: 'Payment Details',
+      loading: actionState.isLoading,
       child: SingleChildScrollView(
         padding: screenPadding(context),
         child: Column(
@@ -241,7 +243,7 @@ class _PaymentDetailViewState extends ConsumerState<_PaymentDetailView> {
                       child: Image.network(
                         payment.proofImageUrl,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Padding(
+                        errorBuilder: (_, _, _) => const Padding(
                           padding: EdgeInsets.all(12),
                           child: Text('Could not load proof image.'),
                         ),
@@ -286,15 +288,10 @@ class _PaymentDetailViewState extends ConsumerState<_PaymentDetailView> {
                         const Spacer(),
                         FilledButton.icon(
                           onPressed: actionState.isLoading ? null : _verify,
-                          icon: actionState.isLoading
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.verified_outlined),
+                          icon: AppAsyncButtonIcon(
+                            isLoading: actionState.isLoading,
+                            icon: Icons.verified_outlined,
+                          ),
                           label: const Text('Mark Verified'),
                         ),
                       ],

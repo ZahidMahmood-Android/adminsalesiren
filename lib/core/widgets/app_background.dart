@@ -20,8 +20,8 @@ class AppBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final doodleColor = isDark
-        ? AppColors.freshGreen.withOpacity(0.04)
-        : AppColors.deepGreen.withOpacity(0.045);
+        ? AppColors.freshGreen.withValues(alpha: 0.04)
+        : AppColors.deepGreen.withValues(alpha: 0.045);
 
     return Stack(
       children: [
@@ -111,7 +111,7 @@ class _DoodlePainter extends CustomPainter {
 
     // ── Corner accent — large quarter-circle ───────────────────────────
     final accentPaint = Paint()
-      ..color = color.withOpacity(color.opacity * 0.7)
+      ..color = color.withValues(alpha: color.a * 0.7)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
 

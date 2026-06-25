@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:html' as html;
 
+import '../../../../core/platform/browser_platform.dart';
 import '../../presentation/widgets/offer_lines_editor.dart';
 
 class OfferCreateDraftStorage {
@@ -12,7 +12,7 @@ class OfferCreateDraftStorage {
     if (userId.isEmpty) {
       return null;
     }
-    final raw = html.window.localStorage[_keyForUser(userId)];
+    final raw = readLocalStorage(_keyForUser(userId));
     if (raw == null || raw.isEmpty) {
       return null;
     }
@@ -53,13 +53,13 @@ class OfferCreateDraftStorage {
       'updatedAt': DateTime.now().toIso8601String(),
       'lines': lines.map((line) => line.toJson()).toList(),
     });
-    html.window.localStorage[_keyForUser(userId)] = payload;
+    writeLocalStorage(_keyForUser(userId), payload);
   }
 
   static void clear(String userId) {
     if (userId.isEmpty) {
       return;
     }
-    html.window.localStorage.remove(_keyForUser(userId));
+    removeLocalStorage(_keyForUser(userId));
   }
 }

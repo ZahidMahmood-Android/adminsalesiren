@@ -22,6 +22,8 @@ class AppFeatureIds {
   static const adminSubscriptionRequest = 'admin_subscription_request';
   static const adminSettings = 'admin_settings';
   static const adminProfile = 'admin_profile';
+  static const adminBugReportSubmit = 'admin_bug_report_submit';
+  static const adminBugReports = 'admin_bug_reports';
 
   static const mobileHome = 'mobile_home';
   static const mobileCategories = 'mobile_categories';
@@ -30,6 +32,7 @@ class AppFeatureIds {
   static const mobileSettings = 'mobile_settings';
   static const mobileSpotlight = 'mobile_spotlight';
   static const mobileReportOffer = 'mobile_report_offer';
+  static const mobileReportBug = 'mobile_report_bug';
 
   static const allAdmin = [
     adminDashboard,
@@ -50,6 +53,8 @@ class AppFeatureIds {
     adminSubscriptionRequest,
     adminSettings,
     adminProfile,
+    adminBugReportSubmit,
+    adminBugReports,
   ];
 
   static const allMobile = [
@@ -60,6 +65,7 @@ class AppFeatureIds {
     mobileSettings,
     mobileSpotlight,
     mobileReportOffer,
+    mobileReportBug,
   ];
 }
 
@@ -193,6 +199,20 @@ class AppFeatureSeedData {
       18,
       'View and edit the signed-in admin profile.',
     ),
+    _admin(
+      AppFeatureIds.adminBugReportSubmit,
+      'Report Bug',
+      '/bug-reports/submit',
+      19,
+      'Submit bugs found in the admin panel.',
+    ),
+    _admin(
+      AppFeatureIds.adminBugReports,
+      'Bug Reports',
+      '/bug-reports',
+      20,
+      'Review and resolve bugs reported from admin and mobile.',
+    ),
     _mobile(
       AppFeatureIds.mobileHome,
       'Home',
@@ -242,6 +262,13 @@ class AppFeatureSeedData {
       7,
       'Report incorrect or expired offers.',
     ),
+    _mobile(
+      AppFeatureIds.mobileReportBug,
+      'Report Bug',
+      '/bug-report',
+      8,
+      'Report app crashes, UI issues, and other bugs.',
+    ),
   ];
 
   static Map<String, List<String>> get defaultFeaturesByRole => {
@@ -258,6 +285,7 @@ class AppFeatureSeedData {
       AppFeatureIds.adminPayments,
       AppFeatureIds.adminSubscriptionRequest,
       AppFeatureIds.adminProfile,
+      AppFeatureIds.adminBugReportSubmit,
     ],
     UserRoles.manager: [
       AppFeatureIds.adminDashboard,
@@ -268,6 +296,7 @@ class AppFeatureSeedData {
       AppFeatureIds.adminNotifications,
       AppFeatureIds.adminUsers,
       AppFeatureIds.adminProfile,
+      AppFeatureIds.adminBugReportSubmit,
     ],
     UserRoles.mobileUser: AppFeatureIds.allMobile,
   };

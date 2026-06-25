@@ -29,6 +29,13 @@ class FeatureAccessUtils {
     return defaultFeatureIdsForRoles(user.roles);
   }
 
+  static bool canSubmitBugReport(AppUser user) => user.canAccessAdminPanel;
+
+  static bool isSubmitBugReportRoute(String location) {
+    return location == '/bug-reports/submit' ||
+        location.startsWith('/bug-reports/submit/');
+  }
+
   static bool hasFeature(AppUser user, String featureId) {
     if (grantsAllFeatures(user)) {
       return true;
@@ -38,6 +45,9 @@ class FeatureAccessUtils {
 
   static bool canAccessAdminRoute(AppUser user, String location) {
     if (grantsAllFeatures(user)) {
+      return true;
+    }
+    if (isSubmitBugReportRoute(location) && canSubmitBugReport(user)) {
       return true;
     }
     final featureId = adminFeatureIdForRoute(location);
@@ -56,6 +66,13 @@ class FeatureAccessUtils {
     }
     if (location == '/reports') {
       return AppFeatureIds.adminReports;
+    }
+    if (location == '/bug-reports/submit' ||
+        location.startsWith('/bug-reports/submit/')) {
+      return AppFeatureIds.adminBugReportSubmit;
+    }
+    if (location == '/bug-reports' || location.startsWith('/bug-reports/')) {
+      return AppFeatureIds.adminBugReports;
     }
     if (location == '/notifications') {
       return AppFeatureIds.adminNotifications;

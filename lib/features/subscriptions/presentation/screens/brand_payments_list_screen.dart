@@ -65,41 +65,41 @@ class BrandPaymentsListScreen extends ConsumerWidget {
                     delay: Duration(milliseconds: index * 30),
                     child: AppListTileMaterial(
                       child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 8,
-                      ),
-                      title: AppTextView.title(
-                        'PKR ${payment.amount}',
-                        fontWeight: FontWeight.w800,
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppTextView.body(
-                            '${_methodLabel(payment.paymentMethod)}'
-                            '${payment.transactionReference.isNotEmpty ? ' · ${payment.transactionReference}' : ''}',
-                          ),
-                          AppTextView.label(
-                            '${payment.brandId} · ${_dateLabel(payment.paidAt ?? payment.createdAt)}',
-                            color: AppColors.textMuted(brightness),
-                          ),
-                        ],
-                      ),
-                      trailing: Wrap(
-                        spacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          AppStatusChip(status: payment.paymentStatus),
-                          IconButton(
-                            tooltip: 'View details',
-                            onPressed: () => context.go(
-                              '/subscriptions/payments/${payment.id}',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 8,
+                        ),
+                        title: AppTextView.title(
+                          'PKR ${payment.amount}',
+                          fontWeight: FontWeight.w800,
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AppTextView.body(
+                              '${_methodLabel(payment.paymentMethod)}'
+                              '${payment.transactionReference.isNotEmpty ? ' · ${payment.transactionReference}' : ''}',
                             ),
-                            icon: const Icon(Icons.open_in_new_outlined),
-                          ),
-                        ],
-                      ),
+                            AppTextView.label(
+                              '${payment.brandId} · ${_dateLabel(payment.paidAt ?? payment.createdAt)}',
+                              color: AppColors.textMuted(brightness),
+                            ),
+                          ],
+                        ),
+                        trailing: Wrap(
+                          spacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            AppStatusChip(status: payment.paymentStatus),
+                            IconButton(
+                              tooltip: 'View details',
+                              onPressed: () => context.go(
+                                '/subscriptions/payments/${payment.id}',
+                              ),
+                              icon: const Icon(Icons.open_in_new_outlined),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );

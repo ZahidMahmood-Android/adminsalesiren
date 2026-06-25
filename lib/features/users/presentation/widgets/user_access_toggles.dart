@@ -39,33 +39,33 @@ class UserAccessToggles extends StatelessWidget {
       children: [
         AppListTileMaterial(
           child: SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Admin panel access'),
-          subtitle: Text(
-            _mobileOnly
-                ? 'Not available for mobile-only users.'
-                : _isOwner
-                ? 'Always enabled for owners.'
-                : 'Allow this user to sign in to the admin panel.',
-          ),
-          value: UserRoleUtils.resolvesAdminEnabled(_roles, isAdminEnabled),
-          onChanged: _canEnableAdmin && !_isOwner ? onAdminChanged : null,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Admin panel access'),
+            subtitle: Text(
+              _mobileOnly
+                  ? 'Not available for mobile-only users.'
+                  : _isOwner
+                  ? 'Always enabled for owners.'
+                  : 'Allow this user to sign in to the admin panel.',
+            ),
+            value: UserRoleUtils.resolvesAdminEnabled(_roles, isAdminEnabled),
+            onChanged: _canEnableAdmin && !_isOwner ? onAdminChanged : null,
           ),
         ),
         AppListTileMaterial(
           child: SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Mobile app access'),
-          subtitle: Text(
-            _isOwner
-                ? 'Always enabled for owners.'
-                : 'Allow this user to use the Sale Siren mobile app.',
-          ),
-          value: UserRoleUtils.resolvesMobileAppEnabled(
-            _roles,
-            isMobileAppEnabled,
-          ),
-          onChanged: _isOwner ? null : onMobileChanged,
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Mobile app access'),
+            subtitle: Text(
+              _isOwner
+                  ? 'Always enabled for owners.'
+                  : 'Allow this user to use the Sale Siren mobile app.',
+            ),
+            value: UserRoleUtils.resolvesMobileAppEnabled(
+              _roles,
+              isMobileAppEnabled,
+            ),
+            onChanged: _isOwner ? null : onMobileChanged,
           ),
         ),
       ],

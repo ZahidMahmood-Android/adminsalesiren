@@ -6,6 +6,46 @@ Log all bug fixes here **before** implementing. For new features use `docs/updat
 
 ---
 
+## 2026-06-24 — Registration email `signBlob` permission denied
+
+**Symptom:** Send verification email fails with `Permission iam.serviceAccounts.signBlob is required` / IAM troubleshooter link.
+
+**Cause:** `createCustomToken()` in `dispatchRegistrationEmailVerificationJob` needs the Cloud Functions **runtime** service account to have **Service Account Token Creator** (`roles/iam.serviceAccountTokenCreator`). Gen 2 functions often run as `salesiren-5539c@appspot.gserviceaccount.com` or `508084936274-compute@developer.gserviceaccount.com`.
+
+**Fix:** Grant **Service Account Token Creator** to the runtime SA in GCP IAM (see `docs/firebase-functions-deployment.md` → Registration email verification IAM). Improved admin error message when this occurs.
+
+---
+
+## 2026-06-24 — Registration email verification CORS on Flutter web
+
+**Symptom:** `adminStartRegistrationEmailVerification` blocked from `http://localhost:*` with CORS preflight failure.
+
+**Cause:** Flutter Web cannot reliably call Gen 2 HTTPS callables when Cloud Run invoker/CORS headers are missing on preflight (same class of issue as `sendOfferPush`).
+
+**Fix:** On web, write `registration_email_verification_jobs` and process via `dispatchRegistrationEmailVerificationJob` Firestore trigger. Callable endpoints remain for non-web. Rules restrict jobs to owners.
+
+---
+
+## 2026-06-24 — Registration email callable CORS from localhost
+
+**Symptom:** Flutter web on `http://localhost:*` blocked calling `adminStartRegistrationEmailVerification` with CORS preflight failure (no `Access-Control-Allow-Origin`).
+
+**Cause:** Gen 2 `onCall` used `cors: true`, which does not always emit CORS headers for localhost dev origins. Preflight fails before the handler runs (also happens if Cloud Run invoker IAM is not set).
+
+**Fix:** Use explicit localhost/production origin regex list via shared `adminCallableOptions()` for all admin HTTPS callables. Redeploy the three registration functions after IAM invoker is public.
+
+---
+
+## 2026-06-24 — Callable deploy failed to set IAM invoker (admin email verification)
+
+**Symptom:** `firebase deploy --only functions` failed for `adminStartRegistrationEmailVerification`, `adminCheckRegistrationEmailStatus`, and `adminCancelRegistrationEmailVerification` with `Failed to set the IAM Policy on the Service` / `Unable to set the invoker`.
+
+**Cause:** New Gen 2 `onCall` functions were deployed without `invoker: 'public'`. Callable HTTPS functions called from the admin web client need public Cloud Run invoker (auth is enforced via `request.auth` in code). Without it, deploy tries to set a restricted IAM policy; that requires `roles/cloudfunctions.admin` and may fail for new services.
+
+**Fix:** Set `invoker: 'public', cors: true` on all three callables (same as `sendOfferPush`). If deploy still fails, grant the deploying account **Cloud Functions Admin** or manually add `allUsers` → **Cloud Run Invoker** on each service in GCP Console.
+
+---
+
 ## 2026-06-24 — reCAPTCHA `api2/clr` 400 on Cloudflare
 
 **Symptom:** Browser logged `POST https://www.google.com/recaptcha/api2/clr?k=6LeGTS8t… 400 (Bad Request)` and App Check still failed with `appCheck/recaptcha-error`.

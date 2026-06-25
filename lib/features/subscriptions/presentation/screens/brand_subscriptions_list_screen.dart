@@ -54,19 +54,19 @@ class BrandSubscriptionsListScreen extends ConsumerWidget {
                     delay: Duration(milliseconds: index * 30),
                     child: AppListTileMaterial(
                       child: ListTile(
-                      title: AppTextView.title(
-                        '${sub.planName} · ${sub.brandId}',
-                        fontWeight: FontWeight.w700,
-                      ),
-                      subtitle: AppTextView.body(
-                        sub.discountPercent > 0
-                            ? '${sub.currency} ${sub.discountedPrice?.toStringAsFixed(0) ?? sub.monthlyPrice}/mo '
-                                  '(${sub.discountPercent}% off) · '
-                                  'Payment: ${sub.paymentStatus}'
-                            : '${sub.currency} ${sub.monthlyPrice}/mo · '
-                                  'Payment: ${sub.paymentStatus}',
-                      ),
-                      trailing: AppStatusChip(status: sub.status),
+                        title: AppTextView.title(
+                          '${sub.planName} · ${sub.brandId}',
+                          fontWeight: FontWeight.w700,
+                        ),
+                        subtitle: AppTextView.body(
+                          sub.discountPercent > 0
+                              ? '${sub.currency} ${sub.discountedPrice?.toStringAsFixed(0) ?? sub.monthlyPrice}/mo '
+                                    '(${sub.discountPercent}% off) · '
+                                    'Payment: ${sub.paymentStatus}'
+                              : '${sub.currency} ${sub.monthlyPrice}/mo · '
+                                    'Payment: ${sub.paymentStatus}',
+                        ),
+                        trailing: AppStatusChip(status: sub.status),
                       ),
                     ),
                   );

@@ -63,10 +63,7 @@ class DisplayLabelUtils {
     return _knownLabels[key] ?? _titleCaseSlug(raw);
   }
 
-  static String slugs(
-    Iterable<String> values, {
-    String separator = ', ',
-  }) {
+  static String slugs(Iterable<String> values, {String separator = ', '}) {
     final labels = values
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)

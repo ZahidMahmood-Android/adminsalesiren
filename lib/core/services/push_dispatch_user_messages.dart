@@ -25,10 +25,7 @@ class PushDispatchUserMessages {
     if (result.successCount > 0) {
       return;
     }
-    throw AppException(
-      failureMessage(result),
-      code: 'push-dispatch-failed',
-    );
+    throw AppException(failureMessage(result), code: 'push-dispatch-failed');
   }
 
   static String successMessage(OfferPushDispatchResult result) {
@@ -79,7 +76,8 @@ class PushDispatchUserMessages {
 
     if (text.contains('cloudmessaging.messages.create') ||
         text.contains('firebasemessaging.admin') ||
-        (text.contains('permission denied') && text.contains('cloudmessaging'))) {
+        (text.contains('permission denied') &&
+            text.contains('cloudmessaging'))) {
       return 'Cloud Functions cannot send push notifications yet. '
           'Redeploy functions (they must run as salesiren-5539c@appspot.gserviceaccount.com), '
           'then ask a project admin to grant that account Firebase Admin '
@@ -137,11 +135,7 @@ Future<void> showNotificationDispatchError(
   BuildContext context,
   Object? error,
 ) {
-  return showAppError(
-    context,
-    error,
-    title: 'Notification not sent',
-  );
+  return showAppError(context, error, title: 'Notification not sent');
 }
 
 void showNotificationDispatchSuccess(

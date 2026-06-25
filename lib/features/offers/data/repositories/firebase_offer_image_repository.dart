@@ -18,6 +18,7 @@ class FirebaseOfferImageRepository implements OfferImageRepository {
     required String fileName,
     required List<int> bytes,
     required String contentType,
+    void Function(double progress)? onProgress,
   }) async {
     final safeName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
     final path =
@@ -25,12 +26,19 @@ class FirebaseOfferImageRepository implements OfferImageRepository {
     final ref = _storage.ref(path);
     _log.info('Uploading offer image offerId=$offerId path=$path');
     try {
-      final task = await ref
-          .putData(
-            Uint8List.fromList(bytes),
-            SettableMetadata(contentType: contentType),
-          )
-          .timeout(const Duration(seconds: 45));
+      final uploadTask = ref.putData(
+        Uint8List.fromList(bytes),
+        SettableMetadata(contentType: contentType),
+      );
+      if (onProgress != null) {
+        await for (final snapshot in uploadTask.snapshotEvents) {
+          final total = snapshot.totalBytes;
+          if (total > 0) {
+            onProgress(snapshot.bytesTransferred / total);
+          }
+        }
+      }
+      final task = await uploadTask.timeout(const Duration(seconds: 45));
       final url = await task.ref.getDownloadURL().timeout(
         const Duration(seconds: 20),
       );
@@ -62,10 +70,11 @@ class FirebaseOfferImageRepository implements OfferImageRepository {
       );
     }
 
-    for (final url in imageUrls
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet()) {
+    for (final url
+        in imageUrls
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()) {
       try {
         await _storage.refFromURL(url).delete();
       } catch (error) {

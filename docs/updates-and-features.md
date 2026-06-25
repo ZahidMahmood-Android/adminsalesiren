@@ -6,6 +6,38 @@ Log all new features, enhancements, and non-bug work here **before** implementin
 
 ---
 
+## 2026-06-24 — Project hygiene: imports, deprecations, release log
+
+Remove unused imports project-wide, replace deprecated APIs (`dart:html`, `withOpacity`, dropdown `value`), add `docs/release-management.md` + release build script, and tighten `.gitignore` for push hygiene.
+
+When `AppLoadingOverlay` is active during API/Firebase work, action buttons stay disabled but no longer show their own `CircularProgressIndicator`. Shared `AppAsyncButtonIcon` / `AppAsyncProgressIcon` helpers; applied across login, registration, CRUD forms, subscriptions, settings seed, and bug report screens.
+
+---
+
+## 2026-06-24 — Bug report submit for all admin users
+
+Report Bug (`/bug-reports/submit`) is available to every signed-in admin-panel user. Managing bug reports (`/bug-reports`) remains owner-assigned.
+
+Sidebar and route guards respect owner-assigned `featureIds` for all non-owner users (e.g. bug reports, reports, pricing). Role-specific nav lists are merged then filtered by feature access; brand/manager hardcoded route allowlists removed in favor of feature checks plus structural restrictions.
+
+When an inbox is already verified in Firebase Auth (no Firestore profile yet), detect it on send/check, show the verified email, and prompt the admin to complete Step 2 registration.
+
+Keep a single email field in the verification step only (no duplicate below after verify). Vertically center the send-verification button with the email input row.
+
+---
+
+## 2026-06-24 — Registration email verification without web CORS
+
+Flutter web starts/checks/cancels registration email verification via `registration_email_verification_jobs` and `dispatchRegistrationEmailVerificationJob` (same pattern as `offer_push_jobs`), avoiding HTTPS callable CORS from localhost and Cloudflare.
+
+---
+
+## 2026-06-24 — Registration email verification UI polish
+
+Improve the user registration email verification card: clearer idle/pending/verified states, verified-only green check on the email field, and a more polished step layout.
+
+---
+
 ## 2026-06-24 — Admin branding logo refresh
 
 Replaced admin branding assets with the new Sale Siren icon and complete logo: full combined logo for login, icon-only mark for dashboard/sidebar branding, and icon-only mark for browser favicon/PWA icons.

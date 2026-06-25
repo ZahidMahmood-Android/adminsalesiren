@@ -11,8 +11,7 @@ Future<void> showAppError(
   String? title,
   String? message,
 }) {
-  final displayMessage =
-      message ?? ErrorMessages.friendly(error) ?? 'Something went wrong.';
+  final displayMessage = message ?? ErrorMessages.friendly(error);
   return showDialog<void>(
     context: context,
     builder: (ctx) =>

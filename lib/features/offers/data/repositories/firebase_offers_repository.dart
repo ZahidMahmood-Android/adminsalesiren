@@ -16,14 +16,12 @@ class FirebaseOffersRepository implements OffersRepository {
     this._firestore,
     this._currentUserId,
     this._currentUserRole,
-    this._currentBrandId,
     this._offerImageRepository,
   );
 
   final FirebaseFirestore _firestore;
   final String _currentUserId;
   final String _currentUserRole;
-  final String _currentBrandId;
   final OfferImageRepository _offerImageRepository;
   final _log = AppLogger.get('FirebaseOffersRepository');
 

@@ -61,8 +61,17 @@ Access these via **Terminal > Run Task...** or `Cmd + Shift + P` → "Run Task"
    - Analyze: Run **Flutter: Analyze** task before committing
 
 4. **Building for Production:**
-   - Run **Flutter: Build Web Release** task
-   - Output: `build/web/` directory
+   - Add a `## YYYY-MM-DD` entry to [`docs/release-management.md`](./release-management.md) (version, target URL, summary).
+   - Run **Flutter: Build Web Release** task or:
+     ```bash
+     chmod +x tool/build_web_release.sh
+     ./tool/build_web_release.sh
+     ```
+   - Output: `build/web/` directory (gitignored — deploy only, never commit).
+
+5. **Before pushing to Git:**
+   - Run **Flutter: Analyze** — fix warnings.
+   - Do not commit `build/`, `docs/keys-and-secrets.md`, `.env`, `functions/node_modules/`, or `.firebase/`.
 
 ## Troubleshooting
 

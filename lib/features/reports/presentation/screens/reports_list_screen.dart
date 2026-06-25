@@ -48,88 +48,88 @@ class ReportsListScreen extends ConsumerWidget {
                           delay: Duration(milliseconds: index * 30),
                           child: AppListTileMaterial(
                             child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 12,
-                            ),
-                            leading: CircleAvatar(
-                              backgroundColor: AppTheme.paper,
-                              child: Icon(
-                                Icons.flag_outlined,
-                                color: _statusColor(report.status),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 12,
                               ),
-                            ),
-                            title: Text(
-                              report.reason,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w800,
+                              leading: CircleAvatar(
+                                backgroundColor: AppTheme.paper,
+                                child: Icon(
+                                  Icons.flag_outlined,
+                                  color: _statusColor(report.status),
+                                ),
                               ),
-                            ),
-                            subtitle: Text(
-                              [
-                                if (report.description.isNotEmpty)
-                                  report.description,
-                                'Offer: ${report.offerId}',
-                                report.createdAt.compactDateTime,
-                              ].join(' · '),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Wrap(
-                              spacing: 10,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                AppStatusChip(status: report.status),
-                                DropdownButton<String>(
-                                  value: report.status,
-                                  underline: const SizedBox.shrink(),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'pending',
-                                      child: Text('Pending'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'reviewing',
-                                      child: Text('Reviewing'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'resolved',
-                                      child: Text('Resolved'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'dismissed',
-                                      child: Text('Dismissed'),
-                                    ),
-                                  ],
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    ref
-                                        .read(reportActionsProvider.notifier)
-                                        .updateStatus(report.id, value);
-                                  },
+                              title: Text(
+                                report.reason,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
                                 ),
-                                IconButton(
-                                  tooltip: 'Delete report',
-                                  onPressed: () async {
-                                    final confirmed =
-                                        await showSweetConfirmationDialog(
-                                          context: context,
-                                          title: 'Delete report?',
-                                          message:
-                                              'This report record will be removed permanently.',
-                                          confirmLabel: 'Delete',
-                                        );
-                                    if (!confirmed || !context.mounted) {
-                                      return;
-                                    }
-                                    await ref
-                                        .read(reportActionsProvider.notifier)
-                                        .delete(report.id);
-                                  },
-                                  icon: const Icon(Icons.delete_outline),
-                                ),
-                              ],
-                            ),
+                              ),
+                              subtitle: Text(
+                                [
+                                  if (report.description.isNotEmpty)
+                                    report.description,
+                                  'Offer: ${report.offerId}',
+                                  report.createdAt.compactDateTime,
+                                ].join(' · '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Wrap(
+                                spacing: 10,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  AppStatusChip(status: report.status),
+                                  DropdownButton<String>(
+                                    value: report.status,
+                                    underline: const SizedBox.shrink(),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'pending',
+                                        child: Text('Pending'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'reviewing',
+                                        child: Text('Reviewing'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'resolved',
+                                        child: Text('Resolved'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'dismissed',
+                                        child: Text('Dismissed'),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      ref
+                                          .read(reportActionsProvider.notifier)
+                                          .updateStatus(report.id, value);
+                                    },
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Delete report',
+                                    onPressed: () async {
+                                      final confirmed =
+                                          await showSweetConfirmationDialog(
+                                            context: context,
+                                            title: 'Delete report?',
+                                            message:
+                                                'This report record will be removed permanently.',
+                                            confirmLabel: 'Delete',
+                                          );
+                                      if (!confirmed || !context.mounted) {
+                                        return;
+                                      }
+                                      await ref
+                                          .read(reportActionsProvider.notifier)
+                                          .delete(report.id);
+                                    },
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );

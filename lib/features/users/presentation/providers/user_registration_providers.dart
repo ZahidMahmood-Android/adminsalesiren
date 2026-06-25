@@ -1,22 +1,18 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/data/firebase/selected_categories_sync.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
-import '../../../../firebase_options.dart';
-import '../../../auth/domain/entities/user_role_utils.dart';
-import '../../../auth/domain/entities/user_roles.dart';
-import '../../../../core/errors/error_messages.dart';
 import '../../../access/domain/app_feature_seed_data.dart';
 import '../../../access/domain/feature_access_utils.dart';
+import '../../../auth/domain/entities/user_role_utils.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/admin_reference_sync.dart';
+import 'registration_email_verification_provider.dart';
 
 final userRegistrationProvider =
     AsyncNotifierProvider.autoDispose<UserRegistrationController, String?>(
@@ -43,9 +39,14 @@ class UserRegistrationController extends AsyncNotifier<String?> {
     required bool isAdminEnabled,
     required bool isMobileAppEnabled,
     required List<String> featureIds,
+    required String verifiedUserId,
   }) async {
     final firestore = ref.read(firestoreProvider);
     final adminId = ref.read(currentUserProvider)?.id ?? '';
+    final verificationService = ref.read(
+      registrationEmailVerificationServiceProvider,
+    );
+    final verification = verificationService.snapshot;
 
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
@@ -54,6 +55,13 @@ class UserRegistrationController extends AsyncNotifier<String?> {
       }
 
       final normalizedEmail = email.trim().toLowerCase();
+      if (!verification.isVerified ||
+          !verification.matchesEmail(normalizedEmail) ||
+          verification.uid != verifiedUserId) {
+        throw AppException(
+          'Verify the email address before registering this user.',
+        );
+      }
       final normalizedRoles = roles.toSet().toList();
       final normalizedBrandId = brandId.trim();
 
@@ -99,7 +107,9 @@ class UserRegistrationController extends AsyncNotifier<String?> {
         throw AppException('A user profile with this email already exists.');
       }
 
-      final userId = await _createAuthUser(normalizedEmail, password);
+      await verificationService.finalizePassword(password);
+      final userId = verifiedUserId;
+      await verificationService.dispose();
       final now = FieldValue.serverTimestamp();
       final primaryRole = UserRoleUtils.primaryRole(normalizedRoles);
 
@@ -142,50 +152,5 @@ class UserRegistrationController extends AsyncNotifier<String?> {
       );
       return 'User registered successfully.';
     });
-  }
-
-  Future<String> _createAuthUser(String email, String password) async {
-    final appName = 'user-reg-${DateTime.now().microsecondsSinceEpoch}';
-    FirebaseApp? app;
-    try {
-      app = await Firebase.initializeApp(
-        name: appName,
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      final auth = FirebaseAuth.instanceFor(app: app);
-      final credential = await auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      await auth.signOut();
-      return credential.user?.uid ?? '';
-    } on FirebaseAuthException catch (error) {
-      _log.warning('_createAuthUser FirebaseAuthException', error);
-      throw AppException(_authErrorMessage(error.code, error.message));
-    } catch (error) {
-      _log.warning('_createAuthUser unexpected error', error);
-      throw AppException(ErrorMessages.friendly(error));
-    } finally {
-      await app?.delete();
-    }
-  }
-
-  static String _authErrorMessage(String code, String? fallback) {
-    return switch (code) {
-      'email-already-in-use' =>
-        'This email is already registered. Use a different email address.',
-      'invalid-email' => 'The email address is not valid.',
-      'weak-password' => 'The password is too weak. Use at least 6 characters.',
-      'operation-not-allowed' =>
-        'Email sign-in is not enabled. Please contact support.',
-      'network-request-failed' =>
-        'We could not connect right now. Please check your internet and try again.',
-      'too-many-requests' =>
-        'Too many attempts. Please wait a moment and try again.',
-      _ =>
-        fallback?.trim().isNotEmpty == true
-            ? ErrorMessages.friendly(fallback)
-            : 'Unable to create the user account. Please try again.',
-    };
   }
 }

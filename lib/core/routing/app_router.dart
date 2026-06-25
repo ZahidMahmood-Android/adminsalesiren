@@ -21,6 +21,8 @@ import '../../features/offers/presentation/screens/offer_details_screen.dart';
 import '../../features/offers/presentation/screens/offer_form_screen.dart';
 import '../../features/offers/presentation/screens/offers_list_screen.dart';
 import '../../features/notifications/presentation/screens/notification_requests_screen.dart';
+import '../../features/bug_reports/presentation/screens/bug_reports_dashboard_screen.dart';
+import '../../features/bug_reports/presentation/screens/submit_bug_report_screen.dart';
 import '../../features/reports/presentation/screens/reports_list_screen.dart';
 import '../../features/settings/presentation/screens/settings_seed_screen.dart';
 import '../../features/subscriptions/presentation/screens/brand_payment_form_screen.dart';
@@ -73,41 +75,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         }
       }
       if (!(profile?.hasRole(UserRoles.owner) ?? false) &&
-          ((profile?.hasRole(UserRoles.brandAdmin) ?? false) ||
-              (profile?.hasRole(UserRoles.manager) ?? false))) {
+          profile != null &&
+          (profile.hasRole(UserRoles.brandAdmin) ||
+              profile.hasRole(UserRoles.manager))) {
         final location = state.matchedLocation;
-        final isManager = profile?.hasRole(UserRoles.manager) ?? false;
-        final citiesAllowed = isManager
-            ? location == '/cities' || location.startsWith('/cities/')
-            : location == '/cities';
-        final brandSubscriptionAllowed =
-            (!isManager && location == '/subscriptions/my') ||
-            location == '/subscriptions/my-usage' ||
-            location == '/subscriptions/payments' ||
-            location == '/subscriptions/payments/new' ||
-            location.startsWith('/subscriptions/payments/') ||
-            location == '/subscriptions/request';
-        final allowed =
-            location == '/dashboard' ||
-            location == '/settings' ||
-            location == '/brands' ||
-            location.startsWith('/brands/') ||
-            citiesAllowed ||
-            location == '/categories' ||
-            location.startsWith('/categories/') ||
-            location == '/offers' ||
-            location.startsWith('/offers/') ||
-            location == '/notifications' ||
-            location == '/users' ||
-            location.startsWith('/users/') ||
-            (!isManager && brandSubscriptionAllowed);
-        if (!allowed ||
-            location == '/brands/register' ||
-            (location == '/brands/new' && !isManager) ||
-            (isManager && location.startsWith('/subscriptions/')) ||
-            (location.startsWith('/cities/') &&
-                !isManager &&
-                !location.startsWith('/cities/new'))) {
+        final isManager = profile.hasRole(UserRoles.manager);
+
+        if (location == '/brands/register') {
+          return '/dashboard';
+        }
+        if (location == '/brands/new' && !isManager) {
+          return '/dashboard';
+        }
+        if (isManager && location.startsWith('/subscriptions/')) {
+          return '/dashboard';
+        }
+        if (!isManager && location.startsWith('/cities/')) {
           return '/dashboard';
         }
       }
@@ -222,6 +205,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/reports',
             pageBuilder: (context, state) =>
                 _fadePage(state, const ReportsListScreen()),
+          ),
+          GoRoute(
+            path: '/bug-reports',
+            pageBuilder: (context, state) =>
+                _fadePage(state, const BugReportsDashboardScreen()),
+            routes: [
+              GoRoute(
+                path: 'submit',
+                pageBuilder: (context, state) =>
+                    _fadePage(state, const SubmitBugReportScreen()),
+              ),
+            ],
           ),
           GoRoute(
             path: '/users',

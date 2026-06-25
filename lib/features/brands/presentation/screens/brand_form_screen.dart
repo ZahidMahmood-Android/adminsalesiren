@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../categories/domain/entities/category.dart' as app_category;
@@ -86,12 +86,13 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     final isBrandScopedUser = ref.read(isBrandScopedUserProvider);
     if (!isBrandScopedUser &&
         (_selectedCategoryIds.isEmpty || _selectedCityIds.isEmpty)) {
-      if (mounted)
+      if (mounted) {
         showAppError(
           context,
           null,
           message: 'Please select at least one city and category.',
         );
+      }
       return;
     }
 
@@ -134,12 +135,13 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
         .save(brand, isEditing: _isEditing);
     final actionState = ref.read(brandActionsProvider);
     if (actionState.hasError && mounted) {
-      if (mounted)
+      if (mounted) {
         await showAppError(
           context,
           actionState.error,
           title: 'Could Not Save Brand',
         );
+      }
       return;
     }
     if (mounted) {
@@ -185,159 +187,159 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
         if (brand != null) {
           _hydrate(brand);
         }
-        return SingleChildScrollView(
-          padding: screenPadding(context),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 920),
-              child: AppCard(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _isEditing ? 'Edit brand' : 'New brand',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w900),
-                            ),
-                          ),
-                          if (_isEditing && !isBrandScopedUser)
-                            IconButton(
-                              tooltip: 'Delete brand',
-                              onPressed: actionState.isLoading ? null : _delete,
-                              icon: const Icon(Icons.delete_outline),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      TextFormField(
-                        controller: _nameController,
-                        enabled: !isBrandScopedUser,
-                        decoration: const InputDecoration(
-                          labelText: 'Brand name',
-                          prefixIcon: Icon(Icons.storefront_outlined),
-                        ),
-                        validator: (value) {
-                          if ((value ?? '').trim().isEmpty) {
-                            return 'Brand name is required';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _logoController,
-                        decoration: const InputDecoration(
-                          labelText: 'Logo URL',
-                          prefixIcon: Icon(Icons.image_outlined),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      UrlSourcesField(
-                        sources: _urlSources,
-                        title: 'Brand link sources',
-                        onChanged: (sources) =>
-                            setState(() => _urlSources = sources),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 16,
-                        children: [
-                          SizedBox(
-                            width: 280,
-                            child: TextFormField(
-                              controller: _contactPhoneController,
-                              decoration: const InputDecoration(
-                                labelText: 'Contact phone',
-                                prefixIcon: Icon(Icons.phone_outlined),
+        return AppLoadingOverlay(
+          isLoading: actionState.isLoading,
+          child: SingleChildScrollView(
+            padding: screenPadding(context),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: AppCard(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _isEditing ? 'Edit brand' : 'New brand',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w900),
                               ),
                             ),
+                            if (_isEditing && !isBrandScopedUser)
+                              IconButton(
+                                tooltip: 'Delete brand',
+                                onPressed: actionState.isLoading
+                                    ? null
+                                    : _delete,
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 22),
+                        TextFormField(
+                          controller: _nameController,
+                          enabled: !isBrandScopedUser,
+                          decoration: const InputDecoration(
+                            labelText: 'Brand name',
+                            prefixIcon: Icon(Icons.storefront_outlined),
                           ),
-                          SizedBox(
-                            width: 580,
-                            child: TextFormField(
-                              controller: _addressController,
-                              decoration: const InputDecoration(
-                                labelText: 'Address',
-                                prefixIcon: Icon(Icons.location_on_outlined),
+                          validator: (value) {
+                            if ((value ?? '').trim().isEmpty) {
+                              return 'Brand name is required';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _logoController,
+                          decoration: const InputDecoration(
+                            labelText: 'Logo URL',
+                            prefixIcon: Icon(Icons.image_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        UrlSourcesField(
+                          sources: _urlSources,
+                          title: 'Brand link sources',
+                          onChanged: (sources) =>
+                              setState(() => _urlSources = sources),
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          children: [
+                            SizedBox(
+                              width: 280,
+                              child: TextFormField(
+                                controller: _contactPhoneController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Contact phone',
+                                  prefixIcon: Icon(Icons.phone_outlined),
+                                ),
                               ),
                             ),
+                            SizedBox(
+                              width: 580,
+                              child: TextFormField(
+                                controller: _addressController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Address',
+                                  prefixIcon: Icon(Icons.location_on_outlined),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Chip(
+                            avatar: Icon(
+                              Icons.circle,
+                              size: 12,
+                              color: _isActive
+                                  ? const Color(0xFF0E7A5F)
+                                  : const Color(0xFFB42318),
+                            ),
+                            label: Text(_isActive ? 'Active' : 'Inactive'),
+                            backgroundColor: _isActive
+                                ? const Color(0xFFE5F4F1)
+                                : const Color(0xFFFFE4E2),
+                            labelStyle: TextStyle(
+                              color: _isActive
+                                  ? const Color(0xFF0E7A5F)
+                                  : const Color(0xFFB42318),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (!isBrandScopedUser) ...[
+                          SelectionBlock<City>(
+                            title: 'Cities',
+                            items: cities,
+                            selectedIds: _selectedCityIds,
+                            idOf: (city) => city.id,
+                            labelOf: (city) => city.name,
+                            onChanged: () => setState(() {}),
+                          ),
+                          const SizedBox(height: 18),
+                          SelectionBlock<app_category.Category>(
+                            title: 'Categories',
+                            items: categories,
+                            selectedIds: _selectedCategoryIds,
+                            idOf: (category) => category.id,
+                            labelOf: (category) => category.name,
+                            onChanged: () => setState(() {}),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 20),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Chip(
-                          avatar: Icon(
-                            Icons.circle,
-                            size: 12,
-                            color: _isActive
-                                ? const Color(0xFF0E7A5F)
-                                : const Color(0xFFB42318),
-                          ),
-                          label: Text(_isActive ? 'Active' : 'Inactive'),
-                          backgroundColor: _isActive
-                              ? const Color(0xFFE5F4F1)
-                              : const Color(0xFFFFE4E2),
-                          labelStyle: TextStyle(
-                            color: _isActive
-                                ? const Color(0xFF0E7A5F)
-                                : const Color(0xFFB42318),
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (!isBrandScopedUser) ...[
-                        SelectionBlock<City>(
-                          title: 'Cities',
-                          items: cities,
-                          selectedIds: _selectedCityIds,
-                          idOf: (city) => city.id,
-                          labelOf: (city) => city.name,
-                          onChanged: () => setState(() {}),
-                        ),
-                        const SizedBox(height: 18),
-                        SelectionBlock<app_category.Category>(
-                          title: 'Categories',
-                          items: categories,
-                          selectedIds: _selectedCategoryIds,
-                          idOf: (category) => category.id,
-                          labelOf: (category) => category.name,
-                          onChanged: () => setState(() {}),
+                        const SizedBox(height: 26),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton(
+                              onPressed: () => context.go('/brands'),
+                              child: const Text('Cancel'),
+                            ),
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed: actionState.isLoading ? null : _submit,
+                              icon: AppAsyncButtonIcon(
+                                isLoading: actionState.isLoading,
+                                icon: Icons.save_outlined,
+                              ),
+                              label: const Text('Save brand'),
+                            ),
+                          ],
                         ),
                       ],
-                      const SizedBox(height: 26),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => context.go('/brands'),
-                            child: const Text('Cancel'),
-                          ),
-                          const SizedBox(width: 12),
-                          FilledButton.icon(
-                            onPressed: actionState.isLoading ? null : _submit,
-                            icon: actionState.isLoading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save_outlined),
-                            label: const Text('Save brand'),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),

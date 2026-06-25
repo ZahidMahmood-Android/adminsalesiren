@@ -6,6 +6,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_inline_error.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../brands/presentation/providers/brand_providers.dart'
     show registeredBrandsProvider;
 import '../providers/subscription_providers.dart';
@@ -70,12 +71,13 @@ class _BrandSubscriptionFormScreenState
     final state = ref.read(subscriptionActionsProvider);
     if (state.hasError) {
       if (mounted) {
-        if (mounted)
+        if (mounted) {
           await showAppError(
             context,
             state.error,
             title: 'Could Not Assign Plan',
           );
+        }
       }
       return;
     }
@@ -90,130 +92,136 @@ class _BrandSubscriptionFormScreenState
     final plans = ref.watch(pricingPlansProvider);
     final actionState = ref.watch(subscriptionActionsProvider);
 
-    return Padding(
-      padding: screenPadding(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Assign subscription',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 18),
-          AppCard(
-            child: Column(
-              children: [
-                brands.when(
-                  data: (items) => DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(
-                      labelText: 'Brand',
-                      helperText:
-                          'Only registered brands (with brand-admin accounts) are listed.',
-                    ),
-                    items: items
-                        .map(
-                          (brand) => DropdownMenuItem(
-                            value: brand.id,
-                            child: Text(brand.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => _brandId = value),
-                  ),
-                  loading: () =>
-                      const SizedBox(height: 72, child: AppLoader(size: 56)),
-                  error: (error, _) => AppInlineError(error),
-                ),
-                const SizedBox(height: 12),
-                plans.when(
-                  data: (items) => DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(
-                      labelText: 'Pricing plan',
-                    ),
-                    items: items
-                        .map(
-                          (plan) => DropdownMenuItem(
-                            value: plan.id,
-                            child: Text(
-                              '${plan.name} (${plan.currency} ${plan.monthlyPrice})',
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => _planId = value),
-                  ),
-                  loading: () =>
-                      const SizedBox(height: 72, child: AppLoader(size: 56)),
-                  error: (error, _) => AppInlineError(error),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _paymentStatus,
-                  decoration: const InputDecoration(
-                    labelText: 'Payment status',
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'paid', child: Text('Paid')),
-                    DropdownMenuItem(value: 'pending', child: Text('Pending')),
-                    DropdownMenuItem(value: 'trial', child: Text('Trial')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _paymentStatus = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-                // Discount section
-                _DiscountPreview(
-                  plans: plans,
-                  planId: _planId,
-                  discountController: _discountController,
-                  onDiscountChanged: () => setState(() {}),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _discountNotesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Discount reason (optional)',
-                    hintText: 'e.g. Promotional offer, loyalty discount…',
-                    prefixIcon: Icon(Icons.note_outlined),
-                  ),
-                  maxLines: 2,
-                  minLines: 1,
-                ),
-                const Divider(),
-                const SizedBox(height: 4),
-                AppListTileMaterial(
-                  child: SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Auto renew'),
-                  value: _autoRenew,
-                  onChanged: (value) => setState(() => _autoRenew = value),
-                  ),
-                ),
-                Row(
-                  children: [
-                    OutlinedButton(
-                      onPressed: () =>
-                          context.go('/subscriptions/brand-subscriptions'),
-                      child: const Text('Cancel'),
-                    ),
-                    const Spacer(),
-                    FilledButton(
-                      onPressed: actionState.isLoading ? null : _submit,
-                      child: const Text('Assign'),
-                    ),
-                  ],
-                ),
-              ],
+    return AppLoadingOverlay(
+      isLoading: actionState.isLoading,
+      child: Padding(
+        padding: screenPadding(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Assign subscription',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
-          ),
-        ],
+            const SizedBox(height: 18),
+            AppCard(
+              child: Column(
+                children: [
+                  brands.when(
+                    data: (items) => DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Brand',
+                        helperText:
+                            'Only registered brands (with brand-admin accounts) are listed.',
+                      ),
+                      items: items
+                          .map(
+                            (brand) => DropdownMenuItem(
+                              value: brand.id,
+                              child: Text(brand.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setState(() => _brandId = value),
+                    ),
+                    loading: () =>
+                        const SizedBox(height: 72, child: AppLoader(size: 56)),
+                    error: (error, _) => AppInlineError(error),
+                  ),
+                  const SizedBox(height: 12),
+                  plans.when(
+                    data: (items) => DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Pricing plan',
+                      ),
+                      items: items
+                          .map(
+                            (plan) => DropdownMenuItem(
+                              value: plan.id,
+                              child: Text(
+                                '${plan.name} (${plan.currency} ${plan.monthlyPrice})',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) => setState(() => _planId = value),
+                    ),
+                    loading: () =>
+                        const SizedBox(height: 72, child: AppLoader(size: 56)),
+                    error: (error, _) => AppInlineError(error),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _paymentStatus,
+                    decoration: const InputDecoration(
+                      labelText: 'Payment status',
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'paid', child: Text('Paid')),
+                      DropdownMenuItem(
+                        value: 'pending',
+                        child: Text('Pending'),
+                      ),
+                      DropdownMenuItem(value: 'trial', child: Text('Trial')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _paymentStatus = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  // Discount section
+                  _DiscountPreview(
+                    plans: plans,
+                    planId: _planId,
+                    discountController: _discountController,
+                    onDiscountChanged: () => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _discountNotesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Discount reason (optional)',
+                      hintText: 'e.g. Promotional offer, loyalty discount…',
+                      prefixIcon: Icon(Icons.note_outlined),
+                    ),
+                    maxLines: 2,
+                    minLines: 1,
+                  ),
+                  const Divider(),
+                  const SizedBox(height: 4),
+                  AppListTileMaterial(
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Auto renew'),
+                      value: _autoRenew,
+                      onChanged: (value) => setState(() => _autoRenew = value),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: () =>
+                            context.go('/subscriptions/brand-subscriptions'),
+                        child: const Text('Cancel'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        onPressed: actionState.isLoading ? null : _submit,
+                        child: const Text('Assign'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

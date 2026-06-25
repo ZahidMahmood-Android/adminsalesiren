@@ -30,7 +30,6 @@ class OfferDetailsScreen extends ConsumerWidget {
     final actionState = ref.watch(offerActionsProvider);
     final isBusy = actionState.isLoading;
     final isOwner = ref.watch(isOwnerProvider);
-    final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
 
     return offerAsync.when(
       data: (offer) {

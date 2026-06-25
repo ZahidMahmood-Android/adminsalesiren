@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../domain/entities/city.dart';
 import '../providers/city_providers.dart';
@@ -69,12 +69,13 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
         .save(city, isEditing: _isEditing);
     final actionState = ref.read(cityActionsProvider);
     if (actionState.hasError && mounted) {
-      if (mounted)
+      if (mounted) {
         await showAppError(
           context,
           actionState.error,
           title: 'Could Not Save City',
         );
+      }
       return;
     }
     if (mounted) {
@@ -118,103 +119,104 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
         if (city != null) {
           _hydrate(city);
         }
-        return SingleChildScrollView(
-          padding: screenPadding(context),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: AppCard(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _isEditing ? 'Edit city' : 'New city',
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w900),
+        return AppLoadingOverlay(
+          isLoading: actionState.isLoading,
+          child: SingleChildScrollView(
+            padding: screenPadding(context),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: AppCard(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _isEditing ? 'Edit city' : 'New city',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w900),
+                              ),
                             ),
+                            if (_isEditing)
+                              IconButton(
+                                tooltip: 'Delete city',
+                                onPressed: actionState.isLoading
+                                    ? null
+                                    : _delete,
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 22),
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'City name',
+                            prefixIcon: Icon(Icons.location_city_outlined),
                           ),
-                          if (_isEditing)
-                            IconButton(
-                              tooltip: 'Delete city',
-                              onPressed: actionState.isLoading ? null : _delete,
-                              icon: const Icon(Icons.delete_outline),
+                          validator: (value) => (value ?? '').trim().isEmpty
+                              ? 'City name is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _idController,
+                          enabled: !_isEditing,
+                          decoration: const InputDecoration(
+                            labelText: 'City ID',
+                            prefixIcon: Icon(Icons.key_outlined),
+                          ),
+                          validator: (value) => (value ?? '').trim().isEmpty
+                              ? 'City ID is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _countryController,
+                          decoration: const InputDecoration(
+                            labelText: 'Country',
+                            prefixIcon: Icon(Icons.public),
+                          ),
+                          validator: (value) => (value ?? '').trim().isEmpty
+                              ? 'Country is required'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        AppListTileMaterial(
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Active city'),
+                            value: _isActive,
+                            onChanged: (value) =>
+                                setState(() => _isActive = value),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton(
+                              onPressed: () => context.go('/cities'),
+                              child: const Text('Cancel'),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 22),
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'City name',
-                          prefixIcon: Icon(Icons.location_city_outlined),
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed: actionState.isLoading ? null : _submit,
+                              icon: AppAsyncButtonIcon(
+                                isLoading: actionState.isLoading,
+                                icon: Icons.save_outlined,
+                              ),
+                              label: const Text('Save city'),
+                            ),
+                          ],
                         ),
-                        validator: (value) => (value ?? '').trim().isEmpty
-                            ? 'City name is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _idController,
-                        enabled: !_isEditing,
-                        decoration: const InputDecoration(
-                          labelText: 'City ID',
-                          prefixIcon: Icon(Icons.key_outlined),
-                        ),
-                        validator: (value) => (value ?? '').trim().isEmpty
-                            ? 'City ID is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _countryController,
-                        decoration: const InputDecoration(
-                          labelText: 'Country',
-                          prefixIcon: Icon(Icons.public),
-                        ),
-                        validator: (value) => (value ?? '').trim().isEmpty
-                            ? 'Country is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 16),
-                      AppListTileMaterial(
-                        child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Active city'),
-                        value: _isActive,
-                        onChanged: (value) => setState(() => _isActive = value),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => context.go('/cities'),
-                            child: const Text('Cancel'),
-                          ),
-                          const SizedBox(width: 12),
-                          FilledButton.icon(
-                            onPressed: actionState.isLoading ? null : _submit,
-                            icon: actionState.isLoading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save_outlined),
-                            label: const Text('Save city'),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

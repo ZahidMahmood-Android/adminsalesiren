@@ -39,6 +39,78 @@ See also: [`firebase-setup.md`](./firebase-setup.md), [`firestore-schema.md`](./
 
 Admin panel code creates/approves `notification_requests`, schedules `offer_push_jobs`, calls `sendOfferPush`, and updates `notification_requests` to `sent` with counts.
 
+### Registration email verification (Flutter Web)
+
+| Function | Type | Purpose |
+|----------|------|---------|
+| `dispatchRegistrationEmailVerificationJob` | Firestore `registration_email_verification_jobs/{jobId}` create | **Primary path on Flutter Web.** Owner writes a job; function creates Auth user, returns `customToken`, checks status, or cancels pending verification without browser callable CORS. |
+| `adminStartRegistrationEmailVerification` | Callable | Non-web fallback to start verification. |
+| `adminCheckRegistrationEmailStatus` | Callable | Non-web fallback to poll verification status. |
+| `adminCancelRegistrationEmailVerification` | Callable | Non-web fallback to delete pending Auth user. |
+
+Deploy:
+
+```bash
+firebase deploy --only functions:dispatchRegistrationEmailVerificationJob,functions:adminStartRegistrationEmailVerification,functions:adminCheckRegistrationEmailStatus,functions:adminCancelRegistrationEmailVerification,firestore:rules --project salesiren-5539c
+```
+
+### Registration email verification IAM (`signBlob`)
+
+**Symptom:** Admin **Send verification email** fails with:
+
+```text
+Permission iam.serviceAccounts.signBlob is required …
+```
+
+**Cause:** The job trigger calls `auth.createCustomToken()`. The function runtime service account must be allowed to sign tokens.
+
+**Step 1 — Confirm runtime service account**
+
+1. Open [Cloud Functions](https://console.cloud.google.com/functions/list?project=salesiren-5539c).
+2. Click **`dispatchRegistrationEmailVerificationJob`** → **Details** → copy **Runtime service account**.
+
+Expected after `setGlobalOptions` in `functions/index.js`:
+
+```text
+salesiren-5539c@appspot.gserviceaccount.com
+```
+
+If it still shows `508084936274-compute@developer.gserviceaccount.com`, redeploy functions so `serviceAccount: salesiren-5539c@appspot.gserviceaccount.com` is applied.
+
+**Step 2 — Grant Service Account Token Creator**
+
+In [IAM](https://console.cloud.google.com/iam-admin/iam?project=salesiren-5539c), for **each** runtime account from step 1 (grant both if unsure):
+
+| Principal | Role to add |
+|-----------|-------------|
+| `salesiren-5539c@appspot.gserviceaccount.com` | **Service Account Token Creator** |
+| `508084936274-compute@developer.gserviceaccount.com` | **Service Account Token Creator** |
+
+Or with gcloud (project owner):
+
+```bash
+gcloud services enable iam.googleapis.com --project=salesiren-5539c
+
+gcloud projects add-iam-policy-binding salesiren-5539c \
+  --member="serviceAccount:salesiren-5539c@appspot.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+gcloud projects add-iam-policy-binding salesiren-5539c \
+  --member="serviceAccount:508084936274-compute@developer.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator"
+```
+
+**Step 3 — Retry**
+
+Wait ~1 minute, then click **Send verification email** again. No redeploy needed after IAM-only changes.
+
+**Optional:** Run functions as the Firebase Admin SDK service account (already has Firebase roles). IAM → Service accounts → copy `firebase-adminsdk-…@salesiren-5539c.iam.gserviceaccount.com`, then redeploy:
+
+```bash
+FIREBASE_FUNCTIONS_SERVICE_ACCOUNT=firebase-adminsdk-XXXX@salesiren-5539c.iam.gserviceaccount.com \
+  firebase deploy --only functions:dispatchRegistrationEmailVerificationJob --project salesiren-5539c
+```
+
 **2026-06-24 fix:** Push dispatch also scans token-bearing mobile user documents after role-based recipient queries. This covers older mobile users whose `fcmTokens` exist but whose role fields are missing or stale, while still excluding privileged admin roles.
 
 ### Function: `cleanupExpiredOffers`
@@ -370,6 +442,40 @@ Remove mistaken bindings for `501491301903-*` if they were added to this project
 
 ## If deploy still fails
 
+### Failed to set IAM Policy / Unable to set the invoker
+
+**Symptom:** Deploy updates some functions but fails on new or updated **callable** (`onCall`) functions with:
+
+```text
+Failed to set the IAM Policy on the Service projects/.../services/admin...
+Unable to set the invoker for the IAM policy
+```
+
+**Cause:** Gen 2 callables are Cloud Run services. Setting `invoker: 'public'` (required for Flutter/web `httpsCallable`) updates Cloud Run IAM. That needs **Cloud Functions Admin** (`roles/cloudfunctions.admin`). `roles/cloudfunctions.developer` can deploy code but not change IAM.
+
+**Fix (pick one):**
+
+1. **Grant deployer IAM (recommended)** — [IAM](https://console.cloud.google.com/iam-admin/iam?project=salesiren-5539c) → your Google account → add **Cloud Functions Admin**, then redeploy:
+   ```bash
+   firebase deploy --only functions:adminStartRegistrationEmailVerification,functions:adminCheckRegistrationEmailStatus,functions:adminCancelRegistrationEmailVerification --project salesiren-5539c
+   ```
+
+2. **Manual invoker (project owner)** — [Cloud Run](https://console.cloud.google.com/run?project=salesiren-5539c) → each failed service → **Permissions** → **Grant access** → principal `allUsers`, role **Cloud Run Invoker**. Then rerun deploy (code-only update).
+
+3. **gcloud (one service example):**
+   ```bash
+   gcloud run services add-iam-policy-binding adminstartregistrationemailverification \
+     --region=us-central1 \
+     --member=allUsers \
+     --role=roles/run.invoker \
+     --project=salesiren-5539c
+   ```
+   Repeat for `admincheckregistrationemailstatus` and `admincancelregistrationemailverification` (Cloud Run names are lowercase).
+
+All admin-panel `onCall` exports in `functions/index.js` use `adminCallableOptions()` (`invoker: 'public'` + explicit localhost/production CORS regex list). Auth is enforced inside the handler via `request.auth`, not by private Cloud Run IAM.
+
+---
+
 1. Open the **Cloud Build** log URL from the `--debug` output.
 2. Read the last error line — it names the exact missing permission (sometimes `storage.objects.get` on `gcf-v2-sources-*` buckets).
 3. Reference: [Cloud Functions troubleshooting — Build service account](https://cloud.google.com/functions/docs/troubleshooting#build-service-account).
@@ -383,13 +489,16 @@ Common extra roles if needed:
 
 ## Runtime note
 
-Firebase CLI may warn that **Node.js 20** is deprecated for Cloud Functions. After a successful deploy, consider upgrading `functions/package.json`:
+Cloud Functions use **Node.js 22** (`functions/package.json` → `"engines": { "node": "22" }`).
 
-```json
-"engines": { "node": "22" }
+Node.js 20 was deprecated on 2026-04-30 and is decommissioned on **2026-10-30**. Deploy with Node 22 locally:
+
+```bash
+cd functions && nvm use   # reads .nvmrc
+cd .. && firebase deploy --only functions
 ```
 
-Then redeploy. Not required for the IAM fix above.
+If you change the runtime version, redeploy all functions so Firebase picks up the new runtime.
 
 ---
 
@@ -411,6 +520,34 @@ gcloud projects describe salesiren-5539c --format='value(projectNumber)'
 ```
 
 Expected output: `508084936274`.
+
+---
+
+## Troubleshooting: billing API 429 (`project_number:563584335869`)
+
+If deploy fails with:
+
+```text
+Request to https://cloudbilling.googleapis.com/v1/projects/salesiren-5539c/billingInfo
+had HTTP Error: 429 ... consumer 'project_number:563584335869'
+```
+
+**This is not your project.** `563584335869` is Firebase CLI’s shared OAuth quota project. Your project is **`salesiren-5539c`** / **`508084936274`**.
+
+The CLI hit a **global rate limit** on that shared project (common during heavy deploy traffic).
+
+**Fix (use your project for API quota):**
+
+```bash
+export GOOGLE_CLOUD_QUOTA_PROJECT=salesiren-5539c
+firebase deploy --only functions --project salesiren-5539c
+```
+
+Also enable **Cloud Billing API** on your project (one-time):
+
+https://console.cloud.google.com/apis/library/cloudbilling.googleapis.com?project=salesiren-5539c
+
+If it still fails, wait 1–2 minutes and retry (per-minute quota), or upgrade Firebase CLI (`npm i -g firebase-tools`) — newer versions route billing checks through your project more reliably.
 
 ---
 

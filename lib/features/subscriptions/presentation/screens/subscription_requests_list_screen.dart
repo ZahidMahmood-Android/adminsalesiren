@@ -49,33 +49,34 @@ class SubscriptionRequestsListScreen extends ConsumerWidget {
                     delay: Duration(milliseconds: index * 30),
                     child: AppListTileMaterial(
                       child: ListTile(
-                      title: AppTextView.title(
-                        '${DisplayLabelUtils.slug(request.type)} · ${request.requestedPlanId}',
-                        fontWeight: FontWeight.w700,
-                      ),
-                      subtitle: AppTextView.body(
-                        'Brand: ${request.brandId}'
-                        '${request.message.isNotEmpty ? '\n${request.message}' : ''}',
-                      ),
-                      isThreeLine: request.message.isNotEmpty,
-                      trailing: Wrap(
-                        spacing: 8,
-                        children: [
-                          AppStatusChip(status: request.status),
-                          if (isOwner && request.status == 'pending')
-                            IconButton(
-                              tooltip: 'Approve & assign plan',
-                              onPressed: actions.isLoading
-                                  ? null
-                                  : () => ref
-                                        .read(
-                                          subscriptionActionsProvider.notifier,
-                                        )
-                                        .approveSubscriptionRequest(request),
-                              icon: const Icon(Icons.check_circle_outlined),
-                            ),
-                        ],
-                      ),
+                        title: AppTextView.title(
+                          '${DisplayLabelUtils.slug(request.type)} · ${request.requestedPlanId}',
+                          fontWeight: FontWeight.w700,
+                        ),
+                        subtitle: AppTextView.body(
+                          'Brand: ${request.brandId}'
+                          '${request.message.isNotEmpty ? '\n${request.message}' : ''}',
+                        ),
+                        isThreeLine: request.message.isNotEmpty,
+                        trailing: Wrap(
+                          spacing: 8,
+                          children: [
+                            AppStatusChip(status: request.status),
+                            if (isOwner && request.status == 'pending')
+                              IconButton(
+                                tooltip: 'Approve & assign plan',
+                                onPressed: actions.isLoading
+                                    ? null
+                                    : () => ref
+                                          .read(
+                                            subscriptionActionsProvider
+                                                .notifier,
+                                          )
+                                          .approveSubscriptionRequest(request),
+                                icon: const Icon(Icons.check_circle_outlined),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   );

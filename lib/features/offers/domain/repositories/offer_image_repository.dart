@@ -4,6 +4,7 @@ abstract class OfferImageRepository {
     required String fileName,
     required List<int> bytes,
     required String contentType,
+    void Function(double progress)? onProgress,
   });
 
   Future<void> deleteImagesForOffer({

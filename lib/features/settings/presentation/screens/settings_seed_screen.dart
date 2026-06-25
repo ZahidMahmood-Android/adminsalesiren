@@ -1,14 +1,17 @@
-import 'dart:html' as html;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/errors/error_messages.dart';
+import '../../../../core/platform/browser_platform.dart';
+import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../../core/widgets/screen_layout.dart';
+import '../../../access/domain/feature_access_utils.dart';
+import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
 import '../../data/master_seed_data.dart';
 import '../providers/app_settings_providers.dart';
@@ -51,7 +54,7 @@ class _CompanyInfoCard extends StatelessWidget {
                         width: 52,
                         height: 52,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Icon(
+                        errorBuilder: (_, _, _) => const Icon(
                           Icons.business,
                           size: 52,
                           color: Colors.white54,
@@ -86,28 +89,23 @@ class _CompanyInfoCard extends StatelessWidget {
                   icon: Icons.language_outlined,
                   label: 'Website',
                   value: AppConstants.byteCinchWebsite,
-                  onTap: () =>
-                      html.window.open(AppConstants.byteCinchWebsite, '_blank'),
+                  onTap: () => openInNewTab(AppConstants.byteCinchWebsite),
                 ),
                 const SizedBox(height: 8),
                 _ContactRow(
                   icon: Icons.email_outlined,
                   label: 'Email',
                   value: AppConstants.byteCinchEmail,
-                  onTap: () => html.window.open(
-                    'mailto:${AppConstants.byteCinchEmail}',
-                    '_blank',
-                  ),
+                  onTap: () =>
+                      openInNewTab('mailto:${AppConstants.byteCinchEmail}'),
                 ),
                 const SizedBox(height: 8),
                 _ContactRow(
                   icon: Icons.phone_outlined,
                   label: 'Phone',
                   value: AppConstants.byteCinchPhone,
-                  onTap: () => html.window.open(
-                    'tel:${AppConstants.byteCinchPhone}',
-                    '_blank',
-                  ),
+                  onTap: () =>
+                      openInNewTab('tel:${AppConstants.byteCinchPhone}'),
                 ),
               ],
             ),
@@ -173,7 +171,7 @@ class _BrandSeedPreview extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final brandsAsync = ref.watch(brandsProvider);
-    final seededIds = MasterSeedData.brands.map((r) => r[0] as String).toSet();
+    final seededIds = MasterSeedData.brands.map((r) => r[0]).toSet();
 
     return brandsAsync.maybeWhen(
       data: (allBrands) {
@@ -220,7 +218,7 @@ class _BrandSeedPreview extends ConsumerWidget {
                           ? Image.network(
                               logoUrl,
                               fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) =>
+                              errorBuilder: (_, _, _) =>
                                   const Icon(Icons.storefront_outlined),
                             )
                           : const Icon(
@@ -240,6 +238,14 @@ class _BrandSeedPreview extends ConsumerWidget {
   }
 }
 
+bool _canSubmitBugReport(WidgetRef ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) {
+    return false;
+  }
+  return FeatureAccessUtils.canSubmitBugReport(user);
+}
+
 class SettingsSeedScreen extends ConsumerWidget {
   const SettingsSeedScreen({super.key});
 
@@ -248,84 +254,164 @@ class SettingsSeedScreen extends ConsumerWidget {
     final state = ref.watch(masterDataSeedActionsProvider);
     final controller = ref.read(masterDataSeedActionsProvider.notifier);
 
-    return SingleChildScrollView(
-      padding: screenPadding(context),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 820),
-        child: AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Seed master data',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w900,
+    return AppLoadingOverlay(
+      isLoading: state.isLoading,
+      child: SingleChildScrollView(
+        padding: screenPadding(context),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Seed master data',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Create or safely update Firestore cities, categories, brands, roles, and app features.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
-              ),
-              const SizedBox(height: 22),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  FilledButton.icon(
-                    onPressed: state.isLoading ? null : controller.seedCities,
-                    icon: const Icon(Icons.location_city_outlined),
-                    label: const Text('Seed Cities'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: state.isLoading
-                        ? null
-                        : controller.seedCategories,
-                    icon: const Icon(Icons.category_outlined),
-                    label: const Text('Seed Categories'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: state.isLoading ? null : controller.seedBrands,
-                    icon: const Icon(Icons.storefront_outlined),
-                    label: const Text('Seed Brands'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: state.isLoading ? null : controller.seedRoles,
-                    icon: const Icon(Icons.badge_outlined),
-                    label: const Text('Seed Roles'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: state.isLoading
-                        ? null
-                        : controller.seedAppFeatures,
-                    icon: const Icon(Icons.apps_outlined),
-                    label: const Text('Seed App Features'),
-                  ),
+                const SizedBox(height: 8),
+                Text(
+                  'Create or safely update Firestore cities, categories, brands, roles, and app features.',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                ),
+                const SizedBox(height: 22),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: state.isLoading ? null : controller.seedCities,
+                      icon: const Icon(Icons.location_city_outlined),
+                      label: const Text('Seed Cities'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: state.isLoading
+                          ? null
+                          : controller.seedCategories,
+                      icon: const Icon(Icons.category_outlined),
+                      label: const Text('Seed Categories'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: state.isLoading ? null : controller.seedBrands,
+                      icon: const Icon(Icons.storefront_outlined),
+                      label: const Text('Seed Brands'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: state.isLoading ? null : controller.seedRoles,
+                      icon: const Icon(Icons.badge_outlined),
+                      label: const Text('Seed Roles'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: state.isLoading
+                          ? null
+                          : controller.seedAppFeatures,
+                      icon: const Icon(Icons.apps_outlined),
+                      label: const Text('Seed App Features'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                state.when(
+                  data: (message) => message == null
+                      ? const SizedBox.shrink()
+                      : Text(
+                          message,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                  loading: () => const AppLoader(),
+                  error: (error, _) => AppErrorView(error: error),
+                ),
+                if (_canSubmitBugReport(ref)) ...[
+                  const SizedBox(height: 28),
+                  const _BugReportSettingsCard(),
                 ],
-              ),
-              const SizedBox(height: 20),
-              state.when(
-                data: (message) => message == null
-                    ? const SizedBox.shrink()
-                    : Text(
-                        message,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
+                const SizedBox(height: 28),
+                const _MobileAdsSettingsCard(),
+                const _BrandSeedPreview(),
+                const SizedBox(height: 32),
+                const Divider(),
+                const SizedBox(height: 20),
+                const _CompanyInfoCard(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BugReportSettingsCard extends StatelessWidget {
+  const _BugReportSettingsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.push('/bug-reports/submit'),
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              colors: [
+                AppColors.deepGreen.withValues(alpha: 0.14),
+                AppColors.coral.withValues(alpha: 0.1),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            border: Border.all(
+              color: AppColors.deepGreen.withValues(alpha: 0.22),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.deepGreen.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.bug_report_rounded,
+                    color: AppColors.deepGreen,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Report a bug',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
-                loading: () => const AppLoader(),
-                error: (error, _) => AppErrorView(error: error),
-              ),
-              const SizedBox(height: 28),
-              const _MobileAdsSettingsCard(),
-              const SizedBox(height: 28),
-              const _BrandSeedPreview(),
-              const SizedBox(height: 32),
-              const Divider(),
-              const SizedBox(height: 20),
-              const _CompanyInfoCard(),
-            ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'Something broken in the admin panel? Send details to the owner team.',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: AppColors.deepGreen,
+                ),
+              ],
+            ),
           ),
         ),
       ),

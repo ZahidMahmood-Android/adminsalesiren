@@ -1,7 +1,8 @@
 {
   "projects": {
     "testing": "salesiren-5539c",
-    "staging": "salesiren-5539c"
+    "staging": "salesiren-5539c",
+    "production": "salesiren-5539c"
   },
   "targets": {},
   "etags": {}

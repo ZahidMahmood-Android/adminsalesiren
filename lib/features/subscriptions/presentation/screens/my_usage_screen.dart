@@ -43,14 +43,14 @@ class MyUsageScreen extends ConsumerWidget {
                     delay: Duration(milliseconds: index * 30),
                     child: AppListTileMaterial(
                       child: ListTile(
-                      title: Text(
-                        '${row.month}/${row.year}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        'Offers: ${row.offersCreated} · Push: ${row.pushNotificationsRequested} · '
-                        'Featured: ${row.featuredOffersUsed} · Views: ${row.viewCount}',
-                      ),
+                        title: Text(
+                          '${row.month}/${row.year}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(
+                          'Offers: ${row.offersCreated} · Push: ${row.pushNotificationsRequested} · '
+                          'Featured: ${row.featuredOffersUsed} · Views: ${row.viewCount}',
+                        ),
                       ),
                     ),
                   );

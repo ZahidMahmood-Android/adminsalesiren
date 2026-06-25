@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/widgets/app_inline_error.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/subscription_request.dart';
 import '../providers/subscription_providers.dart';
@@ -62,12 +63,13 @@ class _SubscriptionRequestFormScreenState
     final state = ref.read(subscriptionActionsProvider);
     if (state.hasError) {
       if (mounted) {
-        if (mounted)
+        if (mounted) {
           await showAppError(
             context,
             state.error,
             title: 'Could Not Submit Request',
           );
+        }
       }
       return;
     }
@@ -81,90 +83,96 @@ class _SubscriptionRequestFormScreenState
     final plans = ref.watch(publicPricingPlansProvider);
     final actionState = ref.watch(subscriptionActionsProvider);
 
-    return Padding(
-      padding: screenPadding(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Upgrade / Renew Request',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 18),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DropdownButtonFormField<String>(
-                  value: _type,
-                  decoration: const InputDecoration(labelText: 'Request type'),
-                  items: const [
-                    DropdownMenuItem(value: 'upgrade', child: Text('Upgrade')),
-                    DropdownMenuItem(value: 'renew', child: Text('Renew')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _type = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                plans.when(
-                  data: (items) => DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(
-                      labelText: 'Requested plan',
-                    ),
-                    items: items
-                        .map(
-                          (plan) => DropdownMenuItem(
-                            value: plan.id,
-                            child: Text(
-                              '${plan.name} (${plan.currency} ${plan.monthlyPrice})',
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) =>
-                        setState(() => _requestedPlanId = value),
-                  ),
-                  loading: () =>
-                      const SizedBox(height: 72, child: AppLoader(size: 56)),
-                  error: (error, _) => AppInlineError(error),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(
-                    labelText: 'Message to admin (optional)',
-                  ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => context.go('/subscriptions/my'),
-                      child: const Text('Cancel'),
-                    ),
-                    const Spacer(),
-                    FilledButton(
-                      onPressed: actionState.isLoading ? null : _submit,
-                      child: actionState.isLoading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Submit request'),
-                    ),
-                  ],
-                ),
-              ],
+    return AppLoadingOverlay(
+      isLoading: actionState.isLoading,
+      child: Padding(
+        padding: screenPadding(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Upgrade / Renew Request',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
-          ),
-        ],
+            const SizedBox(height: 18),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: _type,
+                    decoration: const InputDecoration(
+                      labelText: 'Request type',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'upgrade',
+                        child: Text('Upgrade'),
+                      ),
+                      DropdownMenuItem(value: 'renew', child: Text('Renew')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _type = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  plans.when(
+                    data: (items) => DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(
+                        labelText: 'Requested plan',
+                      ),
+                      items: items
+                          .map(
+                            (plan) => DropdownMenuItem(
+                              value: plan.id,
+                              child: Text(
+                                '${plan.name} (${plan.currency} ${plan.monthlyPrice})',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setState(() => _requestedPlanId = value),
+                    ),
+                    loading: () =>
+                        const SizedBox(height: 72, child: AppLoader(size: 56)),
+                    error: (error, _) => AppInlineError(error),
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _messageController,
+                    decoration: const InputDecoration(
+                      labelText: 'Message to admin (optional)',
+                    ),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: () => context.go('/subscriptions/my'),
+                        child: const Text('Cancel'),
+                      ),
+                      const Spacer(),
+                      FilledButton.icon(
+                        onPressed: actionState.isLoading ? null : _submit,
+                        icon: AppAsyncButtonIcon(
+                          isLoading: actionState.isLoading,
+                          icon: Icons.send_outlined,
+                        ),
+                        label: const Text('Submit request'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

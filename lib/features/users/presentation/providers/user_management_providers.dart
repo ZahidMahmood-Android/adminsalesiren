@@ -147,7 +147,7 @@ class UserManagementActionsController extends AsyncNotifier<void> {
         'fullName': user.fullName,
         'displayName': user.displayName,
         'phoneNumber': user.phoneNumber,
-        'roles': user.roles,
+        'roles': UserRoleUtils.normalizeRoles(user.roles),
         'role': UserRoleUtils.primaryRole(user.roles),
         'brandId': user.brandId,
         'categoryIds': user.categoryIds,

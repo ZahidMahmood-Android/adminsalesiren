@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/services/firebase_providers.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/brand_payment.dart';
@@ -134,6 +135,7 @@ class _BrandPaymentFormScreenState
 
     return ScreenScaffold(
       title: 'Submit Payment',
+      loading: busy,
       child: SingleChildScrollView(
         padding: screenPadding(context),
         child: Form(
@@ -320,13 +322,10 @@ class _BrandPaymentFormScreenState
                   const Spacer(),
                   FilledButton.icon(
                     onPressed: busy ? null : _submit,
-                    icon: busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_outlined),
+                    icon: AppAsyncButtonIcon(
+                      isLoading: busy,
+                      icon: Icons.send_outlined,
+                    ),
                     label: Text(_uploading ? 'Uploading…' : 'Submit Payment'),
                   ),
                 ],

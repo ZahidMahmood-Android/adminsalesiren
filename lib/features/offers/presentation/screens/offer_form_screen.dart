@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
@@ -21,6 +22,7 @@ import '../../../cities/presentation/providers/city_providers.dart';
 import '../../../brands/domain/entities/brand_url_source.dart';
 import '../../data/local/offer_create_draft_storage.dart';
 import '../../domain/entities/offer.dart';
+import '../../domain/entities/offer_image_upload_task.dart';
 import '../../domain/entities/offer_line.dart';
 import '../providers/offer_providers.dart';
 import '../widgets/offer_lines_editor.dart';
@@ -53,6 +55,9 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
 
   bool get _allowsMultipleOffers =>
       !_isEditing || (_loadedOffer?.isGroupOffer ?? false);
+
+  bool get _hasActiveUploads =>
+      _lineDrafts.any((draft) => draft.isUploadingImages);
 
   @override
   void initState() {
@@ -169,12 +174,139 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     if (images.isEmpty || index < 0 || index >= _lineDrafts.length) {
       return;
     }
+    final draft = _lineDrafts[index];
+    final newTasks = images
+        .map(
+          (image) => OfferImageUploadTask(
+            id: const Uuid().v4(),
+            fileName: image.name,
+            file: image,
+          ),
+        )
+        .toList();
     setState(() {
-      _lineDrafts[index].pickedImages
-        ..clear()
-        ..addAll(images);
+      draft.imageUploads.addAll(newTasks);
     });
     _scheduleDraftSave();
+    for (final task in newTasks) {
+      unawaited(_uploadImageTask(lineIndex: index, taskId: task.id));
+    }
+  }
+
+  void _retryLineImageUpload(int index, String taskId) {
+    final draft = _lineDrafts[index];
+    final taskIndex = draft.imageUploads.indexWhere(
+      (task) => task.id == taskId,
+    );
+    if (taskIndex < 0) {
+      return;
+    }
+    final task = draft.imageUploads[taskIndex];
+    setState(() {
+      draft.imageUploads[taskIndex] = task.copyWith(
+        status: OfferImageUploadStatus.queued,
+        progress: 0,
+        errorMessage: null,
+      );
+    });
+    unawaited(_uploadImageTask(lineIndex: index, taskId: taskId));
+  }
+
+  void _removeLineImageUpload(int index, String taskId) {
+    setState(() {
+      _lineDrafts[index].imageUploads.removeWhere((task) => task.id == taskId);
+    });
+    _scheduleDraftSave();
+  }
+
+  String _storageOfferIdForDraft(OfferLineDraft draft) {
+    if (_isEditing) {
+      if (_allowsMultipleOffers && _loadedOffer != null) {
+        return _loadedOffer!.id;
+      }
+      return widget.offerId ?? draft.id;
+    }
+    return draft.id;
+  }
+
+  Future<void> _uploadImageTask({
+    required int lineIndex,
+    required String taskId,
+  }) async {
+    if (lineIndex < 0 || lineIndex >= _lineDrafts.length) {
+      return;
+    }
+    final draft = _lineDrafts[lineIndex];
+    final taskIndex = draft.imageUploads.indexWhere(
+      (task) => task.id == taskId,
+    );
+    if (taskIndex < 0) {
+      return;
+    }
+    final task = draft.imageUploads[taskIndex];
+    if (task.file == null) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      draft.imageUploads[taskIndex] = task.copyWith(
+        status: OfferImageUploadStatus.uploading,
+      );
+    });
+
+    try {
+      final bytes = await task.file!.readAsBytes();
+      final imageRepo = ref.read(offerImageRepositoryProvider);
+      final url = await imageRepo.uploadOfferImage(
+        offerId: _storageOfferIdForDraft(draft),
+        fileName: task.fileName,
+        bytes: bytes,
+        contentType: task.file!.mimeType ?? _contentTypeFor(task.fileName),
+        onProgress: (progress) {
+          if (!mounted) {
+            return;
+          }
+          final currentIndex = draft.imageUploads.indexWhere(
+            (item) => item.id == taskId,
+          );
+          if (currentIndex < 0) {
+            return;
+          }
+          setState(() {
+            draft.imageUploads[currentIndex] = draft.imageUploads[currentIndex]
+                .copyWith(progress: progress);
+          });
+        },
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        draft.imageUrls.add(url);
+        draft.imageUploads.removeWhere((item) => item.id == taskId);
+      });
+      _scheduleDraftSave();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final currentIndex = draft.imageUploads.indexWhere(
+        (item) => item.id == taskId,
+      );
+      if (currentIndex < 0) {
+        return;
+      }
+      setState(() {
+        draft.imageUploads[currentIndex] = draft.imageUploads[currentIndex]
+            .copyWith(
+              status: OfferImageUploadStatus.failed,
+              errorMessage: error.toString(),
+            );
+      });
+    }
   }
 
   Future<void> _pickLineDate(int index, {required bool start}) async {
@@ -327,7 +459,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         isBrandScopedUser: isBrandScopedUser,
         isManager: isManager,
         baseOffer: _isEditing ? _loadedOffer : null,
-        forcedId: _isEditing && !_allowsMultipleOffers ? widget.offerId : null,
+        forcedId: _forcedOfferIdForDraft(draft),
       );
       if (offer == null) {
         if (mounted) {
@@ -398,31 +530,13 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         categoryNames: offerLines.map((line) => line.categoryName).toList(),
       );
       await actions.saveChanges(groupedOffer);
-      for (var index = 0; index < _lineDrafts.length; index++) {
-        final uploaded = await _uploadDraftImages(
-          offerId: groupedOffer.id,
-          draft: _lineDrafts[index],
-          offer: groupedOffer,
-        );
-        if (uploaded != null) {
-          groupedOffer = uploaded;
-          offerLines[index] = offerLines[index].copyWith(
-            imageUrls: uploaded.imageUrls,
-            imageUrl: uploaded.imageUrl,
-          );
-          groupedOffer = groupedOffer.copyWith(offerLines: offerLines);
-          await actions.saveChanges(groupedOffer);
-        }
-      }
     } else {
       for (var index = 0; index < offersToSave.length; index++) {
         final draft = _lineDrafts[index];
         var offer = offersToSave[index];
-        String? offerId;
 
         if (_isEditing) {
           await actions.saveChanges(offer);
-          offerId = offer.id;
         } else {
           final createdId = await actions.create(offer);
           if (createdId == null) {
@@ -436,18 +550,8 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
             }
             return;
           }
-          offerId = createdId;
           offer = offer.copyWith(id: createdId);
           createdIds.add(createdId);
-        }
-
-        final uploaded = await _uploadDraftImages(
-          offerId: offerId!,
-          draft: draft,
-          offer: offer,
-        );
-        if (uploaded != null) {
-          await actions.saveChanges(uploaded);
         }
 
         if (enforceSubscriptionLimits &&
@@ -493,31 +597,14 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     }
   }
 
-  Future<Offer?> _uploadDraftImages({
-    required String offerId,
-    required OfferLineDraft draft,
-    required Offer offer,
-  }) async {
-    if (draft.pickedImages.isEmpty) {
-      return null;
+  String? _forcedOfferIdForDraft(OfferLineDraft draft) {
+    if (_isEditing) {
+      if (_allowsMultipleOffers) {
+        return _loadedOffer?.id;
+      }
+      return widget.offerId;
     }
-    final imageRepo = ref.read(offerImageRepositoryProvider);
-    final nextUrls = [...offer.imageUrls];
-    for (final image in draft.pickedImages) {
-      final bytes = await image.readAsBytes();
-      nextUrls.add(
-        await imageRepo.uploadOfferImage(
-          offerId: offerId,
-          fileName: image.name,
-          bytes: bytes,
-          contentType: image.mimeType ?? _contentTypeFor(image.name),
-        ),
-      );
-    }
-    return offer.copyWith(
-      imageUrls: nextUrls,
-      imageUrl: nextUrls.isNotEmpty ? nextUrls.first : offer.imageUrl,
-    );
+    return draft.id;
   }
 
   @override
@@ -651,7 +738,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Your previous offer draft was recovered. Newly picked images must be re-selected after leaving the page.',
+                                        'Your previous offer draft was recovered. Image uploads must be re-selected after leaving the page.',
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
@@ -685,6 +772,8 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                             isEditing: _isEditing,
                             onPickImages: _pickLineImages,
                             onPickDate: _pickLineDate,
+                            onRetryUpload: _retryLineImageUpload,
+                            onRemoveUpload: _removeLineImageUpload,
                             onChanged: _onDraftsChanged,
                           ),
                         const SizedBox(height: 28),
@@ -697,7 +786,10 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                             ),
                             const SizedBox(width: 12),
                             FilledButton.icon(
-                              onPressed: isSaving || loadingLookups
+                              onPressed:
+                                  isSaving ||
+                                      loadingLookups ||
+                                      _hasActiveUploads
                                   ? null
                                   : () => _submit(
                                       brands: brandItems,
@@ -706,19 +798,16 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                                       isBrandScopedUser: isBrandScopedUser,
                                       isManager: isManager,
                                     ),
-                              icon: isSaving
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.save_outlined),
+                              icon: AppAsyncButtonIcon(
+                                isLoading: isSaving,
+                                icon: Icons.save_outlined,
+                              ),
                               label: Text(
-                                !_isEditing && _lineDrafts.length > 1
-                                    ? 'Save offers'
-                                    : 'Save offer',
+                                _hasActiveUploads
+                                    ? 'Uploading images…'
+                                    : (!_isEditing && _lineDrafts.length > 1
+                                          ? 'Save offers'
+                                          : 'Save offer'),
                               ),
                             ),
                           ],

@@ -33,8 +33,11 @@
     {
       "label": "Flutter: Build Web Release",
       "type": "shell",
-      "command": "flutter",
-      "args": ["build", "web", "--release", "--verbose"],
+      "command": "bash",
+      "args": ["tool/build_web_release.sh"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
       "problemMatcher": {
         "pattern": {
           "regexp": "^(.*)$",

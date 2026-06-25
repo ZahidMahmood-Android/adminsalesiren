@@ -1,10 +1,11 @@
-import 'dart:html' as html;
-
+import '../platform/browser_platform.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/access/domain/app_feature_seed_data.dart';
 import '../../features/access/domain/feature_access_utils.dart';
+import '../../features/auth/domain/entities/app_user.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/auth/presentation/screens/admin_access_diagnostics_screen.dart';
 import '../../features/notifications/domain/entities/notification_request.dart';
@@ -167,7 +168,7 @@ class _SubscriptionGate extends ConsumerWidget {
     return subAsync.when(
       // Still loading — show the page normally to avoid flickering.
       loading: () => child,
-      error: (_, __) => child,
+      error: (_, _) => child,
       data: (sub) {
         if (sub == null || !sub.isUsable) {
           return _SubscriptionExpiredView(sub: sub);
@@ -270,8 +271,7 @@ Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
     color: AppTheme.saffron,
   );
   if (confirmed) {
-    html.window.localStorage.clear();
-    html.window.sessionStorage.clear();
+    clearBrowserStorage();
     await ref.read(authRepositoryProvider).signOut();
     ref.read(passwordChangeSkippedProvider.notifier).state = false;
     ref.invalidate(authStateProvider);
@@ -1060,7 +1060,7 @@ class _BrandMark extends StatelessWidget {
             child: Image.asset(
               AppConstants.appLogoAsset,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
+              errorBuilder: (_, _, _) =>
                   const Icon(Icons.local_offer, color: Colors.white),
             ),
           ),
@@ -1136,7 +1136,7 @@ class _SidebarFooter extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final mutedColor = AppColors.textMuted(cs.brightness);
     return InkWell(
-      onTap: () => html.window.open(AppConstants.byteCinchWebsite, '_blank'),
+      onTap: () => openInNewTab(AppConstants.byteCinchWebsite),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
@@ -1154,7 +1154,7 @@ class _SidebarFooter extends StatelessWidget {
                 width: 28,
                 height: 28,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     Icon(Icons.business, size: 28, color: mutedColor),
               ),
             ),
@@ -1166,7 +1166,7 @@ class _SidebarFooter extends StatelessWidget {
                 Text(
                   'Developed by',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: mutedColor.withOpacity(0.6),
+                    color: mutedColor.withValues(alpha: 0.6),
                   ),
                 ),
                 Text(
@@ -1200,6 +1200,7 @@ const _items = [
   _NavItem('Brands', '/brands', Icons.storefront_outlined),
   _NavItem('Users', '/users', Icons.people_outline),
   _NavItem('Reports', '/reports', Icons.flag_outlined),
+  _NavItem('Bug Reports', '/bug-reports', Icons.bug_report_outlined),
   _NavItem('Pricing', '/subscriptions/plans', Icons.payments_outlined),
   _NavItem(
     'Subscriptions',
@@ -1255,18 +1256,61 @@ List<_NavItem> _visibleItems(WidgetRef ref) {
   if (user == null) {
     return const [];
   }
-  final List<_NavItem> items;
-  if (ref.watch(isBrandAdminProvider)) {
-    items = _brandAdminItems;
-  } else if (ref.watch(isManagerProvider)) {
-    items = _managerItems;
-  } else {
-    items = _items;
-  }
   if (FeatureAccessUtils.grantsAllFeatures(user)) {
-    return items;
+    return _items;
   }
-  return items
-      .where((item) => FeatureAccessUtils.canAccessAdminRoute(user, item.route))
-      .toList();
+
+  final catalog = <String, _NavItem>{
+    for (final item in [..._items, ..._managerItems, ..._brandAdminItems])
+      item.route: item,
+    '/offers': const _NavItem('Offers', '/offers', Icons.local_offer_outlined),
+    '/notifications': const _NavItem(
+      'Notification Requests',
+      '/notifications',
+      Icons.notifications_outlined,
+    ),
+    '/bug-reports/submit': const _NavItem(
+      'Report Bug',
+      '/bug-reports/submit',
+      Icons.support_agent_rounded,
+    ),
+  };
+
+  final visible = <_NavItem>[];
+  for (final item in catalog.values) {
+    if (!_shouldShowNavItem(user, item.route)) {
+      continue;
+    }
+    if (item.route == '/bug-reports/submit') {
+      visible.add(item);
+      continue;
+    }
+    if (!FeatureAccessUtils.canAccessAdminRoute(user, item.route)) {
+      continue;
+    }
+    visible.add(item);
+  }
+
+  visible.sort(
+    (a, b) =>
+        _navRouteSortOrder(a.route).compareTo(_navRouteSortOrder(b.route)),
+  );
+  return visible;
+}
+
+bool _shouldShowNavItem(AppUser user, String route) {
+  if (route == '/bug-reports/submit') {
+    return FeatureAccessUtils.canSubmitBugReport(user) &&
+        !FeatureAccessUtils.hasFeature(user, AppFeatureIds.adminBugReports);
+  }
+  return true;
+}
+
+int _navRouteSortOrder(String route) {
+  for (final feature in AppFeatureSeedData.records) {
+    if (feature.route == route) {
+      return feature.sortOrder;
+    }
+  }
+  return 999;
 }

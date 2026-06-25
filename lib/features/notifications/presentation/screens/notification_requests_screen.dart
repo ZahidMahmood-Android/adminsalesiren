@@ -62,8 +62,9 @@ class NotificationRequestsScreen extends ConsumerWidget {
                       if (!context.mounted) {
                         return;
                       }
-                      final error =
-                          ref.read(notificationRequestActionsProvider).error;
+                      final error = ref
+                          .read(notificationRequestActionsProvider)
+                          .error;
                       if (error != null) {
                         await showNotificationDispatchError(context, error);
                         return;
@@ -351,6 +352,9 @@ class _NotificationBrandGroupCard extends ConsumerWidget {
         );
         final error = ref.read(notificationRequestActionsProvider).error;
         if (error != null) {
+          if (!context.mounted) {
+            return;
+          }
           await showNotificationDispatchError(context, error);
           return;
         }

@@ -29,7 +29,6 @@ final offersRepositoryProvider = Provider<OffersRepository>((ref) {
     ref.watch(firestoreProvider),
     user?.id ?? ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
     user?.role ?? 'owner',
-    user?.brandId ?? '',
     ref.watch(offerImageRepositoryProvider),
   );
 });
@@ -390,10 +389,6 @@ class OfferActionsController extends AsyncNotifier<void> {
         stackTrace,
       );
     }
-  }
-
-  Future<void> _createOfferNotification(Offer offer) async {
-    await _createOfferNotifications(offer);
   }
 
   Future<List<String>> _topicsForCategoryIds(List<String> categoryIds) async {

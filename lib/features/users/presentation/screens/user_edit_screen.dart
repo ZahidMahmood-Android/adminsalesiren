@@ -7,6 +7,7 @@ import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../auth/domain/entities/app_user.dart';
 import '../../../auth/domain/entities/user_role_utils.dart';
@@ -102,7 +103,7 @@ class _UserEditScreenState extends ConsumerState<UserEditScreen> {
     _phoneController.text = user.phoneNumber;
     _selectedRoleIds
       ..clear()
-      ..addAll(user.roles);
+      ..addAll(UserRoleUtils.normalizeRoles(user.roles));
     _selectedFeatureIds
       ..clear()
       ..addAll(
@@ -236,168 +237,170 @@ class _UserEditScreenState extends ConsumerState<UserEditScreen> {
 
         _hydrate(user);
 
-        return SingleChildScrollView(
-          padding: screenPadding(context),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 780),
-              child: AppCard(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Edit user',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 18),
-                      TextFormField(
-                        initialValue: user.email,
-                        readOnly: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email_outlined),
+        return AppLoadingOverlay(
+          isLoading: actionState.isLoading,
+          child: SingleChildScrollView(
+            padding: screenPadding(context),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 780),
+                child: AppCard(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Edit user',
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w900),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: [
-                          SizedBox(
-                            width: 360,
-                            child: TextFormField(
-                              controller: _fullNameController,
-                              decoration: const InputDecoration(
-                                labelText: 'Full name',
-                              ),
-                              validator: (value) => (value ?? '').trim().isEmpty
-                                  ? 'Full name is required'
-                                  : null,
-                            ),
+                        const SizedBox(height: 18),
+                        TextFormField(
+                          initialValue: user.email,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            prefixIcon: Icon(Icons.email_outlined),
                           ),
-                          SizedBox(
-                            width: 360,
-                            child: TextFormField(
-                              controller: _phoneController,
-                              keyboardType: TextInputType.phone,
-                              decoration: const InputDecoration(
-                                labelText: 'Phone number',
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            SizedBox(
+                              width: 360,
+                              child: TextFormField(
+                                controller: _fullNameController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Full name',
+                                ),
+                                validator: (value) =>
+                                    (value ?? '').trim().isEmpty
+                                    ? 'Full name is required'
+                                    : null,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      UserRolesField(
-                        selectedRoleIds: _selectedRoleIds,
-                        onChanged: _onRolesChanged,
-                      ),
-                      const SizedBox(height: 16),
-                      UserFeaturesField(
-                        selectedFeatureIds: _selectedFeatureIds,
-                        onChanged: _onFeaturesChanged,
-                        onApplyRoleDefaults: _applyRoleDefaultFeatures,
-                      ),
-                      if (UserRoleUtils.requiresBrand(
-                        _selectedRoleIds.toList(),
-                      ))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: SizedBox(
-                            width: 360,
-                            child: DropdownButtonFormField<String>(
-                              initialValue: _brandId.isEmpty ? null : _brandId,
-                              decoration: const InputDecoration(
-                                labelText: 'Brand',
-                                prefixIcon: Icon(Icons.storefront_outlined),
+                            SizedBox(
+                              width: 360,
+                              child: TextFormField(
+                                controller: _phoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: const InputDecoration(
+                                  labelText: 'Phone number',
+                                ),
                               ),
-                              items: brands
-                                  .map(
-                                    (brand) => DropdownMenuItem(
-                                      value: brand.id,
-                                      child: Text(brand.name),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) =>
-                                  setState(() => _brandId = value ?? ''),
-                              validator: (value) {
-                                if (UserRoleUtils.requiresBrand(
-                                      _selectedRoleIds.toList(),
-                                    ) &&
-                                    (value == null || value.isEmpty)) {
-                                  return 'Brand is required';
-                                }
-                                return null;
-                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        UserRolesField(
+                          selectedRoleIds: _selectedRoleIds,
+                          onChanged: _onRolesChanged,
+                        ),
+                        const SizedBox(height: 16),
+                        UserFeaturesField(
+                          selectedFeatureIds: _selectedFeatureIds,
+                          onChanged: _onFeaturesChanged,
+                          onApplyRoleDefaults: _applyRoleDefaultFeatures,
+                        ),
+                        if (UserRoleUtils.requiresBrand(
+                          _selectedRoleIds.toList(),
+                        ))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: SizedBox(
+                              width: 360,
+                              child: DropdownButtonFormField<String>(
+                                initialValue: _brandId.isEmpty
+                                    ? null
+                                    : _brandId,
+                                decoration: const InputDecoration(
+                                  labelText: 'Brand',
+                                  prefixIcon: Icon(Icons.storefront_outlined),
+                                ),
+                                items: brands
+                                    .map(
+                                      (brand) => DropdownMenuItem(
+                                        value: brand.id,
+                                        child: Text(brand.name),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) =>
+                                    setState(() => _brandId = value ?? ''),
+                                validator: (value) {
+                                  if (UserRoleUtils.requiresBrand(
+                                        _selectedRoleIds.toList(),
+                                      ) &&
+                                      (value == null || value.isEmpty)) {
+                                    return 'Brand is required';
+                                  }
+                                  return null;
+                                },
+                              ),
                             ),
                           ),
+                        const SizedBox(height: 16),
+                        UserCatalogPreferencesField(
+                          selectedCategoryIds: _categoryIds,
+                          selectedCityIds: _cityIds,
+                          selectedBrandIds: _brandIds,
+                          onChanged: () => setState(() {}),
                         ),
-                      const SizedBox(height: 16),
-                      UserCatalogPreferencesField(
-                        selectedCategoryIds: _categoryIds,
-                        selectedCityIds: _cityIds,
-                        selectedBrandIds: _brandIds,
-                        onChanged: () => setState(() {}),
-                      ),
-                      const SizedBox(height: 8),
-                      UserAccessToggles(
-                        selectedRoleIds: _selectedRoleIds,
-                        isAdminEnabled: _isAdminEnabled,
-                        isMobileAppEnabled: _isMobileAppEnabled,
-                        onAdminChanged: (value) =>
-                            setState(() => _isAdminEnabled = value),
-                        onMobileChanged: (value) =>
-                            setState(() => _isMobileAppEnabled = value),
-                      ),
-                      AppListTileMaterial(
-                        child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Account active'),
-                        value: _isActive,
-                        onChanged: (value) => setState(() => _isActive = value),
+                        const SizedBox(height: 8),
+                        UserAccessToggles(
+                          selectedRoleIds: _selectedRoleIds,
+                          isAdminEnabled: _isAdminEnabled,
+                          isMobileAppEnabled: _isMobileAppEnabled,
+                          onAdminChanged: (value) =>
+                              setState(() => _isAdminEnabled = value),
+                          onMobileChanged: (value) =>
+                              setState(() => _isMobileAppEnabled = value),
                         ),
-                      ),
-                      AppListTileMaterial(
-                        child: SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Notifications enabled'),
-                        subtitle: const Text(
-                          'Updates notificationEnabled in Firestore.',
-                        ),
-                        value: _notificationEnabled,
-                        onChanged: (value) =>
-                            setState(() => _notificationEnabled = value),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => context.go('/users'),
-                            child: const Text('Cancel'),
+                        AppListTileMaterial(
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Account active'),
+                            value: _isActive,
+                            onChanged: (value) =>
+                                setState(() => _isActive = value),
                           ),
-                          const SizedBox(width: 12),
-                          FilledButton.icon(
-                            onPressed: actionState.isLoading ? null : _submit,
-                            icon: actionState.isLoading
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.save_outlined),
-                            label: const Text('Save User'),
+                        ),
+                        AppListTileMaterial(
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Notifications enabled'),
+                            subtitle: const Text(
+                              'Updates notificationEnabled in Firestore.',
+                            ),
+                            value: _notificationEnabled,
+                            onChanged: (value) =>
+                                setState(() => _notificationEnabled = value),
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton(
+                              onPressed: () => context.go('/users'),
+                              child: const Text('Cancel'),
+                            ),
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed: actionState.isLoading ? null : _submit,
+                              icon: AppAsyncButtonIcon(
+                                isLoading: actionState.isLoading,
+                                icon: Icons.save_outlined,
+                              ),
+                              label: const Text('Save User'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -20,7 +20,6 @@ final subscriptionsRepositoryProvider = Provider<SubscriptionsRepository>((
   final user = ref.watch(currentUserProvider);
   return FirebaseSubscriptionsRepository(
     ref.watch(firestoreProvider),
-    user?.id ?? ref.watch(firebaseAuthProvider).currentUser?.uid ?? '',
     user?.role ?? 'owner',
     user?.brandId ?? '',
   );

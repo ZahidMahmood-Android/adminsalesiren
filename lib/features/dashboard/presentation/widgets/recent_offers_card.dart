@@ -41,31 +41,31 @@ class RecentOffersCard extends StatelessWidget {
                 children: items.take(6).map((offer) {
                   return AppListTileMaterial(
                     child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      backgroundColor: AppTheme.paper,
-                      child: Icon(
-                        offer.isPublished
-                            ? Icons.check_circle_outline
-                            : Icons.schedule_outlined,
-                        color: offer.isPublished
-                            ? AppTheme.deepGreen
-                            : AppTheme.saffron,
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: AppTheme.paper,
+                        child: Icon(
+                          offer.isPublished
+                              ? Icons.check_circle_outline
+                              : Icons.schedule_outlined,
+                          color: offer.isPublished
+                              ? AppTheme.deepGreen
+                              : AppTheme.saffron,
+                        ),
                       ),
-                    ),
-                    title: Text(
-                      offer.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      '${offer.brandName} · ${offer.discountText}',
-                    ),
-                    trailing: IconButton(
-                      tooltip: 'Open offer',
-                      onPressed: () => context.go('/offers/${offer.id}'),
-                      icon: const Icon(Icons.arrow_forward),
-                    ),
+                      title: Text(
+                        offer.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        '${offer.brandName} · ${offer.discountText}',
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'Open offer',
+                        onPressed: () => context.go('/offers/${offer.id}'),
+                        icon: const Icon(Icons.arrow_forward),
+                      ),
                     ),
                   );
                 }).toList(),

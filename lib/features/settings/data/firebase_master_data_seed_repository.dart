@@ -53,15 +53,15 @@ class FirebaseMasterDataSeedRepository implements MasterDataSeedRepository {
 
     var sortOrder = 1;
     for (final row in MasterSeedData.brands) {
-      final id = row[0] as String;
-      final name = row[1] as String;
-      final seedWebsite = row[6] as String;
-      final seedLogo = row[7] as String;
-      final seedEmail = row[8] as String;
+      final id = row[0];
+      final name = row[1];
+      final seedWebsite = row[6];
+      final seedLogo = row[7];
+      final seedEmail = row[8];
 
-      final citySlugs = _csv(row[5] as String);
-      final catSlugs = _csv(row[4] as String);
-      final primaryCatSlug = row[3] as String;
+      final citySlugs = _csv(row[5]);
+      final catSlugs = _csv(row[4]);
+      final primaryCatSlug = row[3];
 
       // Resolve slugs → IDs; fall back to slug if not yet seeded.
       final resolvedCityIds = citySlugs

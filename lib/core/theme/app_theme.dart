@@ -94,7 +94,7 @@ class AppTheme {
         ),
         labelStyle: TextStyle(color: AppColors.textMuted(brightness)),
         hintStyle: TextStyle(
-          color: AppColors.textMuted(brightness).withOpacity(0.6),
+          color: AppColors.textMuted(brightness).withValues(alpha: 0.6),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(

@@ -31,7 +31,7 @@ final notificationRequestsProvider =
     });
 
 final notificationRequestsListSearchQueryProvider =
-      StateProvider.autoDispose<String>((ref) => '');
+    StateProvider.autoDispose<String>((ref) => '');
 
 final createNotificationRequestProvider =
     Provider<Future<String> Function(NotificationRequest)>((ref) {

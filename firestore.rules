@@ -102,6 +102,20 @@ service cloud.firestore {
       return isBrandAdmin() ? userDoc().data.brandId : '';
     }
 
+    function userFeatureIds() {
+      return hasUserDoc() && userDoc().data.featureIds is list
+        ? userDoc().data.featureIds
+        : [];
+    }
+
+    function hasAssignedFeature(featureId) {
+      return featureId in userFeatureIds();
+    }
+
+    function canManageBugReports() {
+      return isOwner() || hasAssignedFeature('admin_bug_reports');
+    }
+
     function ownsBrand(targetBrandId) {
       return isBrandAdmin() && brandId() == targetBrandId;
     }
@@ -399,6 +413,17 @@ service cloud.firestore {
       allow update, delete: if isAdminOrOwner();
     }
 
+    match /bug_reports/{reportId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.source in ['mobile', 'admin']
+        && request.resource.data.status == 'new'
+        && request.resource.data.keys().hasAll([
+          'userId', 'source', 'category', 'title', 'details', 'status', 'createdAt'
+        ]);
+      allow list, get, update, delete: if canManageBugReports();
+    }
+
     match /notification_requests/{requestId} {
       allow get: if isManagerOrAdminOrOwner()
         || (isBrandScopedUser()
@@ -433,6 +458,18 @@ service cloud.firestore {
       allow read: if isManagerOrAdminOrOwner();
       allow create, update: if isManagerOrAdminOrOwner() || isBrandScopedUser();
       allow delete: if isAdminOrOwner();
+    }
+
+    match /registration_email_verification_jobs/{jobId} {
+      allow read: if isOwner()
+        && resource.data.requestedByUid == request.auth.uid;
+      allow create: if isOwner()
+        && request.resource.data.requestedByUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.action in ['start', 'check_status', 'cancel']
+        && request.resource.data.email is string
+        && request.resource.data.email.size() > 3;
+      allow update, delete: if false;
     }
 
     match /notification_campaigns/{campaignId} {

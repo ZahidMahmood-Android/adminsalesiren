@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/errors/error_messages.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../domain/entities/pricing_plan.dart';
 import '../providers/subscription_providers.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
@@ -130,12 +130,13 @@ class _PricingPlanFormScreenState extends ConsumerState<PricingPlanFormScreen> {
     final state = ref.read(subscriptionActionsProvider);
     if (state.hasError) {
       if (mounted) {
-        if (mounted)
+        if (mounted) {
           await showAppError(
             context,
             state.error,
             title: 'Could Not Save Plan',
           );
+        }
       }
       return;
     }
@@ -164,179 +165,186 @@ class _PricingPlanFormScreenState extends ConsumerState<PricingPlanFormScreen> {
 
   Widget _buildForm(BuildContext context) {
     final actionState = ref.watch(subscriptionActionsProvider);
-    return Padding(
-      padding: screenPadding(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _isEditing ? 'Edit pricing plan' : 'New pricing plan',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 18),
-          Expanded(
-            child: SingleChildScrollView(
-              child: AppCard(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      if (!_isEditing)
-                        TextFormField(
-                          controller: _idController,
-                          decoration: const InputDecoration(
-                            labelText: 'Plan ID',
+    return AppLoadingOverlay(
+      isLoading: actionState.isLoading,
+      child: Padding(
+        padding: screenPadding(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _isEditing ? 'Edit pricing plan' : 'New pricing plan',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 18),
+            Expanded(
+              child: SingleChildScrollView(
+                child: AppCard(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        if (!_isEditing)
+                          TextFormField(
+                            controller: _idController,
+                            decoration: const InputDecoration(
+                              labelText: 'Plan ID',
+                            ),
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                ? 'Required'
+                                : null,
                           ),
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(labelText: 'Name'),
                           validator: (value) =>
                               value == null || value.trim().isEmpty
                               ? 'Required'
                               : null,
                         ),
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(labelText: 'Name'),
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                            ? 'Required'
-                            : null,
-                      ),
-                      TextFormField(
-                        controller: _descriptionController,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
+                        TextFormField(
+                          controller: _descriptionController,
+                          decoration: const InputDecoration(
+                            labelText: 'Description',
+                          ),
+                          maxLines: 2,
                         ),
-                        maxLines: 2,
-                      ),
-                      TextFormField(
-                        controller: _priceController,
-                        decoration: const InputDecoration(
-                          labelText: 'Monthly price (PKR)',
+                        TextFormField(
+                          controller: _priceController,
+                          decoration: const InputDecoration(
+                            labelText: 'Monthly price (PKR)',
+                          ),
+                          keyboardType: TextInputType.number,
                         ),
-                        keyboardType: TextInputType.number,
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _offerLimitController,
-                              decoration: const InputDecoration(
-                                labelText: 'Offers / month',
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _offerLimitController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Offers / month',
+                                ),
+                                keyboardType: TextInputType.number,
                               ),
-                              keyboardType: TextInputType.number,
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _activeLimitController,
-                              decoration: const InputDecoration(
-                                labelText: 'Active offers',
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _activeLimitController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Active offers',
+                                ),
+                                keyboardType: TextInputType.number,
                               ),
-                              keyboardType: TextInputType.number,
                             ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextFormField(
-                              controller: _pushLimitController,
-                              decoration: const InputDecoration(
-                                labelText: 'Push / month',
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextFormField(
+                                controller: _pushLimitController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Push / month',
+                                ),
+                                keyboardType: TextInputType.number,
                               ),
-                              keyboardType: TextInputType.number,
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextFormField(
-                              controller: _featuredLimitController,
-                              decoration: const InputDecoration(
-                                labelText: 'Featured / month',
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                controller: _featuredLimitController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Featured / month',
+                                ),
+                                keyboardType: TextInputType.number,
                               ),
-                              keyboardType: TextInputType.number,
                             ),
-                          ),
-                        ],
-                      ),
-                      DropdownButtonFormField<String>(
-                        value: _analyticsLevel,
-                        decoration: const InputDecoration(
-                          labelText: 'Analytics level',
+                          ],
                         ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'basic',
-                            child: Text('Basic'),
+                        DropdownButtonFormField<String>(
+                          initialValue: _analyticsLevel,
+                          decoration: const InputDecoration(
+                            labelText: 'Analytics level',
                           ),
-                          DropdownMenuItem(
-                            value: 'standard',
-                            child: Text('Standard'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'advanced',
-                            child: Text('Advanced'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _analyticsLevel = value);
-                          }
-                        },
-                      ),
-                      AppListTileMaterial(
-                        child: SwitchListTile(
-                        title: const Text('Active'),
-                        value: _isActive,
-                        onChanged: (value) => setState(() => _isActive = value),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'basic',
+                              child: Text('Basic'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'standard',
+                              child: Text('Standard'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'advanced',
+                              child: Text('Advanced'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _analyticsLevel = value);
+                            }
+                          },
                         ),
-                      ),
-                      AppListTileMaterial(
-                        child: SwitchListTile(
-                        title: const Text('Public'),
-                        value: _isPublic,
-                        onChanged: (value) => setState(() => _isPublic = value),
-                        ),
-                      ),
-                      AppListTileMaterial(
-                        child: SwitchListTile(
-                        title: const Text('Can request push notifications'),
-                        value: _canPush,
-                        onChanged: (value) => setState(() => _canPush = value),
-                        ),
-                      ),
-                      AppListTileMaterial(
-                        child: SwitchListTile(
-                        title: const Text('Can use featured offers'),
-                        value: _canFeatured,
-                        onChanged: (value) =>
-                            setState(() => _canFeatured = value),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          OutlinedButton(
-                            onPressed: () => context.go('/subscriptions/plans'),
-                            child: const Text('Cancel'),
+                        AppListTileMaterial(
+                          child: SwitchListTile(
+                            title: const Text('Active'),
+                            value: _isActive,
+                            onChanged: (value) =>
+                                setState(() => _isActive = value),
                           ),
-                          const Spacer(),
-                          FilledButton(
-                            onPressed: actionState.isLoading ? null : _submit,
-                            child: Text(_isEditing ? 'Save' : 'Create'),
+                        ),
+                        AppListTileMaterial(
+                          child: SwitchListTile(
+                            title: const Text('Public'),
+                            value: _isPublic,
+                            onChanged: (value) =>
+                                setState(() => _isPublic = value),
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        AppListTileMaterial(
+                          child: SwitchListTile(
+                            title: const Text('Can request push notifications'),
+                            value: _canPush,
+                            onChanged: (value) =>
+                                setState(() => _canPush = value),
+                          ),
+                        ),
+                        AppListTileMaterial(
+                          child: SwitchListTile(
+                            title: const Text('Can use featured offers'),
+                            value: _canFeatured,
+                            onChanged: (value) =>
+                                setState(() => _canFeatured = value),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            OutlinedButton(
+                              onPressed: () =>
+                                  context.go('/subscriptions/plans'),
+                              child: const Text('Cancel'),
+                            ),
+                            const Spacer(),
+                            FilledButton(
+                              onPressed: actionState.isLoading ? null : _submit,
+                              child: Text(_isEditing ? 'Save' : 'Create'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
