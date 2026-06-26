@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_shimmer.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/brand_dashboard_stats_provider.dart';
@@ -60,7 +60,7 @@ class _OwnerDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return analytics.when(
-      loading: () => const Center(child: AppLoader()),
+      loading: () => const AppFormShimmer(),
       error: (error, _) => AppErrorView(error: error),
       data: (data) {
         return Column(
@@ -192,7 +192,7 @@ class _BrandDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return stats.when(
-      loading: () => const Center(child: AppLoader()),
+      loading: () => const AppFormShimmer(),
       error: (error, _) => AppErrorView(error: error),
       data: (data) {
         return Column(

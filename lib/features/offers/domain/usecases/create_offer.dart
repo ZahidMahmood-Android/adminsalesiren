@@ -6,5 +6,6 @@ class CreateOffer {
 
   final OffersRepository _repository;
 
-  Future<String> call(Offer offer) => _repository.createOffer(offer);
+  Future<String> call(Offer offer, {bool sendNotification = true}) =>
+      _repository.createOffer(offer, sendNotification: sendNotification);
 }

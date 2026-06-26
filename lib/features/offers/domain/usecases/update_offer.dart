@@ -6,5 +6,6 @@ class UpdateOffer {
 
   final OffersRepository _repository;
 
-  Future<void> call(Offer offer) => _repository.updateOffer(offer);
+  Future<void> call(Offer offer, {bool sendNotification = false}) =>
+      _repository.updateOffer(offer, sendNotification: sendNotification);
 }

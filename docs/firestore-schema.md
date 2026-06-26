@@ -151,7 +151,9 @@ Brand admins may create categories with their own `userId`; only they can edit/d
 
 ## Offers
 
-Primary `cityId` / `categoryId` fields remain for compatibility. Multi-select uses `cityIds`, `cityNames`, `categoryIds`, and `categoryNames`.
+Primary `cityId` / `categoryId` fields remain for compatibility. Multi-select uses `cityIds`, `cityNames`, `categoryIds`, and `categoryNames`. When an offer applies to every category on a brand, `categoryName` is stored as `Whole brand` and `categoryIds` lists all brand categories.
+
+Offer schedule also supports `endDateMode`: `fixed` (default, requires `endDate`), `ongoing`, or `until_stock_ends` (no `endDate` stored).
 
 **Grouped mall offers:** one Firestore offer can include multiple full sub-offers via `offerLines`. Top-level `categoryId`, `discountText`, `imageUrl`, etc. mirror the first line (or a summary like `"3 offers"`). Each line can include its own title, description, images, link sources, category, discount, and can be published/notified separately.
 

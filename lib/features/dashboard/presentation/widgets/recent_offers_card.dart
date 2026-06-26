@@ -6,7 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/app_error_view.dart';
-import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_shimmer.dart';
 import '../../../offers/domain/entities/offer.dart';
 
 class RecentOffersCard extends StatelessWidget {
@@ -72,7 +72,7 @@ class RecentOffersCard extends StatelessWidget {
               );
             },
             loading: () =>
-                const SizedBox(height: 180, child: AppLoader(size: 72)),
+                const SizedBox(height: 180, child: AppListShimmer(itemCount: 4)),
             error: (error, _) => AppErrorView(error: error),
           ),
         ],

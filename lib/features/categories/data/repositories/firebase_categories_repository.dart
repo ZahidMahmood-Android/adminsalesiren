@@ -43,26 +43,28 @@ class FirebaseCategoriesRepository implements CategoriesRepository {
 
   @override
   Future<String> createCategory(Category category) async {
-    final safeId = _safeId(category.id.isEmpty ? category.name : category.id);
-    final doc = _categories.doc(safeId);
+    final doc = _categories.doc();
+    final id = doc.id;
     final now = DateTime.now();
+    final slug = category.slug.isEmpty ? _safeId(category.name) : category.slug;
     final model = CategoryModel.fromEntity(
       category.copyWith(
-        id: safeId,
+        id: id,
+        slug: slug,
         topic: category.topic.isEmpty
-            ? _topicFor(category.name, safeId)
+            ? _topicFor(category.name, id)
             : category.topic,
         createdAt: now,
         updatedAt: now,
         userId: _currentUserId,
       ),
     );
-    _log.info('Creating category id=$safeId name=${category.name}');
+    _log.info('Creating category id=$id name=${category.name}');
     final data = model.toFirestore()
       ..['createdAt'] = FieldValue.serverTimestamp()
       ..['updatedAt'] = FieldValue.serverTimestamp();
     await doc.set(data);
-    return safeId;
+    return id;
   }
 
   @override

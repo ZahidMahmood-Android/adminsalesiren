@@ -73,13 +73,15 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
     required String requestId,
     required String offerId,
     String offerLineId = '',
+    bool sendNotification = true,
   }) async {
     final user = ref.read(currentUserProvider);
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       _log.info(
         'Publishing notification request requestId=$requestId '
-        'offerId=$offerId offerLineId=${offerLineId.isEmpty ? '' : offerLineId}',
+        'offerId=$offerId offerLineId=${offerLineId.isEmpty ? '' : offerLineId} '
+        'sendNotification=$sendNotification',
       );
       await ref
           .read(notificationsRepositoryProvider)
@@ -87,15 +89,24 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
             requestId,
             'approved',
             approvedBy: user?.id ?? '',
+            adminNotes: sendNotification
+                ? ''
+                : 'Published without push notification.',
           );
       if (offerLineId.isNotEmpty) {
-        await ref
-            .read(offersRepositoryProvider)
-            .publishOfferLine(offerId, offerLineId, requestId: requestId);
+        await ref.read(offersRepositoryProvider).publishOfferLine(
+              offerId,
+              offerLineId,
+              requestId: requestId,
+              sendNotification: sendNotification,
+            );
       } else {
-        await ref
-            .read(offersRepositoryProvider)
-            .publishOffer(offerId, true, requestId: requestId);
+        await ref.read(offersRepositoryProvider).publishOffer(
+              offerId,
+              true,
+              requestId: requestId,
+              sendNotification: sendNotification,
+            );
       }
       _log.info(
         'Notification request publish finished requestId=$requestId offerId=$offerId',
@@ -103,7 +114,10 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
     });
   }
 
-  Future<void> publishAllForOffer(String offerId) async {
+  Future<void> publishAllForOffer(
+    String offerId, {
+    bool sendNotification = true,
+  }) async {
     final requests = await ref.read(notificationRequestsProvider.future);
     final pending = requests
         .where(
@@ -118,11 +132,12 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
         requestId: request.id,
         offerId: request.offerId,
         offerLineId: request.offerLineId,
+        sendNotification: sendNotification,
       );
     }
   }
 
-  Future<void> publishAllPending() async {
+  Future<void> publishAllPending({bool sendNotification = true}) async {
     final requests = await ref.read(notificationRequestsProvider.future);
     final pending = requests
         .where(
@@ -135,7 +150,28 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
         requestId: request.id,
         offerId: request.offerId,
         offerLineId: request.offerLineId,
+        sendNotification: sendNotification,
       );
+    }
+  }
+
+  Future<void> publishPendingRequests(
+    Iterable<NotificationRequest> requests, {
+    bool sendNotification = true,
+  }) async {
+    for (final request in requests) {
+      if (request.status != 'pending' || request.offerId.isEmpty) {
+        continue;
+      }
+      await publishRequest(
+        requestId: request.id,
+        offerId: request.offerId,
+        offerLineId: request.offerLineId,
+        sendNotification: sendNotification,
+      );
+      if (state.hasError) {
+        return;
+      }
     }
   }
 

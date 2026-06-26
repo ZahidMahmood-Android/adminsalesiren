@@ -14,6 +14,7 @@ import '../../features/subscriptions/domain/entities/brand_subscription.dart';
 import '../../features/subscriptions/domain/entities/subscription_request.dart';
 import '../../features/subscriptions/presentation/providers/subscription_providers.dart';
 import '../constants/app_constants.dart';
+import '../services/firebase_providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_providers.dart';
@@ -23,7 +24,7 @@ import 'app_background.dart';
 import 'app_card.dart';
 import 'app_list_tile_material.dart';
 import 'app_error_view.dart';
-import 'app_loader.dart';
+import 'app_shimmer.dart';
 import 'sweet_confirmation_dialog.dart';
 
 class AppShell extends ConsumerWidget {
@@ -33,6 +34,11 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final signedIn = ref.watch(firebaseAuthProvider).currentUser != null;
+    if (!signedIn) {
+      return const Scaffold(body: SizedBox.shrink());
+    }
+
     final route = GoRouterState.of(context).matchedLocation;
     final isCompact = MediaQuery.sizeOf(context).width < 920;
     final userProfile = ref.watch(currentUserProfileProvider);
@@ -41,7 +47,7 @@ class AppShell extends ConsumerWidget {
     final isManager = ref.watch(isManagerProvider);
 
     if (userProfile.isLoading || adminAccess.isLoading) {
-      return const Scaffold(body: AppLoader());
+      return const Scaffold(body: AppFormShimmer());
     }
 
     final hasAccess = adminAccess.maybeWhen(
@@ -124,7 +130,7 @@ class _AccessContent extends ConsumerWidget {
         }
         return child;
       },
-      loading: () => const AppLoader(),
+      loading: () => const AppFormShimmer(),
       error: (error, _) {
         if (error.toString().contains('timeout')) {
           return const AppErrorView(
@@ -270,14 +276,17 @@ Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
     icon: Icons.logout,
     color: AppTheme.saffron,
   );
-  if (confirmed) {
-    clearBrowserStorage();
-    await ref.read(authRepositoryProvider).signOut();
-    ref.read(passwordChangeSkippedProvider.notifier).state = false;
-    ref.invalidate(authStateProvider);
-    ref.invalidate(currentUserProfileProvider);
-    ref.invalidate(adminAccessProvider);
+  if (!confirmed || !context.mounted) {
+    return;
   }
+
+  final container = ProviderScope.containerOf(context);
+  clearBrowserStorage();
+  container.read(passwordChangeSkippedProvider.notifier).state = false;
+  await container.read(authRepositoryProvider).signOut();
+  container.invalidate(authStateProvider);
+  container.invalidate(currentUserProfileProvider);
+  container.invalidate(adminAccessProvider);
 }
 
 class _InactiveAccountView extends ConsumerWidget {
@@ -998,7 +1007,7 @@ class _Sidebar extends ConsumerWidget {
                     ...items.map(
                       (item) => _NavTile(
                         item: item,
-                        selected: currentRoute.startsWith(item.route),
+                        selected: _isRouteSelected(currentRoute, item.route),
                       ),
                     ),
                   ],
@@ -1033,7 +1042,7 @@ class _MobileDrawer extends ConsumerWidget {
               ...items.map(
                 (item) => _NavTile(
                   item: item,
-                  selected: currentRoute.startsWith(item.route),
+                  selected: _isRouteSelected(currentRoute, item.route),
                 ),
               ),
             ],
@@ -1210,6 +1219,11 @@ const _items = [
   _NavItem('Payments', '/subscriptions/payments', Icons.receipt_long_outlined),
   _NavItem('Usage', '/subscriptions/usage', Icons.bar_chart_outlined),
   _NavItem('Plan Requests', '/subscriptions/requests', Icons.upgrade_outlined),
+  _NavItem(
+    'Alert Settings',
+    '/settings/alerts',
+    Icons.notifications_active_outlined,
+  ),
   _NavItem('Settings', '/settings', Icons.settings_outlined),
 ];
 
@@ -1313,4 +1327,18 @@ int _navRouteSortOrder(String route) {
     }
   }
   return 999;
+}
+
+bool _isRouteSelected(String currentRoute, String itemRoute) {
+  if (currentRoute == itemRoute) {
+    return true;
+  }
+  if (!currentRoute.startsWith('$itemRoute/')) {
+    return false;
+  }
+  // `/settings` should not stay highlighted on `/settings/alerts`.
+  if (itemRoute == '/settings') {
+    return false;
+  }
+  return true;
 }

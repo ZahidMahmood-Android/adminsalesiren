@@ -12,6 +12,8 @@ import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/offer.dart';
 import '../providers/offer_providers.dart';
+import '../../../notifications/presentation/widgets/offer_publish_notification_flow.dart';
+import '../../../settings/presentation/providers/alert_settings_ui.dart';
 
 class OfferTile extends ConsumerWidget {
   const OfferTile({required this.offer, super.key});
@@ -22,6 +24,8 @@ class OfferTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final actionState = ref.watch(offerActionsProvider);
     final isOwner = ref.watch(isOwnerProvider);
+    final isManager = ref.watch(isManagerProvider);
+    final canDeleteOffer = isOwner || isManager || !offer.isPublished;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -66,7 +70,7 @@ class OfferTile extends ConsumerWidget {
                       ),
                     ),
                     AppTextView.label(
-                      '${offer.startDate.shortDate} - ${offer.endDate.shortDate}',
+                      '${offer.startDate.shortDate} - ${offer.scheduleEndLabel}',
                       color: AppColors.textMuted(
                         Theme.of(context).colorScheme.brightness,
                       ),
@@ -108,12 +112,30 @@ class OfferTile extends ConsumerWidget {
                   tooltip: 'Publish',
                   onPressed: actionState.isLoading
                       ? null
-                      : () => ref
-                            .read(offerActionsProvider.notifier)
-                            .publish(offer.id, true),
+                      : () async {
+                          final alertOptions = readAlertNotificationOptions(ref);
+                          final drafts = await confirmOfferNotificationDrafts(
+                            context,
+                            offer,
+                            enabledSlugs: alertOptions.enabledSlugs,
+                            selectableAlertTypes:
+                                alertOptions.selectableAlertTypes,
+                            alertTypeLabels: alertOptions.alertTypeLabels,
+                          );
+                          if (drafts == null || !context.mounted) {
+                            return;
+                          }
+                          await ref
+                              .read(offerActionsProvider.notifier)
+                              .publish(
+                                offer.id,
+                                true,
+                                notificationDrafts: drafts,
+                              );
+                        },
                   icon: const Icon(Icons.visibility_outlined),
                 ),
-              if (!offer.isPublished)
+              if (canDeleteOffer)
                 IconButton(
                   tooltip: 'Delete offer',
                   onPressed: actionState.isLoading
@@ -123,7 +145,7 @@ class OfferTile extends ConsumerWidget {
                             context: context,
                             title: 'Delete offer?',
                             message:
-                                'This will remove ${offer.title} permanently.',
+                                'This will remove ${offer.title} and its images permanently.',
                             confirmLabel: 'Delete',
                           );
                           if (!confirmed || !context.mounted) {
@@ -184,6 +206,12 @@ class OfferTile extends ConsumerWidget {
                       },
                 icon: const Icon(Icons.copy_all_outlined),
               ),
+              if (!offer.isExpired)
+                IconButton(
+                  tooltip: 'Edit offer',
+                  onPressed: () => context.go('/offers/${offer.id}/edit'),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
               IconButton(
                 tooltip: 'Open offer',
                 onPressed: () => context.go('/offers/${offer.id}'),

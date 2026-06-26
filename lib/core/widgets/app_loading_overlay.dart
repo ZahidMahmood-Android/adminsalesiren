@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'app_loader.dart';
+import 'app_loading_indicator.dart';
 
 /// Exposes whether an ancestor [AppLoadingOverlay] is showing the global loader.
 class AppLoadingScope extends InheritedWidget {
@@ -44,13 +44,14 @@ class AppLoadingOverlay extends StatelessWidget {
     return AppLoadingScope(
       isLoading: isLoading,
       child: Stack(
+        fit: StackFit.expand,
         children: [
           child,
           if (isLoading)
             Positioned.fill(
               child: ColoredBox(
                 color: Colors.black.withValues(alpha: 0.08),
-                child: AppLoader(size: loaderSize),
+                child: Center(child: AppLoadingIndicator(size: loaderSize)),
               ),
             ),
         ],

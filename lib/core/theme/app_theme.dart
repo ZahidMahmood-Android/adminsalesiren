@@ -45,15 +45,17 @@ class AppTheme {
       error: AppColors.error,
     );
 
-    final textTheme = GoogleFonts.interTextTheme().apply(
+    final baseTheme = ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      colorScheme: colorScheme,
+    );
+    final textTheme = GoogleFonts.interTextTheme(baseTheme.textTheme).apply(
       bodyColor: textColor,
       displayColor: textColor,
     );
 
-    return ThemeData(
-      useMaterial3: true,
-      brightness: brightness,
-      colorScheme: colorScheme,
+    return baseTheme.copyWith(
       scaffoldBackgroundColor: bg,
       textTheme: textTheme,
       visualDensity: VisualDensity.standard,

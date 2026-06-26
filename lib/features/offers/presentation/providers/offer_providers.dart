@@ -20,8 +20,11 @@ import '../../domain/usecases/delete_offer.dart';
 import '../../domain/usecases/update_offer.dart';
 import '../../../notifications/domain/alert_type_utils.dart';
 import '../../../notifications/domain/entities/notification_request.dart';
+import '../../../notifications/domain/entities/offer_notification_draft.dart';
+import '../../../notifications/domain/entities/offer_notification_content_utils.dart';
 import '../../../notifications/presentation/providers/notification_providers.dart';
 import '../../../subscriptions/presentation/providers/subscription_providers.dart';
+import '../../../settings/presentation/providers/app_settings_providers.dart';
 
 final offersRepositoryProvider = Provider<OffersRepository>((ref) {
   final user = ref.watch(currentUserProvider);
@@ -104,37 +107,85 @@ class OfferActionsController extends AsyncNotifier<void> {
   @override
   FutureOr<void> build() {}
 
-  Future<String?> create(Offer offer) async {
+  Future<String?> create(
+    Offer offer, {
+    Map<String, OfferNotificationDraft>? notificationDrafts,
+  }) async {
     _log.info('Create offer action started title=${offer.title}');
     state = const AsyncLoading();
     String? id;
     state = await AsyncValue.guard(() async {
-      id = await ref.read(createOfferProvider).call(offer);
+      final dispatchAfterSave = notificationDrafts != null && offer.isPublished;
+      id = await ref
+          .read(createOfferProvider)
+          .call(
+            offer,
+            sendNotification: !dispatchAfterSave && offer.isPublished,
+          );
       final user = ref.read(currentUserProvider);
-      await _createOfferNotifications(
-        offer.copyWith(
-          id: id,
-          createdByUserId: user?.id ?? '',
-          createdByRole: user?.role ?? 'owner',
-        ),
+      final savedOffer = offer.copyWith(
+        id: id,
+        createdByUserId: user?.id ?? '',
+        createdByRole: user?.role ?? 'owner',
       );
+      if (dispatchAfterSave) {
+        await ref
+            .read(notificationsRepositoryProvider)
+            .deleteRequestsForOffer(id!);
+        final requestIds = await _createOfferNotifications(
+          savedOffer,
+          notificationDrafts: notificationDrafts,
+        );
+        await _dispatchOfferNotifications(offerId: id!, requestIds: requestIds);
+        ref.invalidate(notificationRequestsProvider);
+      } else {
+        await _createOfferNotifications(
+          savedOffer,
+          notificationDrafts: notificationDrafts,
+        );
+      }
     });
     _refreshOffers(id: id);
     _logActionResult('Create offer action', id: id);
     return id;
   }
 
-  Future<void> saveChanges(Offer offer) async {
+  Future<void> saveChanges(
+    Offer offer, {
+    Map<String, OfferNotificationDraft>? notificationDrafts,
+  }) async {
     _log.info('Update offer action started id=${offer.id}');
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await ref.read(updateOfferProvider).call(offer);
-      if (!offer.isPublished) {
+      final dispatchAfterSave = notificationDrafts != null && offer.isPublished;
+      await ref.read(updateOfferProvider).call(offer, sendNotification: false);
+      if (dispatchAfterSave) {
         await ref
             .read(notificationsRepositoryProvider)
             .deleteRequestsForOffer(offer.id);
-        await _createOfferNotifications(offer);
+        final requestIds = await _createOfferNotifications(
+          offer.copyWith(isPublished: true),
+          notificationDrafts: notificationDrafts,
+        );
+        await _dispatchOfferNotifications(
+          offerId: offer.id,
+          requestIds: requestIds,
+        );
         ref.invalidate(notificationRequestsProvider);
+      } else if (!offer.isPublished) {
+        try {
+          await ref
+              .read(notificationsRepositoryProvider)
+              .deleteRequestsForOffer(offer.id);
+          await _createOfferNotifications(offer);
+          ref.invalidate(notificationRequestsProvider);
+        } catch (error, stackTrace) {
+          _log.warning(
+            'Notification request sync failed after offer update id=${offer.id}',
+            error,
+            stackTrace,
+          );
+        }
       }
     });
     _refreshOffers(id: offer.id);
@@ -174,14 +225,21 @@ class OfferActionsController extends AsyncNotifier<void> {
     _logActionResult('Delete offer action', id: id);
   }
 
-  Future<void> publish(String id, bool isPublished) async {
+  Future<void> publish(
+    String id,
+    bool isPublished, {
+    Map<String, OfferNotificationDraft>? notificationDrafts,
+  }) async {
     _log.info('Publish offer action started id=$id value=$isPublished');
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       if (isPublished) {
         final offer = await ref.read(offersRepositoryProvider).getOffer(id);
         if (offer != null) {
-          await _createOfferNotifications(offer.copyWith(isPublished: true));
+          await _createOfferNotifications(
+            offer.copyWith(isPublished: true),
+            notificationDrafts: notificationDrafts,
+          );
         }
       }
       await ref.read(offersRepositoryProvider).publishOffer(id, isPublished);
@@ -280,7 +338,33 @@ class OfferActionsController extends AsyncNotifier<void> {
     }
   }
 
-  Future<void> _createOfferNotifications(Offer offer) async {
+  Future<void> _dispatchOfferNotifications({
+    required String offerId,
+    required Map<String, String> requestIds,
+  }) async {
+    for (final entry in requestIds.entries) {
+      try {
+        await ref
+            .read(offersRepositoryProvider)
+            .resendOfferNotification(
+              offerId: offerId,
+              offerLineId: entry.key,
+              requestId: entry.value,
+            );
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Offer notification dispatch failed offerId=$offerId line=${entry.key}',
+          error,
+          stackTrace,
+        );
+      }
+    }
+  }
+
+  Future<Map<String, String>> _createOfferNotifications(
+    Offer offer, {
+    Map<String, OfferNotificationDraft>? notificationDrafts,
+  }) async {
     final user = ref.read(currentUserProvider);
     if (user?.hasRole(UserRoles.brandAdmin) == true &&
         offer.brandId.isNotEmpty) {
@@ -291,12 +375,21 @@ class OfferActionsController extends AsyncNotifier<void> {
         _log.warning(
           'Notification requests blocked for offer id=${offer.id}: $limitMessage',
         );
-        return;
+        return const {};
       }
     }
     final lines = offer.resolvedLines;
+    final requestIds = <String, String>{};
     for (final line in lines) {
-      await _createLineNotification(offer, line, checkLimits: false);
+      final requestId = await _createLineNotification(
+        offer,
+        line,
+        checkLimits: false,
+        notificationDrafts: notificationDrafts,
+      );
+      if (requestId != null && requestId.isNotEmpty) {
+        requestIds[line.id] = requestId;
+      }
     }
     if (user?.hasRole(UserRoles.brandAdmin) == true &&
         offer.brandId.isNotEmpty &&
@@ -305,12 +398,14 @@ class OfferActionsController extends AsyncNotifier<void> {
           .read(subscriptionActionsProvider.notifier)
           .recordPushRequested(offer.brandId);
     }
+    return requestIds;
   }
 
-  Future<void> _createLineNotification(
+  Future<String?> _createLineNotification(
     Offer offer,
     OfferLine line, {
     bool checkLimits = true,
+    Map<String, OfferNotificationDraft>? notificationDrafts,
   }) async {
     try {
       final user = ref.read(currentUserProvider);
@@ -324,9 +419,22 @@ class OfferActionsController extends AsyncNotifier<void> {
           _log.warning(
             'Notification request blocked for offer id=${offer.id}: $limitMessage',
           );
-          return;
+          return null;
         }
       }
+      final draft = OfferNotificationDraftUtils.draftForLine(
+        line,
+        notificationDrafts,
+      );
+      final title = draft?.title.trim().isNotEmpty == true
+          ? draft!.title.trim()
+          : OfferNotificationContentUtils.suggestedTitle(offer, line);
+      final body = draft?.body.trim().isNotEmpty == true
+          ? draft!.body.trim()
+          : OfferNotificationContentUtils.suggestedBody(offer);
+      final includeImage =
+          draft?.includeImage ??
+          OfferNotificationDraftUtils.primaryImageUrl(offer).isNotEmpty;
       final categoryIds = [line.categoryId];
       final categoryTopics = await _topicsForCategoryIds(categoryIds);
       final offerImages = offer.imageUrls
@@ -336,21 +444,25 @@ class OfferActionsController extends AsyncNotifier<void> {
       final imageUrl = offerImages.isNotEmpty
           ? offerImages.first
           : offer.imageUrl.trim();
-      final alertType = resolveAlertTypeForOffer(
-        offer.copyWith(
-          discountText: line.discountText,
-          categoryId: line.categoryId,
-        ),
+      final enabledSlugs = ref.read(selectableAlertTypeSlugsProvider);
+      final alertType = clampAlertTypeSlug(
+        draft?.alertType ??
+            resolveAlertTypeForOffer(
+              offer.copyWith(
+                discountText: line.discountText,
+                categoryId: line.categoryId,
+              ),
+              enabledSlugs: enabledSlugs,
+            ),
+        enabledSlugs: enabledSlugs,
       );
-      await ref
+      return await ref
           .read(createNotificationRequestProvider)
           .call(
             NotificationRequest(
               id: '',
-              title: _notificationTitleForOfferLine(offer, line),
-              body: offer.isGroupOffer
-                  ? '${line.displayTitle(line.categoryName)}: ${line.discountText}'
-                  : '${offer.brandName}: ${line.discountText}',
+              title: title.isEmpty ? 'New offer' : title,
+              body: body,
               topic: categoryTopics.isEmpty ? '' : categoryTopics.first,
               type: alertType,
               data: {
@@ -364,7 +476,9 @@ class OfferActionsController extends AsyncNotifier<void> {
                 'cityId': offer.cityId,
                 'cityIds': offer.cityIds.join(','),
                 'imageUrl': imageUrl,
-                'includeImage': 'true',
+                'includeImage': includeImage ? 'true' : 'false',
+                'type': alertType,
+                'alertType': alertType,
               },
               brandId: offer.brandId,
               brandName: offer.brandName,
@@ -378,7 +492,7 @@ class OfferActionsController extends AsyncNotifier<void> {
               targetCategoryIds: categoryIds,
               targetTopics: categoryTopics,
               status: offer.isPublished ? 'approved' : 'pending',
-              includeImage: true,
+              includeImage: includeImage,
               createdAt: DateTime.now(),
             ),
           );
@@ -388,6 +502,7 @@ class OfferActionsController extends AsyncNotifier<void> {
         error,
         stackTrace,
       );
+      return null;
     }
   }
 
@@ -403,45 +518,5 @@ class OfferActionsController extends AsyncNotifier<void> {
         .where((topic) => topic.isNotEmpty)
         .toSet()
         .toList();
-  }
-
-  String _notificationTitleForOfferLine(Offer offer, OfferLine line) {
-    final offerTitle = offer.isGroupOffer
-        ? line.displayTitle(offer.title).trim()
-        : offer.title.trim();
-    final discount = _notificationDiscountLabel(line);
-    if (offerTitle.isEmpty && discount.isEmpty) {
-      return 'New offer just dropped';
-    }
-    if (offerTitle.isEmpty) {
-      return '$discount deal just dropped';
-    }
-    if (discount.isEmpty) {
-      return '$offerTitle offer is live';
-    }
-    return '$offerTitle - $discount deal';
-  }
-
-  String _notificationDiscountLabel(OfferLine line) {
-    final text = line.discountText.trim();
-    final type = _discountTypeLabel(line.discountType);
-    if (text.isEmpty) {
-      return type;
-    }
-    if (type.isEmpty || text.toLowerCase().contains(type.toLowerCase())) {
-      return text;
-    }
-    return '$text $type';
-  }
-
-  String _discountTypeLabel(String type) {
-    return switch (type.trim()) {
-      'percentage' => 'off',
-      'flat' => 'saving',
-      'fixed_amount' => 'saving',
-      'buy_one_get_one' => 'BOGO',
-      'free_shipping' => 'free shipping',
-      _ => '',
-    };
   }
 }

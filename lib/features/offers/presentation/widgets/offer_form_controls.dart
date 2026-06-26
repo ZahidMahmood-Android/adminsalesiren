@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../../core/widgets/app_network_image.dart';
+import '../../../../core/widgets/app_field_selector.dart';
 import '../../domain/entities/offer_image_upload_task.dart';
 
 class DropdownBox extends StatelessWidget {
@@ -21,25 +22,28 @@ class DateButton extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onPressed,
+    this.prefixIcon = Icons.calendar_month_outlined,
+    this.width = 300,
+    this.enabled = true,
     super.key,
   });
 
   final String label;
   final String? value;
   final VoidCallback onPressed;
+  final IconData prefixIcon;
+  final double width;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 300,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.calendar_month_outlined),
-        label: Align(
-          alignment: Alignment.centerLeft,
-          child: Text('$label: ${value ?? 'Select'}'),
-        ),
-      ),
+    return AppFieldSelector(
+      label: label,
+      valueText: value ?? 'Select',
+      prefixIcon: prefixIcon,
+      width: width,
+      enabled: enabled,
+      onTap: onPressed,
     );
   }
 }

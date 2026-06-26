@@ -25,6 +25,7 @@ import '../../features/bug_reports/presentation/screens/bug_reports_dashboard_sc
 import '../../features/bug_reports/presentation/screens/submit_bug_report_screen.dart';
 import '../../features/reports/presentation/screens/reports_list_screen.dart';
 import '../../features/settings/presentation/screens/settings_seed_screen.dart';
+import '../../features/settings/presentation/screens/alert_settings_screen.dart';
 import '../../features/subscriptions/presentation/screens/brand_payment_form_screen.dart';
 import '../../features/subscriptions/presentation/screens/brand_payment_verify_screen.dart';
 import '../../features/subscriptions/presentation/screens/brand_payments_list_screen.dart';
@@ -43,16 +44,24 @@ import '../../features/users/presentation/screens/users_list_screen.dart';
 import '../services/firebase_providers.dart';
 import '../widgets/app_shell.dart';
 
+final rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+final shellNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'shell');
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(firebaseAuthProvider);
-  final profile = ref.watch(currentUserProfileProvider).value;
+  final routerRefresh = ref.watch(_routerRefreshListenableProvider);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/dashboard',
-    refreshListenable: GoRouterRefreshStream(auth.authStateChanges()),
+    refreshListenable: Listenable.merge([
+      GoRouterRefreshStream(auth.authStateChanges()),
+      routerRefresh,
+    ]),
     redirect: (context, state) {
       final signedIn = auth.currentUser != null;
       final loggingIn = state.matchedLocation == '/login';
+      final profile = ref.read(currentUserProfileProvider).value;
 
       if (!signedIn) {
         return loggingIn ? null : '/login';
@@ -62,6 +71,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
       if (profile != null && !profile.hasRole(UserRoles.owner)) {
         final location = state.matchedLocation;
+        if (location.startsWith('/settings/alerts')) {
+          return '/settings';
+        }
         if (!FeatureAccessUtils.canAccessAdminRoute(profile, location)) {
           return '/dashboard';
         }
@@ -99,9 +111,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/login',
+        parentNavigatorKey: rootNavigatorKey,
         pageBuilder: (context, state) => _fadePage(state, const LoginScreen()),
       ),
       ShellRoute(
+        navigatorKey: shellNavigatorKey,
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(
@@ -246,6 +260,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/settings',
             pageBuilder: (context, state) =>
                 _fadePage(state, const SettingsSeedScreen()),
+            routes: [
+              GoRoute(
+                path: 'alerts',
+                pageBuilder: (context, state) =>
+                    _fadePage(state, const AlertSettingsScreen()),
+              ),
+            ],
           ),
           GoRoute(
             path: '/subscriptions/plans',
@@ -329,6 +350,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+final _routerRefreshListenableProvider = Provider<Listenable>((ref) {
+  final notifier = _RouterRefreshNotifier();
+  ref.onDispose(notifier.dispose);
+  ref.listen(currentUserProfileProvider, (_, _) => notifier.refresh());
+  return notifier;
+});
+
+class _RouterRefreshNotifier extends ChangeNotifier {
+  void refresh() => notifyListeners();
+}
 
 CustomTransitionPage<void> _fadePage(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(

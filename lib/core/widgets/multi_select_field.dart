@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_field_selector.dart';
 import 'app_list_tile_material.dart';
 
 class MultiSelectOption {
@@ -15,8 +16,13 @@ class MultiSelectField extends StatelessWidget {
     required this.options,
     required this.selectedIds,
     required this.onChanged,
-    this.width = 260,
+    this.prefixIcon,
+    this.width = 300,
     this.emptyLabel = 'Any',
+    this.enableSelectAll = false,
+    this.selectAllLabel = 'Select all',
+    this.showClearOption = true,
+    this.enabled = true,
     super.key,
   });
 
@@ -24,12 +30,23 @@ class MultiSelectField extends StatelessWidget {
   final List<MultiSelectOption> options;
   final List<String> selectedIds;
   final ValueChanged<List<String>> onChanged;
+  final IconData? prefixIcon;
   final double width;
   final String emptyLabel;
+  final bool enableSelectAll;
+  final String selectAllLabel;
+  final bool showClearOption;
+  final bool enabled;
+
+  bool get _allSelected =>
+      options.isNotEmpty && selectedIds.length == options.length;
 
   String _summary() {
     if (selectedIds.isEmpty) {
       return emptyLabel;
+    }
+    if (enableSelectAll && _allSelected) {
+      return selectAllLabel;
     }
     final labels = options
         .where((option) => selectedIds.contains(option.id))
@@ -42,12 +59,17 @@ class MultiSelectField extends StatelessWidget {
   }
 
   Future<void> _openPicker(BuildContext context) async {
+    if (!enabled) {
+      return;
+    }
     final draft = {...selectedIds};
     await showDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final allSelected =
+                options.isNotEmpty && draft.length == options.length;
             return AlertDialog(
               title: Text(label),
               content: SizedBox(
@@ -55,17 +77,40 @@ class MultiSelectField extends StatelessWidget {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
-                    AppListTileMaterial(
-                      child: CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(emptyLabel),
-                        value: draft.isEmpty,
-                        onChanged: (_) {
-                          setDialogState(() => draft.clear());
-                        },
+                    if (enableSelectAll) ...[
+                      AppListTileMaterial(
+                        child: CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(selectAllLabel),
+                          value: allSelected,
+                          onChanged: (_) {
+                            setDialogState(() {
+                              if (allSelected) {
+                                draft.clear();
+                              } else {
+                                draft
+                                  ..clear()
+                                  ..addAll(options.map((option) => option.id));
+                              }
+                            });
+                          },
+                        ),
                       ),
-                    ),
-                    const Divider(height: 1),
+                      const Divider(height: 1),
+                    ],
+                    if (showClearOption) ...[
+                      AppListTileMaterial(
+                        child: CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(emptyLabel),
+                          value: draft.isEmpty,
+                          onChanged: (_) {
+                            setDialogState(() => draft.clear());
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1),
+                    ],
                     ...options.map((option) {
                       final selected = draft.contains(option.id);
                       return AppListTileMaterial(
@@ -110,19 +155,13 @@ class MultiSelectField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return AppFieldSelector(
+      label: label,
+      valueText: _summary(),
+      prefixIcon: prefixIcon,
       width: width,
-      child: InkWell(
-        onTap: () => _openPicker(context),
-        borderRadius: BorderRadius.circular(4),
-        child: InputDecorator(
-          decoration: InputDecoration(
-            labelText: label,
-            suffixIcon: const Icon(Icons.arrow_drop_down),
-          ),
-          child: Text(_summary(), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-      ),
+      enabled: enabled,
+      onTap: () => _openPicker(context),
     );
   }
 }

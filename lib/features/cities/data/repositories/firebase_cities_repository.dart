@@ -43,23 +43,25 @@ class FirebaseCitiesRepository implements CitiesRepository {
 
   @override
   Future<String> createCity(City city) async {
-    final safeId = _safeId(city.id.isEmpty ? city.name : city.id);
-    final doc = _cities.doc(safeId);
+    final doc = _cities.doc();
+    final id = doc.id;
     final now = DateTime.now();
+    final slug = city.slug.isEmpty ? _safeId(city.name) : city.slug;
     final model = CityModel.fromEntity(
       city.copyWith(
-        id: safeId,
+        id: id,
+        slug: slug,
         createdAt: now,
         updatedAt: now,
         userId: _currentUserId,
       ),
     );
-    _log.info('Creating city id=$safeId name=${city.name}');
+    _log.info('Creating city id=$id name=${city.name}');
     final data = model.toFirestore()
       ..['createdAt'] = FieldValue.serverTimestamp()
       ..['updatedAt'] = FieldValue.serverTimestamp();
     await doc.set(data);
-    return safeId;
+    return id;
   }
 
   @override

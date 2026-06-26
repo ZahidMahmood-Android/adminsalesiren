@@ -16,6 +16,8 @@ import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/offer.dart';
 import '../providers/offer_providers.dart';
+import '../../../notifications/presentation/widgets/offer_publish_notification_flow.dart';
+import '../../../settings/presentation/providers/alert_settings_ui.dart';
 import '../widgets/info_grid.dart';
 import '../../../../core/widgets/screen_layout.dart';
 
@@ -30,12 +32,15 @@ class OfferDetailsScreen extends ConsumerWidget {
     final actionState = ref.watch(offerActionsProvider);
     final isBusy = actionState.isLoading;
     final isOwner = ref.watch(isOwnerProvider);
+    final isManager = ref.watch(isManagerProvider);
 
     return offerAsync.when(
       data: (offer) {
         if (offer == null) {
           return const AppErrorView(message: 'Offer not found.');
         }
+
+        final canDeleteOffer = isOwner || isManager || !offer.isPublished;
 
         return AppLoadingOverlay(
           isLoading: isBusy,
@@ -98,8 +103,7 @@ class OfferDetailsScreen extends ConsumerWidget {
                                 ),
                                 const SizedBox(width: 10),
                               ],
-                              // Delete: hidden once published (must unpublish first).
-                              if (!offer.isPublished)
+                              if (canDeleteOffer)
                                 IconButton(
                                   tooltip: 'Delete offer',
                                   onPressed: isBusy
@@ -110,7 +114,7 @@ class OfferDetailsScreen extends ConsumerWidget {
                                                 context: context,
                                                 title: 'Delete offer?',
                                                 message:
-                                                    'This will remove ${offer.title} permanently.',
+                                                    'This will remove ${offer.title} and its images permanently.',
                                                 confirmLabel: 'Delete',
                                               );
                                           if (!confirmed || !context.mounted) {
@@ -180,7 +184,7 @@ class OfferDetailsScreen extends ConsumerWidget {
                                               : offer.cityNames.join(', '),
                                           'Discount': offer.discountText,
                                           'Dates':
-                                              '${offer.startDate.shortDate} - ${offer.endDate.shortDate}',
+                                              '${offer.startDate.shortDate} - ${offer.scheduleEndLabel}',
                                           'Created':
                                               offer.createdAt.compactDateTime,
                                         },
@@ -249,15 +253,40 @@ class OfferDetailsScreen extends ConsumerWidget {
                                               FilledButton.icon(
                                                 onPressed: isBusy
                                                     ? null
-                                                    : () => ref
-                                                          .read(
-                                                            offerActionsProvider
-                                                                .notifier,
-                                                          )
-                                                          .publish(
-                                                            offer.id,
-                                                            true,
-                                                          ),
+                                                    : () async {
+                                                        final alertOptions =
+                                                            readAlertNotificationOptions(
+                                                          ref,
+                                                        );
+                                                        final drafts =
+                                                            await confirmOfferNotificationDrafts(
+                                                              context,
+                                                              offer,
+                                                              enabledSlugs: alertOptions
+                                                                  .enabledSlugs,
+                                                              selectableAlertTypes:
+                                                                  alertOptions
+                                                                      .selectableAlertTypes,
+                                                              alertTypeLabels:
+                                                                  alertOptions
+                                                                      .alertTypeLabels,
+                                                            );
+                                                        if (drafts == null ||
+                                                            !context.mounted) {
+                                                          return;
+                                                        }
+                                                        await ref
+                                                            .read(
+                                                              offerActionsProvider
+                                                                  .notifier,
+                                                            )
+                                                            .publish(
+                                                              offer.id,
+                                                              true,
+                                                              notificationDrafts:
+                                                                  drafts,
+                                                            );
+                                                      },
                                                 icon: const Icon(
                                                   Icons.visibility_outlined,
                                                 ),

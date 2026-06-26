@@ -928,6 +928,25 @@ async function resolveRecipients(db, offerId, offer) {
 }
 
 /**
+ * @param {import('firebase-admin/firestore').DocumentData} request
+ */
+function requestAlertType(request) {
+  const data = request.data || {};
+  const fromData =
+    typeof data.type === 'string' && data.type.trim()
+      ? data.type.trim()
+      : typeof data.alertType === 'string' && data.alertType.trim()
+        ? data.alertType.trim()
+        : '';
+  if (fromData) {
+    return fromData;
+  }
+  return typeof request.type === 'string' && request.type.trim()
+    ? request.type.trim()
+    : 'new_offer';
+}
+
+/**
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} offerId
  * @param {import('firebase-admin/firestore').DocumentData} offer
@@ -954,6 +973,7 @@ async function resolveNotificationContent(db, offerId, offer, requestId = null) 
         imageUrl: request.includeImage === false
           ? ''
           : requestImageUrl(request, offer),
+        type: requestAlertType(request),
       };
     }
   }
@@ -985,6 +1005,7 @@ async function resolveNotificationContent(db, offerId, offer, requestId = null) 
       imageUrl: request.includeImage === false
         ? ''
         : requestImageUrl(request, offer),
+      type: requestAlertType(request),
     };
   }
 
@@ -994,6 +1015,7 @@ async function resolveNotificationContent(db, offerId, offer, requestId = null) 
     requestId: null,
     includeImage: true,
     imageUrl: primaryOfferImageUrl(offer),
+    type: 'new_offer',
   };
 }
 
@@ -1230,6 +1252,11 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
       ? content.imageUrl.trim()
       : '';
 
+  const alertType =
+    typeof content.type === 'string' && content.type.trim()
+      ? content.type.trim()
+      : 'new_offer';
+
   for (const tokenChunk of chunk(allTokens, 500)) {
     const response = await messaging.sendEachForMulticast({
       tokens: tokenChunk,
@@ -1239,7 +1266,8 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
         ...(imageUrl ? { imageUrl } : {}),
       },
       data: {
-        type: 'new_offer',
+        type: alertType,
+        alertType,
         offerId,
         title: content.title,
         body: content.body,
@@ -1293,12 +1321,17 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
         errorMessage: message,
       });
       if (shouldRemoveFcmToken(code)) {
-        invalidTokens.push(tokenChunk[index]);
+        logger.warn('FCM token send failed (token kept in Firestore)', {
+          offerId,
+          token: maskFcmToken(tokenChunk[index]),
+          errorCode: code,
+          errorMessage: message,
+        });
       }
     });
   }
 
-  await removeInvalidTokens(db, recipients, invalidTokens);
+  // Tokens are only removed on explicit mobile sign out — never pruned here.
   await markNotificationSent(
     db,
     offerId,

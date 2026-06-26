@@ -6,7 +6,73 @@ Log all new features, enhancements, and non-bug work here **before** implementin
 
 ---
 
-## 2026-06-24 — Project hygiene: imports, deprecations, release log
+## 2026-06-19 — Unified selectors and shimmer loading
+
+Shared `AppFieldSelector`, `SingleSelectField`, and updated `MultiSelectField` for consistent dropdown-style fields; shimmer placeholders replace spinners on data fetch loading states.
+
+---
+
+## 2026-06-19 — Offer open-ended end dates
+
+Offer form supports fixed end date, ongoing, or until stock ends (`endDateMode`); open-ended offers store no `endDate` in Firestore.
+
+---
+
+## 2026-06-19 — Auto-generated city and category IDs
+
+New city/category forms no longer accept a manual ID; Firestore assigns the document ID on create. Edit screens show the ID read-only.
+
+---
+
+## 2026-06-19 — Offer form category scope and city defaults
+
+Offer create/edit: multi-select categories (dropdown), whole-brand scope option, Lahore default city, and select-all cities in picker.
+
+---
+
+Title: `{brand}: {discountText}`. Body: ad title + full stop + ad description (single line).
+
+---
+
+## 2026-06-19 — Notification title/body format
+
+Title: `{brand}: {discountText}`. Body: offer title then description.
+
+---
+
+## 2026-06-19 — Notification listing edit/publish title refresh
+
+Edit and publish on existing notification requests re-fetch the linked offer to suggest title (offer + discount) and description.
+
+---
+
+## 2026-06-19 — Smart default notification titles
+
+Default push title blends offer title with discount (when not already present); still editable in preview.
+
+---
+
+## 2026-06-19 — Offer notification defaults and publish preview
+
+Notification requests use offer title and description; pre-publish dialog to edit push title, body, and image option.
+
+---
+
+## 2026-06-19 — Notification publish UI compact selector
+
+Hide brand publish-all buttons when collapsed; per-request segmented publish control with compact Publish action.
+
+---
+
+## 2026-06-19 — Notification requests list UI polish
+
+Rename publish buttons (no counts), collapsible brand cards, per-request publish action panel (with/without notification only).
+
+---
+
+## 2026-06-24 — Notification request publish modes
+
+Notification requests list: publish pending offers with or without push — per request, per brand card, and publish-all at the top.
 
 Remove unused imports project-wide, replace deprecated APIs (`dart:html`, `withOpacity`, dropdown `value`), add `docs/release-management.md` + release build script, and tighten `.gitignore` for push hygiene.
 

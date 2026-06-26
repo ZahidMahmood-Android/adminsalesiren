@@ -1,10 +1,10 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../../../core/services/app_logger.dart';
 import '../../domain/repositories/offer_image_repository.dart';
+import '../utils/offer_storage_utils.dart';
 
 class FirebaseOfferImageRepository implements OfferImageRepository {
   FirebaseOfferImageRepository(this._storage);
@@ -58,16 +58,29 @@ class FirebaseOfferImageRepository implements OfferImageRepository {
   Future<void> deleteImagesForOffer({
     required String offerId,
     Iterable<String> imageUrls = const [],
+    Iterable<String> additionalFolderIds = const [],
   }) async {
     _log.info('Deleting offer images offerId=$offerId');
-    try {
-      await _deleteStorageFolder(_storage.ref('offers/$offerId'));
-    } catch (error, stackTrace) {
-      _log.warning(
-        'Failed to delete offer image folder offerId=$offerId',
-        error,
-        stackTrace,
-      );
+    final folderIds = <String>{
+      offerId,
+      ...additionalFolderIds.map((id) => id.trim()).where((id) => id.isNotEmpty),
+    };
+    final storagePaths = OfferStorageUtils.storagePathsForUrls(imageUrls);
+
+    for (final path in storagePaths) {
+      await _deleteRefSilently(_storage.ref(path), label: path);
+    }
+
+    for (final folderId in folderIds) {
+      try {
+        await _deleteStorageFolder(_storage.ref('offers/$folderId'));
+      } catch (error, stackTrace) {
+        _log.warning(
+          'Failed to delete offer image folder offers/$folderId',
+          error,
+          stackTrace,
+        );
+      }
     }
 
     for (final url
@@ -75,21 +88,45 @@ class FirebaseOfferImageRepository implements OfferImageRepository {
             .map((value) => value.trim())
             .where((value) => value.isNotEmpty)
             .toSet()) {
-      try {
-        await _storage.refFromURL(url).delete();
-      } catch (error) {
-        _log.fine('Could not delete image url (may already be gone): $url');
+      await _deleteUrlSilently(url);
+    }
+  }
+
+  Future<void> _deleteUrlSilently(String url) async {
+    try {
+      await _storage.refFromURL(url).delete();
+    } catch (error) {
+      final path = OfferStorageUtils.pathFromFirebaseStorageUrl(url);
+      if (path != null) {
+        await _deleteRefSilently(_storage.ref(path), label: path);
+        return;
       }
+      _log.fine('Could not delete image url (may already be gone): $url');
+    }
+  }
+
+  Future<void> _deleteRefSilently(Reference ref, {required String label}) async {
+    try {
+      await ref.delete();
+    } catch (error) {
+      _log.fine('Could not delete storage object $label (may already be gone)');
     }
   }
 
   Future<void> _deleteStorageFolder(Reference ref) async {
-    final list = await ref.listAll();
-    for (final item in list.items) {
-      await item.delete();
-    }
-    for (final prefix in list.prefixes) {
-      await _deleteStorageFolder(prefix);
-    }
+    const pageSize = 100;
+    String? pageToken;
+    do {
+      final listResult = await ref.list(
+        ListOptions(maxResults: pageSize, pageToken: pageToken),
+      );
+      for (final item in listResult.items) {
+        await item.delete();
+      }
+      for (final prefix in listResult.prefixes) {
+        await _deleteStorageFolder(prefix);
+      }
+      pageToken = listResult.nextPageToken;
+    } while (pageToken != null);
   }
 }

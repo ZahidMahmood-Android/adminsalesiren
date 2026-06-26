@@ -6,6 +6,86 @@ Log all bug fixes here **before** implementing. For new features use `docs/updat
 
 ---
 
+## 2026-06-26 — Brand admin / manager cannot update own offers
+
+**Symptom:** `OfferActionsController` logs `permission-denied` on update; create works for the same user and offer id.
+
+**Cause:** Firestore `isPublishedOffer()` treated `status: approved` as published even when `isPublished` was false, so brand-scoped users were blocked from editing approved-but-unpublished offers. Update rules also keyed on `ownsOffer()` (brand match only) instead of the same creator + brand checks used on create. The edit form reset `approvalStatus` from `approved` to `pending` on save, which could also break published-state preservation.
+
+**Fix:** Align offer update rules with `createsOwnOffer()` (creator + brand), base `isPublishedOffer()` only on `isPublished == true`, preserve approval fields when editing unpublished offers, and make notification-request cleanup best-effort after a successful offer write.
+
+---
+
+## 2026-06-26 — Dashboard bootstrap `RenderBox was not laid out`
+
+**Symptom:** On `/dashboard` load, console logs `RenderBox was not laid out: RenderSemanticsGestureHandler` (Flutter framework error during bootstrap).
+
+**Cause:** Dashboard loading state used `AppLoader(list: true)` (`AppListShimmer` / `ListView`) inside a `CustomScrollView` → `Column` with unbounded max height. `SingleSelectField` picker dialog also used `Flexible` inside a shrink-wrapped `Column`.
+
+**Fix:** Use `AppFormShimmer` on dashboard loading (non-scroll sliver body). Replace dialog `Flexible` + `ListView` with a single `ListView(shrinkWrap: true)` like `MultiSelectField`.
+
+---
+
+## 2026-06-26 — Alert Settings nav opens dashboard
+
+**Symptom:** Left menu “Alert Settings” navigates to `/dashboard` instead of the alert settings screen.
+
+**Cause:** `/settings/alerts` was registered as a sibling of `/settings`. go_router treats `/settings` as the parent path and does not match the flat sibling route.
+
+**Fix:** Nest `alerts` under the `/settings` route (same pattern as `/bug-reports/submit`).
+
+---
+
+## 2026-06-26 — Logout login page layout exception loop
+
+**Symptom:** After logout, `/login` logs `RenderBox was not laid out: RenderIgnorePointer` continuously.
+
+**Cause:** Login could render inside the shell during auth teardown; `AppLoadingOverlay` used a loose `Stack` (overlay not expanded); `AppLoader(list: true)` could place a `ListView` in unbounded-height parents during shell loading states.
+
+**Fix:** Root navigator key for `/login`, skip shell chrome when signed out, expand loading overlay stack, guard list shimmer to bounded heights, hard-navigate to `/login` after sign-out, and tighten login form layout constraints.
+
+**Follow-up:** Returning bare `child` when signed out stripped `Scaffold`/Material from the still-mounted shell route; logout also used `ref` after the shell unmounted.
+
+---
+
+## 2026-06-26 — Logout throws No Material / ref unmounted
+
+**Symptom:** Logout shows login but console floods `No Material widget found` (TextField on prior shell page), `RenderFlex overflowed`, and `Using "ref" when a widget is about to or has been unmounted`.
+
+**Cause:** `AppShell` returned the shell `child` without a `Scaffold` while the shell navigator still held the previous page during auth teardown. `_confirmLogout` invalidated providers via `ref` after navigation unmounted the shell.
+
+**Fix:** Render an empty `Scaffold` when signed out (do not mount shell `child`). Use `ProviderScope.containerOf` for post-sign-out invalidation; let auth redirect navigate to `/login`.
+
+---
+
+## 2026-06-19 — Material icons missing across admin panel
+
+**Symptom:** Sidebar, form, and action icons render as empty boxes after theme changes.
+
+**Cause:** `GoogleFonts.interTextTheme()` was applied without a base `ThemeData`, so the Material Icons font was not wired into the theme on web.
+
+**Fix:** Build theme from `ThemeData(useMaterial3: true)` first, then apply Inter only to `textTheme` via `copyWith`.
+
+---
+
+## 2026-06-19 — FCM tokens cleared while still signed in
+
+**Symptom:** Admin push says no users have FCM tokens; mobile user was logged in but `fcmTokens` empty in Firestore.
+
+**Cause:** Mobile preference sync set `fcmTokens: []` when notifications were disabled and replaced the array with a single token instead of `arrayUnion`. Cloud Functions also removed tokens after FCM send errors.
+
+**Fix:** Only remove the current device token on sign out (`arrayRemove`). Otherwise always `arrayUnion` the active token; never wipe the list. Disable server-side token pruning on dispatch failures.
+
+---
+
+## 2026-06-19 — Offer delete must remove all Storage assets
+
+**Symptom:** Deleting an offer (any status) can leave images under `offers/{offerId}/` or orphaned URLs in Storage.
+
+**Fix:** Harden client-side Storage cleanup (URL path parsing, paginated folder delete, line-folder sweep). Owner/manager may delete published offers; delete also removes related `offer_push_jobs`.
+
+---
+
 ## 2026-06-24 — Registration email `signBlob` permission denied
 
 **Symptom:** Send verification email fails with `Permission iam.serviceAccounts.signBlob is required` / IAM troubleshooter link.

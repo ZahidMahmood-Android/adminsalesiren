@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:sale_siren_models/sale_siren_models.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loader.dart';
+import '../../../../core/widgets/app_shimmer.dart';
 import '../../../../core/widgets/app_loading_overlay.dart';
 import '../../../auth/domain/entities/user_roles.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -22,6 +24,10 @@ import '../../../cities/presentation/providers/city_providers.dart';
 import '../../../brands/domain/entities/brand_url_source.dart';
 import '../../data/local/offer_create_draft_storage.dart';
 import '../../domain/entities/offer.dart';
+import '../../../notifications/domain/entities/offer_notification_draft.dart';
+import '../../../notifications/domain/offer_edit_notification_utils.dart';
+import '../../../notifications/presentation/widgets/offer_publish_notification_flow.dart';
+import '../../../settings/presentation/providers/alert_settings_ui.dart';
 import '../../domain/entities/offer_image_upload_task.dart';
 import '../../domain/entities/offer_line.dart';
 import '../providers/offer_providers.dart';
@@ -314,6 +320,9 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       return;
     }
     final draft = _lineDrafts[index];
+    if (!start && draft.endDateMode != OfferEndDateModes.fixed) {
+      return;
+    }
     final initialDate = start
         ? draft.startDate ?? DateTime.now()
         : draft.endDate ??
@@ -331,10 +340,13 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     setState(() {
       if (start) {
         draft.startDate = picked;
-        if (draft.endDate != null && !draft.endDate!.isAfter(picked)) {
+        if (draft.endDateMode == OfferEndDateModes.fixed &&
+            draft.endDate != null &&
+            !draft.endDate!.isAfter(picked)) {
           draft.endDate = picked.add(const Duration(days: 1));
         }
       } else {
+        draft.endDateMode = OfferEndDateModes.fixed;
         draft.endDate = picked;
       }
       draft.syncLifecycleFromEndDate();
@@ -500,19 +512,27 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         return;
       }
       final offerLines = _lineDrafts.map((draft) {
-        final category = categories
-            .where((item) => item.id == draft.categoryId)
-            .firstOrNull;
+        final brandId = isBrandScopedUser ? user?.brandId : draft.brandId;
+        final brand = brands.where((item) => item.id == brandId).firstOrNull;
+        final resolvedCategories = resolveDraftCategories(
+          draft: draft,
+          brand: brand,
+          allCategories: categories,
+        );
         final images = draft.imageUrls
             .map((url) => url.trim())
             .where((url) => url.isNotEmpty)
             .toList();
+        final primaryCategory = resolvedCategories.firstOrNull;
         return OfferLine(
           id: draft.id,
           title: draft.title.trim(),
           description: draft.description.trim(),
-          categoryId: category?.id ?? '',
-          categoryName: category?.name ?? '',
+          categoryId: primaryCategory?.id ?? '',
+          categoryName: offerCategoryLabel(
+            scope: draft.categoryScope,
+            categories: resolvedCategories,
+          ),
           discountText: draft.discountText.trim(),
           discountType: draft.discountType,
           discountValue: int.tryParse(draft.discountValue.trim()),
@@ -521,24 +541,112 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
           linkSources: BrandUrlSourceUtils.withStableIds(draft.linkSources),
         );
       }).toList();
+      final aggregatedCategoryIds = <String>[];
+      final aggregatedCategoryNames = <String>[];
+      for (final draft in _lineDrafts) {
+        final brandId = isBrandScopedUser ? user?.brandId : draft.brandId;
+        final brand = brands.where((item) => item.id == brandId).firstOrNull;
+        for (final category in resolveDraftCategories(
+          draft: draft,
+          brand: brand,
+          allCategories: categories,
+        )) {
+          if (!aggregatedCategoryIds.contains(category.id)) {
+            aggregatedCategoryIds.add(category.id);
+            aggregatedCategoryNames.add(category.name);
+          }
+        }
+      }
       var groupedOffer = primaryOffer.copyWith(
         offerLines: offerLines,
         discountText: offerLines.length > 1
             ? '${offerLines.length} offers'
             : primaryOffer.discountText,
-        categoryIds: offerLines.map((line) => line.categoryId).toList(),
-        categoryNames: offerLines.map((line) => line.categoryName).toList(),
+        categoryIds: aggregatedCategoryIds,
+        categoryNames: aggregatedCategoryNames,
       );
-      await actions.saveChanges(groupedOffer);
+      Map<String, OfferNotificationDraft>? groupedNotificationDrafts;
+      final wasPublished = _loadedOffer?.isPublished ?? false;
+      final willPublish = groupedOffer.isPublished && !wasPublished;
+      final shouldNotifyEdit = wasPublished &&
+          groupedOffer.isPublished &&
+          OfferEditNotificationUtils.hasNotifiableChange(
+            previous: _loadedOffer!,
+            next: groupedOffer,
+          );
+      if (willPublish || shouldNotifyEdit) {
+        final alertOptions = readAlertNotificationOptions(ref);
+        groupedNotificationDrafts = await confirmOfferNotificationDrafts(
+          context,
+          groupedOffer,
+          previousOffer: shouldNotifyEdit ? _loadedOffer : null,
+          confirmLabel: willPublish ? 'Save & publish' : 'Save & notify',
+          title: willPublish ? 'Notification preview' : 'Update notification',
+          subtitle: willPublish
+              ? 'Review and edit the push notification before publishing this offer.'
+              : 'Choose the alert category and message for this offer update.',
+          enabledSlugs: alertOptions.enabledSlugs,
+          selectableAlertTypes: alertOptions.selectableAlertTypes,
+          alertTypeLabels: alertOptions.alertTypeLabels,
+        );
+        if (groupedNotificationDrafts == null) {
+          return;
+        }
+      }
+      await actions.saveChanges(
+        groupedOffer,
+        notificationDrafts: groupedNotificationDrafts,
+      );
     } else {
       for (var index = 0; index < offersToSave.length; index++) {
         final draft = _lineDrafts[index];
         var offer = offersToSave[index];
 
+        Map<String, OfferNotificationDraft>? notificationDrafts;
+        final wasPublished = _isEditing && (_loadedOffer?.isPublished ?? false);
+        final willPublish = offer.isPublished && !wasPublished;
+        final shouldNotifyEdit = _isEditing &&
+            wasPublished &&
+            offer.isPublished &&
+            _loadedOffer != null &&
+            OfferEditNotificationUtils.hasNotifiableChange(
+              previous: _loadedOffer!,
+              next: offer,
+            );
+        if (willPublish || shouldNotifyEdit) {
+          final alertOptions = readAlertNotificationOptions(ref);
+          notificationDrafts = await confirmOfferNotificationDrafts(
+            context,
+            offer,
+            previousOffer: shouldNotifyEdit ? _loadedOffer : null,
+            confirmLabel: _isEditing
+                ? (willPublish ? 'Save & publish' : 'Save & notify')
+                : 'Create & publish',
+            title: willPublish || !_isEditing
+                ? 'Notification preview'
+                : 'Update notification',
+            subtitle: willPublish || !_isEditing
+                ? 'Review and edit the push notification before publishing this offer.'
+                : 'Choose the alert category and message for this offer update.',
+            enabledSlugs: alertOptions.enabledSlugs,
+            selectableAlertTypes: alertOptions.selectableAlertTypes,
+            alertTypeLabels: alertOptions.alertTypeLabels,
+          );
+          if (notificationDrafts == null) {
+            return;
+          }
+        }
+
         if (_isEditing) {
-          await actions.saveChanges(offer);
+          await actions.saveChanges(
+            offer,
+            notificationDrafts: notificationDrafts,
+          );
         } else {
-          final createdId = await actions.create(offer);
+          final createdId = await actions.create(
+            offer,
+            notificationDrafts: notificationDrafts,
+          );
           if (createdId == null) {
             final actionState = ref.read(offerActionsProvider);
             if (mounted) {
@@ -755,7 +863,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                             ),
                           ),
                         if (loadingLookups)
-                          const SizedBox(height: 96, child: AppLoader(size: 72))
+                          const SizedBox(height: 96, child: AppFormShimmer())
                         else
                           OfferLinesEditor(
                             lines: _lineDrafts,

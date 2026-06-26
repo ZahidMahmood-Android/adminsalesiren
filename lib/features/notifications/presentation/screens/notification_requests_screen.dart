@@ -8,12 +8,10 @@ import '../../../../core/widgets/empty_state.dart';
 import '../../../../core/widgets/list_screen_body.dart';
 import '../../../../core/widgets/list_search_field.dart';
 import '../../../../core/widgets/screen_layout.dart';
-import '../../../../core/widgets/sweet_confirmation_dialog.dart';
-import '../../../../core/services/push_dispatch_user_messages.dart';
-import '../../../../core/widgets/app_error_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/notification_request.dart';
 import '../providers/notification_providers.dart';
+import '../widgets/notification_publish_actions.dart';
 import '../widgets/notification_request_tile.dart';
 
 class NotificationRequestsScreen extends ConsumerWidget {
@@ -40,48 +38,10 @@ class NotificationRequestsScreen extends ConsumerWidget {
       title: 'Notification Requests',
       actions: [
         if ((isBrandScopedUser || canManageRequests) && hasPendingRequests)
-          FilledButton.icon(
-            onPressed: actionState.isLoading
-                ? null
-                : () async {
-                    final confirmed = await showSweetConfirmationDialog(
-                      context: context,
-                      title: 'Publish all pending?',
-                      message:
-                          'This will publish every pending notification request shown for your account.',
-                      confirmLabel: 'Publish all',
-                      icon: Icons.campaign_outlined,
-                    );
-                    if (!confirmed || !context.mounted) {
-                      return;
-                    }
-                    try {
-                      await ref
-                          .read(notificationRequestActionsProvider.notifier)
-                          .publishAllPending();
-                      if (!context.mounted) {
-                        return;
-                      }
-                      final error = ref
-                          .read(notificationRequestActionsProvider)
-                          .error;
-                      if (error != null) {
-                        await showNotificationDispatchError(context, error);
-                        return;
-                      }
-                      showAppSuccess(
-                        context,
-                        'Pending notification requests published.',
-                      );
-                    } catch (error) {
-                      if (!context.mounted) {
-                        return;
-                      }
-                      await showNotificationDispatchError(context, error);
-                    }
-                  },
-            icon: const Icon(Icons.campaign_outlined),
-            label: const Text('Publish all'),
+          notificationPublishModeButtons(
+            enabled: !actionState.isLoading,
+            hasPending: hasPendingRequests,
+            onPublish: (mode) => publishAllPendingRequests(context, ref, mode: mode),
           ),
       ],
       child: ListScreenBody<List<NotificationRequest>>(
@@ -188,8 +148,11 @@ class _NotificationBrandGroup {
   final String brandName;
   final List<NotificationRequest> requests;
 
-  int get pendingCount =>
-      requests.where((request) => request.status == 'pending').length;
+  int get pendingCount => requests
+      .where(
+        (request) => request.status == 'pending' && request.offerId.isNotEmpty,
+      )
+      .length;
 }
 
 List<_NotificationBrandGroup> _groupNotificationRequestsByBrand(
@@ -250,7 +213,7 @@ bool _notificationRequestMatchesSearch(
   );
 }
 
-class _NotificationBrandGroupCard extends ConsumerWidget {
+class _NotificationBrandGroupCard extends ConsumerStatefulWidget {
   const _NotificationBrandGroupCard({
     required this.group,
     required this.canManageRequests,
@@ -264,113 +227,129 @@ class _NotificationBrandGroupCard extends ConsumerWidget {
   final AsyncValue<void> actionState;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_NotificationBrandGroupCard> createState() =>
+      _NotificationBrandGroupCardState();
+}
+
+class _NotificationBrandGroupCardState
+    extends ConsumerState<_NotificationBrandGroupCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final group = widget.group;
     final canPublishBrand =
-        group.pendingCount > 0 && (isBrandScopedUser || canManageRequests);
+        group.pendingCount > 0 &&
+        (widget.isBrandScopedUser || widget.canManageRequests);
+    final theme = Theme.of(context);
 
     return AppCard(
       padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    group.brandName,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
+          Material(
+            color: Colors.transparent,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        children: [
+                          AnimatedRotation(
+                            turns: _expanded ? 0.5 : 0,
+                            duration: const Duration(milliseconds: 200),
+                            child: Icon(
+                              Icons.expand_more,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              group.brandName,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Chip(
+                            label: Text('${group.requests.length}'),
+                            avatar: const Icon(
+                              Icons.notifications_none_outlined,
+                              size: 18,
+                            ),
+                          ),
+                          if (group.pendingCount > 0) ...[
+                            const SizedBox(width: 8),
+                            Chip(
+                              label: Text('${group.pendingCount} pending'),
+                              backgroundColor: theme
+                                  .colorScheme
+                                  .primaryContainer
+                                  .withValues(alpha: 0.55),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                if (canPublishBrand)
-                  TextButton.icon(
-                    onPressed: actionState.isLoading
-                        ? null
-                        : () => _publishPendingForBrand(context, ref),
-                    icon: const Icon(Icons.campaign_outlined, size: 18),
-                    label: Text('Publish (${group.pendingCount})'),
-                  ),
-                const SizedBox(width: 8),
-                Chip(
-                  label: Text('${group.requests.length}'),
-                  avatar: const Icon(
-                    Icons.notifications_none_outlined,
-                    size: 18,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-          const Divider(height: 1),
-          ...group.requests.asMap().entries.map((entry) {
-            return Column(
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                NotificationRequestTile(
-                  request: entry.value,
-                  canManageRequests: canManageRequests,
-                  isBrandScopedUser: isBrandScopedUser,
-                  actionState: actionState,
-                ),
-                if (entry.key != group.requests.length - 1)
-                  const Divider(height: 1),
+                const Divider(height: 1),
+                if (canPublishBrand)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
+                    child: notificationPublishModeButtons(
+                      enabled: !widget.actionState.isLoading,
+                      hasPending: group.pendingCount > 0,
+                      onPublish: (mode) => publishBrandPendingRequests(
+                        context,
+                        ref,
+                        mode: mode,
+                        brandName: group.brandName,
+                        requests: group.requests,
+                      ),
+                    ),
+                  ),
+                ...group.requests.asMap().entries.map((entry) {
+                  return Column(
+                    children: [
+                      NotificationRequestTile(
+                        request: entry.value,
+                        canManageRequests: widget.canManageRequests,
+                        isBrandScopedUser: widget.isBrandScopedUser,
+                        actionState: widget.actionState,
+                      ),
+                      if (entry.key != group.requests.length - 1)
+                        const Divider(height: 1),
+                    ],
+                  );
+                }),
               ],
-            );
-          }),
+            ),
+            crossFadeState: _expanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 220),
+            sizeCurve: Curves.easeInOut,
+          ),
         ],
       ),
     );
-  }
-
-  Future<void> _publishPendingForBrand(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
-    final confirmed = await showSweetConfirmationDialog(
-      context: context,
-      title: 'Publish pending for ${group.brandName}?',
-      message:
-          'This will publish every pending notification request for this brand.',
-      confirmLabel: 'Publish',
-      icon: Icons.campaign_outlined,
-    );
-    if (!confirmed || !context.mounted) {
-      return;
-    }
-    final actions = ref.read(notificationRequestActionsProvider.notifier);
-    try {
-      for (final request in group.requests) {
-        if (request.status != 'pending' || request.offerId.isEmpty) {
-          continue;
-        }
-        await actions.publishRequest(
-          requestId: request.id,
-          offerId: request.offerId,
-          offerLineId: request.offerLineId,
-        );
-        final error = ref.read(notificationRequestActionsProvider).error;
-        if (error != null) {
-          if (!context.mounted) {
-            return;
-          }
-          await showNotificationDispatchError(context, error);
-          return;
-        }
-      }
-      if (!context.mounted) {
-        return;
-      }
-      showAppSuccess(
-        context,
-        'Pending requests for ${group.brandName} published.',
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      await showNotificationDispatchError(context, error);
-    }
   }
 }

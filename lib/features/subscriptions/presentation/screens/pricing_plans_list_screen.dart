@@ -117,7 +117,7 @@ class PricingPlansListScreen extends ConsumerWidget {
               ),
             );
           },
-          loading: () => const AppLoader(),
+          loading: () => const AppLoader(list: true),
           error: (error, _) => AppErrorView(error: error),
         ),
       ),

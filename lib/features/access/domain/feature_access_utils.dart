@@ -77,7 +77,7 @@ class FeatureAccessUtils {
     if (location == '/notifications') {
       return AppFeatureIds.adminNotifications;
     }
-    if (location == '/settings') {
+    if (location == '/settings' || location.startsWith('/settings/')) {
       return AppFeatureIds.adminSettings;
     }
     if (location.startsWith('/cities')) {

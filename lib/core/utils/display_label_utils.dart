@@ -5,6 +5,7 @@ class DisplayLabelUtils {
   static const _knownLabels = <String, String>{
     'new_offer': 'New Offer',
     'price_drop': 'Price Drop',
+    'price_up': 'Price Up',
     'ending_soon': 'Ending Soon',
     'update': 'Update',
     'owner': 'Super Admin',

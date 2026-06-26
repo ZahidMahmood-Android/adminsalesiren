@@ -1,4 +1,5 @@
 import '../../../brands/domain/entities/brand_url_source.dart';
+import '../../../../core/extensions/date_time_extensions.dart';
 import 'offer_line.dart';
 import 'package:sale_siren_models/sale_siren_models.dart';
 
@@ -25,7 +26,8 @@ class Offer {
     this.linkSources = const [],
     this.shareUrl = '',
     required this.startDate,
-    required this.endDate,
+    this.endDate,
+    this.endDateMode = OfferEndDateModes.fixed,
     required this.isVerified,
     required this.isPublished,
     required this.isFeatured,
@@ -73,7 +75,8 @@ class Offer {
   final List<BrandUrlSource> linkSources;
   final String shareUrl;
   final DateTime startDate;
-  final DateTime endDate;
+  final DateTime? endDate;
+  final String endDateMode;
   final bool isVerified;
   final bool isPublished;
   final bool isFeatured;
@@ -142,7 +145,19 @@ class Offer {
 
   String get discountDisplay => discount.displayText;
 
-  bool get isExpired => status == 'expired' || endDate.isBefore(DateTime.now());
+  String get scheduleEndLabel => OfferEndDateModes.scheduleEndLabel(
+        mode: endDateMode,
+        endDate: endDate,
+        formatDate: (date) => date.shortDate,
+      );
+
+  bool get isExpired =>
+      status == 'expired' ||
+      OfferSchedule(
+        startDate: startDate,
+        endDate: endDate,
+        endDateMode: endDateMode,
+      ).isExpired;
 
   Offer copyWith({
     String? id,
@@ -167,6 +182,8 @@ class Offer {
     String? shareUrl,
     DateTime? startDate,
     DateTime? endDate,
+    String? endDateMode,
+    bool clearEndDate = false,
     bool? isVerified,
     bool? isPublished,
     bool? isFeatured,
@@ -214,7 +231,8 @@ class Offer {
       linkSources: linkSources ?? this.linkSources,
       shareUrl: shareUrl ?? this.shareUrl,
       startDate: startDate ?? this.startDate,
-      endDate: endDate ?? this.endDate,
+      endDate: clearEndDate ? null : (endDate ?? this.endDate),
+      endDateMode: endDateMode ?? this.endDateMode,
       isVerified: isVerified ?? this.isVerified,
       isPublished: isPublished ?? this.isPublished,
       isFeatured: isFeatured ?? this.isFeatured,

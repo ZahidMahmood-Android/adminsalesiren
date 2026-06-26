@@ -125,6 +125,79 @@ service cloud.firestore {
         && resource.data.brandId == brandId();
     }
 
+    function offerCreatedByUserId(data) {
+      return data.get('createdByUserId', '') != ''
+        ? data.get('createdByUserId', '')
+        : data.get('createdBy', '');
+    }
+
+    function offerStatus(data) {
+      return data.get('status', '') != ''
+        ? data.get('status', '')
+        : (data.get('isPublished', false) == true ? 'published' : 'draft');
+    }
+
+    function isPublishedLikeStatus(status) {
+      return status == 'published' || status == 'approved';
+    }
+
+    function preservesCreatedByUserId() {
+      return offerCreatedByUserId(request.resource.data) != ''
+        && offerCreatedByUserId(request.resource.data)
+            == offerCreatedByUserId(resource.data);
+    }
+
+    function isPublishedOffer() {
+      return resource.data.isPublished == true;
+    }
+
+    function updatesOwnOffer() {
+      let d = request.resource.data;
+      return isBrandScopedUser()
+        && offerCreatedByUserId(resource.data) == request.auth.uid
+        && preservesCreatedByUserId()
+        && d.brandId == resource.data.brandId
+        && (
+          isManager()
+          || d.brandId == brandId()
+        )
+        && (
+          (
+            !resource.data.isPublished
+            && d.isPublished == false
+          )
+          || canEditPublishedOfferContent()
+          || canExpirePublishedOffer()
+          || (
+            isBrandAdmin()
+            && offerStatus(resource.data) in ['pending', 'pending_review']
+            && d.isPublished == true
+            && isPublishedLikeStatus(d.status)
+            && d.approvalStatus == 'approved'
+            && d.approvedBy == request.auth.uid
+          )
+        );
+    }
+
+    function preservesPublishedOfferState() {
+      return request.resource.data.brandId == resource.data.brandId
+        && preservesCreatedByUserId()
+        && request.resource.data.isPublished == true
+        && isPublishedLikeStatus(request.resource.data.status)
+        && request.resource.data.approvalStatus == 'approved';
+    }
+
+    function canEditPublishedOfferContent() {
+      return isPublishedOffer() && preservesPublishedOfferState();
+    }
+
+    function canExpirePublishedOffer() {
+      return isPublishedOffer()
+        && request.resource.data.isPublished == false
+        && request.resource.data.status == 'expired'
+        && request.resource.data.approvalStatus == 'expired';
+    }
+
     function createsOwnOffer() {
       let d = request.resource.data;
       let pendingPath =
@@ -351,39 +424,11 @@ service cloud.firestore {
           isManagerOrAdminOrOwner()
           && (
             (resource.data.status != 'published' && resource.data.isPublished != true)
-            || (
-              (resource.data.status == 'published' || resource.data.isPublished == true)
-              && request.resource.data.isPublished == false
-              && request.resource.data.status == 'expired'
-              && request.resource.data.approvalStatus == 'expired'
-            )
+            || canEditPublishedOfferContent()
+            || canExpirePublishedOffer()
           )
         )
-        || (ownsOffer()
-          && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected', 'paused', 'published']
-          && request.resource.data.brandId == resource.data.brandId
-          && request.resource.data.createdByUserId == resource.data.createdByUserId
-          && (
-            (
-              resource.data.status != 'published'
-              && resource.data.isPublished != true
-              && request.resource.data.isPublished == false
-            )
-            || (
-              (resource.data.status == 'published' || resource.data.isPublished == true)
-              && request.resource.data.isPublished == false
-              && request.resource.data.status == 'expired'
-              && request.resource.data.approvalStatus == 'expired'
-            )
-            || (
-              isBrandAdmin()
-              && resource.data.status in ['pending', 'pending_review']
-              && request.resource.data.isPublished == true
-              && request.resource.data.status == 'published'
-              && request.resource.data.approvalStatus == 'approved'
-              && request.resource.data.approvedBy == request.auth.uid
-            )
-          ))
+        || updatesOwnOffer()
         || (
           isMobileUser()
           && resource.data.isPublished == true
@@ -395,11 +440,12 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys()
               .hasOnly(['saveCount', 'shareCount', 'updatedAt'])
         );
-      allow delete: if resource.data.status != 'published'
-        && resource.data.isPublished != true
-        && (
-          isManagerOrAdminOrOwner()
-          || (ownsOffer() && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected'])
+      allow delete: if isManagerOrAdminOrOwner()
+        || (
+          resource.data.status != 'published'
+          && resource.data.isPublished != true
+          && ownsOffer()
+          && resource.data.status in ['pending', 'pending_review', 'approved', 'draft', 'rejected', 'expired']
         );
     }
 
@@ -457,7 +503,7 @@ service cloud.firestore {
     match /offer_push_jobs/{jobId} {
       allow read: if isManagerOrAdminOrOwner();
       allow create, update: if isManagerOrAdminOrOwner() || isBrandScopedUser();
-      allow delete: if isAdminOrOwner();
+      allow delete: if isManagerOrAdminOrOwner();
     }
 
     match /registration_email_verification_jobs/{jobId} {

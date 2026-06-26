@@ -44,7 +44,7 @@ class OffersListScreen extends ConsumerWidget {
         onRetry: () => ref.invalidate(offersStreamProvider),
         builder: (items) {
           if (currentUser == null) {
-            return const AppLoader();
+            return const AppLoader(list: true);
           }
 
           return Column(

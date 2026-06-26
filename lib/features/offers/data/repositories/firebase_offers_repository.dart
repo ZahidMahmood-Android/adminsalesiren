@@ -10,6 +10,7 @@ import '../../domain/entities/offer_filters.dart';
 import '../../domain/repositories/offer_image_repository.dart';
 import '../../domain/repositories/offers_repository.dart';
 import '../models/offer_model.dart';
+import '../utils/offer_storage_utils.dart';
 
 class FirebaseOffersRepository implements OffersRepository {
   FirebaseOffersRepository(
@@ -43,6 +44,22 @@ class FirebaseOffersRepository implements OffersRepository {
       approvalStatus: 'pending',
       approvedBy: '',
       approvedAt: null,
+    );
+  }
+
+  Offer _normalizeOfferForWrite(Offer offer) {
+    final createdByUserId = offer.createdByUserId.isNotEmpty
+        ? offer.createdByUserId
+        : (offer.createdBy.isNotEmpty ? offer.createdBy : _currentUserId);
+    final status = offer.isPublished
+        ? 'published'
+        : (offer.status == 'pending' ? 'pending_review' : offer.status);
+    return offer.copyWith(
+      createdByUserId: createdByUserId,
+      createdBy: offer.createdBy.isNotEmpty ? offer.createdBy : createdByUserId,
+      status: status,
+      approvalStatus: offer.isPublished ? 'approved' : offer.approvalStatus,
+      isVerified: offer.isPublished ? true : offer.isVerified,
     );
   }
 
@@ -81,7 +98,7 @@ class FirebaseOffersRepository implements OffersRepository {
   }
 
   @override
-  Future<String> createOffer(Offer offer) async {
+  Future<String> createOffer(Offer offer, {bool sendNotification = true}) async {
     final pendingOffer = _enforcePendingForManager(offer);
     final doc = pendingOffer.id.isEmpty
         ? _offers.doc()
@@ -125,7 +142,7 @@ class FirebaseOffersRepository implements OffersRepository {
       ..['createdAt'] = FieldValue.serverTimestamp()
       ..['updatedAt'] = FieldValue.serverTimestamp();
     await doc.set(data);
-    if (pendingOffer.isPublished) {
+    if (sendNotification && pendingOffer.isPublished) {
       await _scheduleOfferPush(doc.id);
     }
     _log.info('Created offer id=${doc.id}');
@@ -190,13 +207,11 @@ class FirebaseOffersRepository implements OffersRepository {
   }
 
   @override
-  Future<void> updateOffer(Offer offer) async {
+  Future<void> updateOffer(Offer offer, {bool sendNotification = false}) async {
     final pendingOffer = _enforcePendingForManager(offer);
+    final normalizedOffer = _normalizeOfferForWrite(pendingOffer);
     final model = OfferModel.fromEntity(
-      pendingOffer.copyWith(
-        updatedAt: DateTime.now(),
-        createdBy: _currentUserId,
-      ),
+      normalizedOffer.copyWith(updatedAt: DateTime.now()),
     );
     _log.info(
       'Updating offer id=${pendingOffer.id} title=${pendingOffer.title}',
@@ -204,7 +219,7 @@ class FirebaseOffersRepository implements OffersRepository {
     final data = model.toFirestore(includeCreatedAt: false)
       ..['updatedAt'] = FieldValue.serverTimestamp();
     await _offers.doc(pendingOffer.id).update(data);
-    if (pendingOffer.isPublished) {
+    if (sendNotification && pendingOffer.isPublished) {
       await _scheduleOfferPush(pendingOffer.id);
     }
   }
@@ -259,35 +274,52 @@ class FirebaseOffersRepository implements OffersRepository {
   @override
   Future<void> deleteOffer(String id) async {
     _log.warning('Deleting offer id=$id');
+    Offer? offer;
     try {
       final snapshot = await _offers.doc(id).get();
-      final imageUrls = <String>{};
       if (snapshot.exists) {
-        final offer = OfferModel.fromSnapshot(snapshot);
-        if (offer.imageUrl.trim().isNotEmpty) {
-          imageUrls.add(offer.imageUrl.trim());
-        }
-        imageUrls.addAll(
-          offer.imageUrls
-              .map((url) => url.trim())
-              .where((url) => url.isNotEmpty),
+        offer = OfferModel.fromSnapshot(snapshot);
+        await _offerImageRepository.deleteImagesForOffer(
+          offerId: id,
+          imageUrls: OfferStorageUtils.collectImageUrls(offer),
+          additionalFolderIds: OfferStorageUtils.storageFolderIds(offer),
         );
-        for (final line in offer.resolvedLines) {
-          imageUrls.addAll(line.resolvedImageUrls());
-        }
       }
-      await _offerImageRepository.deleteImagesForOffer(
-        offerId: id,
-        imageUrls: imageUrls,
-      );
     } catch (error, stackTrace) {
       _log.warning(
-        'Offer image cleanup failed for id=$id; deleting Firestore doc anyway',
+        'Offer image cleanup failed for id=$id; continuing delete',
         error,
         stackTrace,
       );
     }
+
+    try {
+      await _deletePushJobsForOffer(id);
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Offer push job cleanup failed for id=$id; continuing delete',
+        error,
+        stackTrace,
+      );
+    }
+
     await _offers.doc(id).delete();
+    _log.info('Deleted offer id=$id');
+  }
+
+  Future<void> _deletePushJobsForOffer(String offerId) async {
+    final snapshot = await _firestore
+        .collection('offer_push_jobs')
+        .where('offerId', isEqualTo: offerId)
+        .get();
+    if (snapshot.docs.isEmpty) {
+      return;
+    }
+    final batch = _firestore.batch();
+    for (final doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 
   @override
@@ -295,6 +327,7 @@ class FirebaseOffersRepository implements OffersRepository {
     String offerId,
     String lineId, {
     required String requestId,
+    bool sendNotification = true,
   }) async {
     _log.info(
       'Publishing offer line offerId=$offerId lineId=$lineId requestId=$requestId',
@@ -326,9 +359,12 @@ class FirebaseOffersRepository implements OffersRepository {
       'approvedAt': Timestamp.now(),
       'updatedAt': Timestamp.now(),
     });
-    await _scheduleOfferPush(offerId, lineId: lineId, requestId: requestId);
+    if (sendNotification) {
+      await _scheduleOfferPush(offerId, lineId: lineId, requestId: requestId);
+    }
     _log.info(
-      'Published offer line offerId=$offerId lineId=$lineId requestId=$requestId',
+      'Published offer line offerId=$offerId lineId=$lineId requestId=$requestId '
+      'sendNotification=$sendNotification',
     );
   }
 
@@ -337,9 +373,11 @@ class FirebaseOffersRepository implements OffersRepository {
     String id,
     bool isPublished, {
     String? requestId,
+    bool sendNotification = true,
   }) async {
     _log.info(
-      'Setting offer published id=$id value=$isPublished requestId=${requestId ?? ''}',
+      'Setting offer published id=$id value=$isPublished requestId=${requestId ?? ''} '
+      'sendNotification=$sendNotification',
     );
     await _offers.doc(id).update({
       'isPublished': isPublished,
@@ -350,7 +388,7 @@ class FirebaseOffersRepository implements OffersRepository {
       'approvedAt': isPublished ? Timestamp.now() : null,
       'updatedAt': Timestamp.now(),
     });
-    if (isPublished) {
+    if (isPublished && sendNotification) {
       await _scheduleOfferPush(id, requestId: requestId);
     }
   }

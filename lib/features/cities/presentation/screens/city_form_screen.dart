@@ -25,7 +25,6 @@ class CityFormScreen extends ConsumerStatefulWidget {
 class _CityFormScreenState extends ConsumerState<CityFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _idController = TextEditingController();
   final _countryController = TextEditingController(text: 'Pakistan');
   var _isActive = true;
   var _hydrated = false;
@@ -35,7 +34,6 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _idController.dispose();
     _countryController.dispose();
     super.dispose();
   }
@@ -45,7 +43,6 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
       return;
     }
     _nameController.text = city.name;
-    _idController.text = city.id;
     _countryController.text = city.country;
     _isActive = city.isActive;
     _hydrated = true;
@@ -57,7 +54,7 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
     }
     final now = DateTime.now();
     final city = City(
-      id: _isEditing ? widget.cityId! : _idController.text.trim(),
+      id: _isEditing ? widget.cityId! : '',
       name: _nameController.text.trim(),
       country: _countryController.text.trim(),
       isActive: _isActive,
@@ -163,18 +160,18 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
                               ? 'City name is required'
                               : null,
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _idController,
-                          enabled: !_isEditing,
-                          decoration: const InputDecoration(
-                            labelText: 'City ID',
-                            prefixIcon: Icon(Icons.key_outlined),
+                        if (_isEditing) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            initialValue: widget.cityId,
+                            enabled: false,
+                            decoration: const InputDecoration(
+                              labelText: 'City ID',
+                              prefixIcon: Icon(Icons.key_outlined),
+                              helperText: 'Assigned by Firebase when created',
+                            ),
                           ),
-                          validator: (value) => (value ?? '').trim().isEmpty
-                              ? 'City ID is required'
-                              : null,
-                        ),
+                        ],
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _countryController,

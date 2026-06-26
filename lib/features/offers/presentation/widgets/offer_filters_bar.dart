@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/multi_select_field.dart';
+import '../../../../core/widgets/single_select_field.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
 import '../../../categories/presentation/providers/category_providers.dart';
@@ -30,6 +31,8 @@ class OfferFiltersBar extends ConsumerWidget {
         children: [
           MultiSelectField(
             label: 'Cities',
+            prefixIcon: Icons.location_city_outlined,
+            emptyLabel: 'Any city',
             options: cities
                 .map((city) => MultiSelectOption(id: city.id, label: city.name))
                 .toList(),
@@ -40,6 +43,8 @@ class OfferFiltersBar extends ConsumerWidget {
           ),
           MultiSelectField(
             label: 'Categories',
+            prefixIcon: Icons.category_outlined,
+            emptyLabel: 'Any category',
             options: categories
                 .map(
                   (category) =>
@@ -54,6 +59,8 @@ class OfferFiltersBar extends ConsumerWidget {
           if (!isBrandScopedUser)
             MultiSelectField(
               label: 'Brands',
+              prefixIcon: Icons.storefront_outlined,
+              emptyLabel: 'Any brand',
               options: brands
                   .map(
                     (brand) =>
@@ -65,39 +72,37 @@ class OfferFiltersBar extends ConsumerWidget {
                 filters.copyWith(brandIds: ids, clearBrand: true),
               ),
             ),
-          SizedBox(
-            width: 180,
-            child: DropdownButtonFormField<bool>(
-              initialValue: filters.isPublished,
-              decoration: const InputDecoration(labelText: 'Published'),
-              items: const [
-                DropdownMenuItem<bool>(value: null, child: Text('Any')),
-                DropdownMenuItem(value: true, child: Text('Published')),
-                DropdownMenuItem(value: false, child: Text('Draft')),
-              ],
-              onChanged: (value) => controller.update(
-                filters.copyWith(
-                  isPublished: value,
-                  clearPublished: value == null,
-                ),
+          SingleSelectField<bool?>(
+            label: 'Published',
+            prefixIcon: Icons.publish_outlined,
+            value: filters.isPublished,
+            emptyLabel: 'Any',
+            allowAny: true,
+            options: const [
+              SingleSelectOption(value: true, label: 'Published'),
+              SingleSelectOption(value: false, label: 'Draft'),
+            ],
+            onChanged: (value) => controller.update(
+              filters.copyWith(
+                isPublished: value,
+                clearPublished: value == null,
               ),
             ),
           ),
-          SizedBox(
-            width: 180,
-            child: DropdownButtonFormField<bool>(
-              initialValue: filters.isVerified,
-              decoration: const InputDecoration(labelText: 'Verified'),
-              items: const [
-                DropdownMenuItem<bool>(value: null, child: Text('Any')),
-                DropdownMenuItem(value: true, child: Text('Verified')),
-                DropdownMenuItem(value: false, child: Text('Unverified')),
-              ],
-              onChanged: (value) => controller.update(
-                filters.copyWith(
-                  isVerified: value,
-                  clearVerified: value == null,
-                ),
+          SingleSelectField<bool?>(
+            label: 'Verified',
+            prefixIcon: Icons.verified_outlined,
+            value: filters.isVerified,
+            emptyLabel: 'Any',
+            allowAny: true,
+            options: const [
+              SingleSelectOption(value: true, label: 'Verified'),
+              SingleSelectOption(value: false, label: 'Unverified'),
+            ],
+            onChanged: (value) => controller.update(
+              filters.copyWith(
+                isVerified: value,
+                clearVerified: value == null,
               ),
             ),
           ),

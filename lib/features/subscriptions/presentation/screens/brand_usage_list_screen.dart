@@ -184,7 +184,7 @@ class _BrandUsageListScreenState extends ConsumerState<BrandUsageListScreen> {
               },
             );
           },
-          loading: () => const AppLoader(),
+          loading: () => const AppLoader(list: true),
           error: (error, _) => AppErrorView(error: error),
         ),
       ),

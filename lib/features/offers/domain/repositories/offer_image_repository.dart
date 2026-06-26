@@ -10,5 +10,6 @@ abstract class OfferImageRepository {
   Future<void> deleteImagesForOffer({
     required String offerId,
     Iterable<String> imageUrls = const [],
+    Iterable<String> additionalFolderIds = const [],
   });
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_error_view.dart';
-import 'app_loader.dart';
+import 'app_shimmer.dart';
 
 class ListScreenBody<T> extends StatelessWidget {
   const ListScreenBody({
@@ -25,7 +25,7 @@ class ListScreenBody<T> extends StatelessWidget {
     return asyncValue.when(
       skipLoadingOnRefresh: skipLoadingOnRefresh,
       skipLoadingOnReload: skipLoadingOnReload,
-      loading: () => const AppLoader(),
+      loading: () => const AppListShimmer(),
       error: (error, _) => AppErrorView(error: error, onRetry: onRetry),
       data: builder,
     );

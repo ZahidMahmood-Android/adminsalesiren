@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/extensions/date_time_extensions.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/app_shimmer.dart';
 import '../../../../core/widgets/animated_content.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_list_tile_material.dart';
@@ -237,7 +238,7 @@ class _BugReportsDashboardScreenState
             ),
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: AppListShimmer()),
         error: (error, _) => Center(child: Text(error.toString())),
       ),
     );

@@ -26,7 +26,6 @@ class CategoryFormScreen extends ConsumerStatefulWidget {
 class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _idController = TextEditingController();
   final _iconController = TextEditingController(text: 'local_offer');
   final _sortOrderController = TextEditingController(text: '1');
   var _isActive = true;
@@ -37,7 +36,6 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _idController.dispose();
     _iconController.dispose();
     _sortOrderController.dispose();
     super.dispose();
@@ -48,7 +46,6 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
       return;
     }
     _nameController.text = category.name;
-    _idController.text = category.id;
     _iconController.text = category.iconName;
     _sortOrderController.text = category.sortOrder.toString();
     _isActive = category.isActive;
@@ -61,7 +58,7 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
     }
     final now = DateTime.now();
     final category = Category(
-      id: _isEditing ? widget.categoryId! : _idController.text.trim(),
+      id: _isEditing ? widget.categoryId! : '',
       name: _nameController.text.trim(),
       iconName: _iconController.text.trim(),
       isActive: _isActive,
@@ -179,18 +176,18 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
                               ? 'Category name is required'
                               : null,
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _idController,
-                          enabled: !_isEditing,
-                          decoration: const InputDecoration(
-                            labelText: 'Category ID',
-                            prefixIcon: Icon(Icons.key_outlined),
+                        if (_isEditing) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            initialValue: widget.categoryId,
+                            enabled: false,
+                            decoration: const InputDecoration(
+                              labelText: 'Category ID',
+                              prefixIcon: Icon(Icons.key_outlined),
+                              helperText: 'Assigned by Firebase when created',
+                            ),
                           ),
-                          validator: (value) => (value ?? '').trim().isEmpty
-                              ? 'Category ID is required'
-                              : null,
-                        ),
+                        ],
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _iconController,

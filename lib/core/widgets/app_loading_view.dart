@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_loading_indicator.dart';
-import 'app_loader.dart';
+import 'app_shimmer.dart';
 
 /// Centered branded loader for page-level and section-level loading states.
 class AppLoadingView extends StatelessWidget {
@@ -13,7 +13,7 @@ class AppLoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (label.isEmpty) {
-      return AppLoader(size: size);
+      return const AppFormShimmer();
     }
 
     return Center(

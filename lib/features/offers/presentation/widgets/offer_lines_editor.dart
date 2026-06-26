@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:sale_siren_models/sale_siren_models.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/extensions/date_time_extensions.dart';
 import '../../../../core/widgets/app_list_tile_material.dart';
 import '../../../../core/widgets/multi_select_field.dart';
+import '../../../../core/widgets/single_select_field.dart';
+import '../../../../core/widgets/app_field_selector.dart';
 import '../../../auth/domain/entities/app_user.dart';
 import '../../../brands/domain/entities/brand.dart';
 import '../../../brands/domain/entities/brand_url_source.dart';
@@ -17,6 +20,11 @@ import '../../domain/entities/offer_image_upload_task.dart';
 import '../../domain/entities/offer_line.dart';
 import 'offer_form_controls.dart';
 
+const kDefaultOfferCityId = 'lahore';
+const kWholeBrandCategoryLabel = 'Whole brand';
+
+enum OfferCategoryScope { selected, wholeBrand }
+
 class OfferLineDraft {
   OfferLineDraft({
     required this.id,
@@ -24,12 +32,14 @@ class OfferLineDraft {
     Set<String>? selectedCityIds,
     this.title = '',
     this.description = '',
-    this.categoryId,
+    Set<String>? selectedCategoryIds,
+    this.categoryScope = OfferCategoryScope.selected,
     this.discountText = '',
     this.discountType = 'percentage',
     this.discountValue = '',
     this.status = 'pending_review',
     this.lifecycleStatus = 'active',
+    this.endDateMode = OfferEndDateModes.fixed,
     DateTime? startDate,
     DateTime? endDate,
     this.isVerified = false,
@@ -40,9 +50,12 @@ class OfferLineDraft {
     List<XFile>? pickedImages,
     List<OfferImageUploadTask>? imageUploads,
     List<BrandUrlSource>? linkSources,
-  }) : selectedCityIds = selectedCityIds ?? <String>{},
+  }) : selectedCityIds = selectedCityIds ?? {kDefaultOfferCityId},
+       selectedCategoryIds = selectedCategoryIds ?? <String>{},
        startDate = startDate ?? _defaultStartDate(),
-       endDate = endDate ?? _defaultEndDate(),
+       endDate = OfferEndDateModes.hasOpenEndedEnd(endDateMode)
+           ? null
+           : (endDate ?? _defaultEndDate()),
        imageUrls = imageUrls ?? <String>[],
        pickedImages = pickedImages ?? <XFile>[],
        imageUploads = imageUploads ?? <OfferImageUploadTask>[],
@@ -55,12 +68,14 @@ class OfferLineDraft {
   Set<String> selectedCityIds;
   String title;
   String description;
-  String? categoryId;
+  Set<String> selectedCategoryIds;
+  OfferCategoryScope categoryScope;
   String discountText;
   String discountType;
   String discountValue;
   String status;
   String lifecycleStatus;
+  String endDateMode;
   DateTime? startDate;
   DateTime? endDate;
   bool isVerified;
@@ -110,7 +125,9 @@ class OfferLineDraft {
     if (status == 'pending') {
       status = 'pending_review';
     }
-    if (status != 'pending_review' && status != 'published') {
+    if (status != 'pending_review' &&
+        status != 'published' &&
+        status != 'approved') {
       status = 'pending_review';
     }
     return OfferLineDraft(
@@ -121,14 +138,20 @@ class OfferLineDraft {
           : offer.cityIds.toSet(),
       title: offer.title,
       description: offer.description,
-      categoryId: offer.categoryId.isEmpty ? null : offer.categoryId,
+      selectedCategoryIds: offer.categoryIds.isNotEmpty
+          ? offer.categoryIds.toSet()
+          : {if (offer.categoryId.isNotEmpty) offer.categoryId},
+      categoryScope: offer.categoryName == kWholeBrandCategoryLabel
+          ? OfferCategoryScope.wholeBrand
+          : OfferCategoryScope.selected,
       discountText: offer.discountText,
       discountType: offer.discountType,
       discountValue: offer.discountValue?.toString() ?? '',
       status: status,
-      lifecycleStatus: lifecycleForDate(offer.endDate),
+      lifecycleStatus: lifecycleForDate(offer.endDate, offer.endDateMode),
       startDate: offer.startDate,
       endDate: offer.endDate,
+      endDateMode: offer.endDateMode,
       isVerified: offer.isVerified,
       isFeatured: offer.isFeatured,
       imageSliderAutoPlay: offer.imageSliderAutoPlay,
@@ -153,7 +176,9 @@ class OfferLineDraft {
     if (status == 'pending') {
       status = 'pending_review';
     }
-    if (status != 'pending_review' && status != 'published') {
+    if (status != 'pending_review' &&
+        status != 'published' &&
+        status != 'approved') {
       status = 'pending_review';
     }
     return OfferLineDraft(
@@ -166,14 +191,22 @@ class OfferLineDraft {
       description: line.description.isNotEmpty
           ? line.description
           : parent.description,
-      categoryId: line.categoryId.isEmpty ? null : line.categoryId,
+      selectedCategoryIds: line.categoryId.isEmpty
+          ? parent.categoryIds.toSet()
+          : {line.categoryId},
+      categoryScope:
+          line.categoryName == kWholeBrandCategoryLabel ||
+              parent.categoryName == kWholeBrandCategoryLabel
+          ? OfferCategoryScope.wholeBrand
+          : OfferCategoryScope.selected,
       discountText: line.discountText,
       discountType: line.discountType,
       discountValue: line.discountValue?.toString() ?? '',
       status: status,
-      lifecycleStatus: lifecycleForDate(parent.endDate),
+      lifecycleStatus: lifecycleForDate(parent.endDate, parent.endDateMode),
       startDate: parent.startDate,
       endDate: parent.endDate,
+      endDateMode: parent.endDateMode,
       isVerified: parent.isVerified,
       isFeatured: parent.isFeatured,
       imageSliderAutoPlay: parent.imageSliderAutoPlay,
@@ -197,7 +230,8 @@ class OfferLineDraft {
   bool get isEffectivelyEmpty =>
       title.trim().isEmpty &&
       description.trim().isEmpty &&
-      (categoryId == null || categoryId!.isEmpty) &&
+      categoryScope == OfferCategoryScope.selected &&
+      selectedCategoryIds.isEmpty &&
       discountText.trim().isEmpty &&
       imageUrls.isEmpty &&
       imageUploads.isEmpty &&
@@ -213,12 +247,14 @@ class OfferLineDraft {
       'selectedCityIds': selectedCityIds.toList(),
       'title': title,
       'description': description,
-      'categoryId': categoryId,
+      'selectedCategoryIds': selectedCategoryIds.toList(),
+      'categoryScope': categoryScope.name,
       'discountText': discountText,
       'discountType': discountType,
       'discountValue': discountValue,
       'status': status,
       'lifecycleStatus': lifecycleStatus,
+      'endDateMode': endDateMode,
       'startDate': startDate?.toIso8601String(),
       'endDate': endDate?.toIso8601String(),
       'isVerified': isVerified,
@@ -232,6 +268,15 @@ class OfferLineDraft {
 
   factory OfferLineDraft.fromJson(Map<String, dynamic> json) {
     final cityIds = json['selectedCityIds'];
+    final categoryIds = json['selectedCategoryIds'];
+    final legacyCategoryId = json['categoryId'] as String?;
+    final parsedCategoryIds = categoryIds is List
+        ? categoryIds.map((item) => item.toString()).toSet()
+        : <String>{
+            if (legacyCategoryId != null && legacyCategoryId.isNotEmpty)
+              legacyCategoryId,
+          };
+    final scopeName = json['categoryScope'] as String?;
     return OfferLineDraft(
       id: json['id'] as String? ?? const Uuid().v4(),
       brandId: json['brandId'] as String?,
@@ -240,12 +285,16 @@ class OfferLineDraft {
           : null,
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
-      categoryId: json['categoryId'] as String?,
+      selectedCategoryIds: parsedCategoryIds,
+      categoryScope: scopeName == OfferCategoryScope.wholeBrand.name
+          ? OfferCategoryScope.wholeBrand
+          : OfferCategoryScope.selected,
       discountText: json['discountText'] as String? ?? '',
       discountType: json['discountType'] as String? ?? 'percentage',
       discountValue: json['discountValue'] as String? ?? '',
       status: json['status'] as String? ?? 'pending_review',
       lifecycleStatus: json['lifecycleStatus'] as String? ?? 'active',
+      endDateMode: json['endDateMode'] as String? ?? OfferEndDateModes.fixed,
       startDate: _readDate(json['startDate']),
       endDate: _readDate(json['endDate']),
       isVerified: json['isVerified'] as bool? ?? false,
@@ -279,23 +328,30 @@ class OfferLineDraft {
     final today = DateTime.now();
     final date = DateTime(today.year, today.month, today.day);
     if (value == 'expired') {
+      endDateMode = OfferEndDateModes.fixed;
       startDate = date.subtract(const Duration(days: 7));
       endDate = date.subtract(const Duration(days: 1));
     } else if (value == 'ending_soon') {
+      endDateMode = OfferEndDateModes.fixed;
       startDate = date;
       endDate = date.add(const Duration(days: 2));
     } else {
       startDate = date;
-      endDate = date.add(const Duration(days: 14));
+      if (endDateMode == OfferEndDateModes.fixed) {
+        endDate = date.add(const Duration(days: 14));
+      }
     }
   }
 
   void syncLifecycleFromEndDate() {
-    lifecycleStatus = lifecycleForDate(endDate);
+    lifecycleStatus = lifecycleForDate(endDate, endDateMode);
   }
 }
 
-String lifecycleForDate(DateTime? endDate) {
+String lifecycleForDate(DateTime? endDate, [String? endDateMode]) {
+  if (OfferEndDateModes.hasOpenEndedEnd(endDateMode)) {
+    return 'active';
+  }
   if (endDate == null) {
     return 'active';
   }
@@ -636,92 +692,83 @@ class _OfferLineCard extends StatelessWidget {
               runSpacing: 16,
               children: [
                 if (isManager)
-                  DropdownBox(
-                    child: TextFormField(
-                      initialValue: 'Pending Review',
-                      enabled: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Status',
-                        prefixIcon: Icon(Icons.info_outline),
+                  SingleSelectField<String>(
+                    label: 'Status',
+                    prefixIcon: Icons.info_outline,
+                    value: 'pending_review',
+                    enabled: false,
+                    options: const [
+                      SingleSelectOption(
+                        value: 'pending_review',
+                        label: 'Pending Review',
                       ),
-                    ),
+                    ],
+                    onChanged: null,
                   )
                 else
-                  DropdownBox(
-                    child: DropdownButtonFormField<String>(
-                      initialValue: line.status,
-                      decoration: const InputDecoration(
-                        labelText: 'Status',
-                        prefixIcon: Icon(Icons.info_outline),
+                  SingleSelectField<String>(
+                    label: 'Status',
+                    prefixIcon: Icons.info_outline,
+                    value: line.status,
+                    enabled: !lockedOffer,
+                    options: const [
+                      SingleSelectOption(
+                        value: 'pending_review',
+                        label: 'Pending Review',
                       ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'pending_review',
-                          child: Text('Pending Review'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'published',
-                          child: Text('Published'),
-                        ),
-                      ],
-                      onChanged: lockedOffer
-                          ? null
-                          : (value) {
-                              line.status = value ?? 'pending_review';
-                              onChanged();
-                            },
-                    ),
-                  ),
-                DropdownBox(
-                  child: DropdownButtonFormField<bool>(
-                    initialValue: line.isVerified,
-                    decoration: const InputDecoration(
-                      labelText: 'Verification',
-                      prefixIcon: Icon(Icons.verified_outlined),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: true, child: Text('Verified')),
-                      DropdownMenuItem(value: false, child: Text('Unverified')),
+                      SingleSelectOption(
+                        value: 'published',
+                        label: 'Published',
+                      ),
                     ],
                     onChanged: lockedOffer
                         ? null
                         : (value) {
-                            line.isVerified = value ?? false;
-                            if (!line.isVerified) {
-                              line.isFeatured = false;
-                            }
+                            line.status = value ?? 'pending_review';
                             onChanged();
                           },
                   ),
+                SingleSelectField<bool>(
+                  label: 'Verification',
+                  prefixIcon: Icons.verified_outlined,
+                  value: line.isVerified,
+                  enabled: !lockedOffer,
+                  options: const [
+                    SingleSelectOption(value: true, label: 'Verified'),
+                    SingleSelectOption(value: false, label: 'Unverified'),
+                  ],
+                  onChanged: lockedOffer
+                      ? null
+                      : (value) {
+                          line.isVerified = value ?? false;
+                          if (!line.isVerified) {
+                            line.isFeatured = false;
+                          }
+                          onChanged();
+                        },
                 ),
-                DropdownBox(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: line.lifecycleStatus,
-                    decoration: const InputDecoration(
-                      labelText: 'Offer lifecycle',
-                      prefixIcon: Icon(Icons.timeline_outlined),
+                SingleSelectField<String>(
+                  label: 'Offer lifecycle',
+                  prefixIcon: Icons.timeline_outlined,
+                  value: line.lifecycleStatus,
+                  enabled: !lockedOffer,
+                  options: const [
+                    SingleSelectOption(value: 'active', label: 'Active'),
+                    SingleSelectOption(
+                      value: 'ending_soon',
+                      label: 'Ending Soon',
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'active', child: Text('Active')),
-                      DropdownMenuItem(
-                        value: 'ending_soon',
-                        child: Text('Ending Soon'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'expired',
-                        child: Text('Expired'),
-                      ),
-                    ],
-                    onChanged: lockedOffer
-                        ? null
-                        : (value) {
-                            if (value == null) {
-                              return;
-                            }
-                            line.applyLifecycleStatus(value);
-                            onChanged();
-                          },
-                  ),
+                    SingleSelectOption(value: 'expired', label: 'Expired'),
+                  ],
+                  onChanged: lockedOffer
+                      ? null
+                      : (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          line.applyLifecycleStatus(value);
+                          onChanged();
+                        },
                 ),
               ],
             ),
@@ -774,40 +821,49 @@ class _OfferLineCard extends StatelessWidget {
                     ),
                   )
                 else
-                  DropdownBox(
-                    child: DropdownMenu<String>(
-                      width: 360,
-                      requestFocusOnTap: true,
-                      initialSelection: line.brandId,
-                      enableSearch: true,
-                      enableFilter: true,
-                      label: const Text('Brand'),
-                      leadingIcon: const Icon(Icons.storefront_outlined),
-                      hintText: 'Select brand',
-                      dropdownMenuEntries: brands
-                          .map(
-                            (brand) => DropdownMenuEntry(
-                              value: brand.id,
-                              label: brand.name,
-                            ),
-                          )
-                          .toList(),
-                      onSelected: lockedOffer
-                          ? null
-                          : (value) {
-                              line.brandId = value;
-                              final brand = _brandById(value);
-                              if (brand != null) {
-                                _applyBrandDefaults(brand);
+                  SingleSelectField<String>(
+                    label: 'Brand',
+                    prefixIcon: Icons.storefront_outlined,
+                    value: line.brandId,
+                    emptyLabel: 'Select brand',
+                    enableSearch: true,
+                    enabled: !lockedOffer,
+                    options: brands
+                        .map(
+                          (brand) => SingleSelectOption(
+                            value: brand.id,
+                            label: brand.name,
+                          ),
+                        )
+                        .toList(),
+                    onChanged: lockedOffer
+                        ? null
+                        : (value) {
+                            line.brandId = value;
+                            final brand = _brandById(value);
+                            if (brand != null) {
+                              _applyBrandDefaults(brand);
+                              if (line.categoryScope ==
+                                  OfferCategoryScope.selected) {
+                                final allowed = brand.categoryIds.toSet();
+                                if (allowed.isNotEmpty) {
+                                  line.selectedCategoryIds.removeWhere(
+                                    (id) => !allowed.contains(id),
+                                  );
+                                }
                               }
-                              onChanged();
-                            },
-                    ),
+                            }
+                            onChanged();
+                          },
                   ),
                 MultiSelectField(
-                  width: 360,
                   label: 'Cities',
+                  prefixIcon: Icons.location_city_outlined,
                   emptyLabel: 'Select cities',
+                  enableSelectAll: true,
+                  selectAllLabel: 'All cities',
+                  showClearOption: false,
+                  enabled: !lockedOffer,
                   options: cities
                       .map(
                         (city) =>
@@ -832,46 +888,128 @@ class _OfferLineCard extends StatelessWidget {
                 DateButton(
                   label: 'Start date',
                   value: line.startDate?.shortDate,
+                  enabled: !lockedOffer,
                   onPressed: lockedOffer ? () {} : () => onPickDate(true),
                 ),
-                DateButton(
-                  label: 'End date',
-                  value: line.endDate?.shortDate,
-                  onPressed: lockedOffer ? () {} : () => onPickDate(false),
+                SingleSelectField<String>(
+                  label: 'Offer ends',
+                  prefixIcon: Icons.event_available_outlined,
+                  value: line.endDateMode,
+                  enabled: !lockedOffer,
+                  options: const [
+                    SingleSelectOption(
+                      value: OfferEndDateModes.fixed,
+                      label: 'Fixed end date',
+                    ),
+                    SingleSelectOption(
+                      value: OfferEndDateModes.ongoing,
+                      label: 'Ongoing',
+                    ),
+                    SingleSelectOption(
+                      value: OfferEndDateModes.untilStockEnds,
+                      label: 'Until stock ends',
+                    ),
+                  ],
+                  onChanged: lockedOffer
+                      ? null
+                      : (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          line.endDateMode = value;
+                          if (OfferEndDateModes.hasOpenEndedEnd(value)) {
+                            line.endDate = null;
+                          } else {
+                            line.endDate ??= OfferLineDraft._defaultEndDate();
+                          }
+                          line.syncLifecycleFromEndDate();
+                          onChanged();
+                        },
                 ),
+                if (line.endDateMode == OfferEndDateModes.fixed)
+                  DateButton(
+                    label: 'End date',
+                    value: line.endDate?.shortDate,
+                    enabled: !lockedOffer,
+                    onPressed: lockedOffer ? () {} : () => onPickDate(false),
+                  ),
               ],
             ),
+            const SizedBox(height: 14),
+            Text(
+              'Offer applies to',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<OfferCategoryScope>(
+              segments: const [
+                ButtonSegment(
+                  value: OfferCategoryScope.selected,
+                  label: Text('Selected categories'),
+                  icon: Icon(Icons.category_outlined),
+                ),
+                ButtonSegment(
+                  value: OfferCategoryScope.wholeBrand,
+                  label: Text('Whole brand'),
+                  icon: Icon(Icons.storefront_outlined),
+                ),
+              ],
+              selected: {line.categoryScope},
+              onSelectionChanged: lockedOffer
+                  ? null
+                  : (selection) {
+                      final scope = selection.first;
+                      line.categoryScope = scope;
+                      if (scope == OfferCategoryScope.wholeBrand) {
+                        line.selectedCategoryIds.clear();
+                      }
+                      onChanged();
+                    },
+            ),
+            const SizedBox(height: 12),
+            if (line.categoryScope == OfferCategoryScope.wholeBrand)
+              AppFieldSelector(
+                label: 'Categories',
+                prefixIcon: Icons.category_outlined,
+                valueText: selectedBrand == null
+                    ? 'Select a brand to run this offer on the whole brand'
+                    : 'Offer on whole brand',
+                enabled: false,
+                onTap: null,
+              )
+            else
+              MultiSelectField(
+                label: 'Categories',
+                prefixIcon: Icons.category_outlined,
+                emptyLabel: 'Select categories',
+                enabled: !lockedOffer,
+                options:
+                    categoriesForBrand(
+                          brand: selectedBrand,
+                          allCategories: categories,
+                        )
+                        .map(
+                          (category) => MultiSelectOption(
+                            id: category.id,
+                            label: category.name,
+                          ),
+                        )
+                        .toList(),
+                selectedIds: line.selectedCategoryIds.toList(),
+                onChanged: lockedOffer
+                    ? (_) {}
+                    : (ids) {
+                        line.selectedCategoryIds = ids.toSet();
+                        onChanged();
+                      },
+              ),
             const SizedBox(height: 14),
             Wrap(
               spacing: 16,
               runSpacing: 16,
               children: [
-                DropdownBox(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _singleMatchingValue(
-                      line.categoryId,
-                      categories.map((item) => item.id),
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Category',
-                      prefixIcon: Icon(Icons.category_outlined),
-                    ),
-                    items: categories
-                        .map(
-                          (category) => DropdownMenuItem(
-                            value: category.id,
-                            child: Text(category.name),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: lockedOffer
-                        ? null
-                        : (value) {
-                            line.categoryId = value;
-                            onChanged();
-                          },
-                  ),
-                ),
                 DropdownBox(
                   child: TextFormField(
                     initialValue: line.discountText,
@@ -886,39 +1024,34 @@ class _OfferLineCard extends StatelessWidget {
                     },
                   ),
                 ),
-                DropdownBox(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: line.discountType,
-                    decoration: const InputDecoration(
-                      labelText: 'Discount type',
+                SingleSelectField<String>(
+                  label: 'Discount type',
+                  prefixIcon: Icons.local_offer_outlined,
+                  value: line.discountType,
+                  enabled: !lockedOffer,
+                  options: const [
+                    SingleSelectOption(
+                      value: 'percentage',
+                      label: 'Percentage',
                     ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'percentage',
-                        child: Text('Percentage'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'flat',
-                        child: Text('Flat amount'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'upto_percentage',
-                        child: Text('Up to percentage'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'upto_amount',
-                        child: Text('Up to amount'),
-                      ),
-                      DropdownMenuItem(value: 'bundle', child: Text('Bundle')),
-                      DropdownMenuItem(value: 'other', child: Text('Other')),
-                    ],
-                    onChanged: lockedOffer
-                        ? null
-                        : (value) {
-                            line.discountType = value ?? 'percentage';
-                            onChanged();
-                          },
-                  ),
+                    SingleSelectOption(value: 'flat', label: 'Flat amount'),
+                    SingleSelectOption(
+                      value: 'upto_percentage',
+                      label: 'Up to percentage',
+                    ),
+                    SingleSelectOption(
+                      value: 'upto_amount',
+                      label: 'Up to amount',
+                    ),
+                    SingleSelectOption(value: 'bundle', label: 'Bundle'),
+                    SingleSelectOption(value: 'other', label: 'Other'),
+                  ],
+                  onChanged: lockedOffer
+                      ? null
+                      : (value) {
+                          line.discountType = value ?? 'percentage';
+                          onChanged();
+                        },
                 ),
                 DropdownBox(
                   child: TextFormField(
@@ -982,27 +1115,21 @@ class _OfferLineCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                DropdownBox(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: line.imageDisplayMode,
-                    decoration: const InputDecoration(
-                      labelText: 'Offer detail image view',
-                      prefixIcon: Icon(Icons.view_carousel_outlined),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'carousel',
-                        child: Text('Carousel'),
-                      ),
-                      DropdownMenuItem(value: 'grid', child: Text('Grid')),
-                    ],
-                    onChanged: lockedOffer
-                        ? null
-                        : (value) {
-                            line.imageDisplayMode = value ?? 'carousel';
-                            onChanged();
-                          },
-                  ),
+                SingleSelectField<String>(
+                  label: 'Offer detail image view',
+                  prefixIcon: Icons.view_carousel_outlined,
+                  value: line.imageDisplayMode,
+                  enabled: !lockedOffer,
+                  options: const [
+                    SingleSelectOption(value: 'carousel', label: 'Carousel'),
+                    SingleSelectOption(value: 'grid', label: 'Grid'),
+                  ],
+                  onChanged: lockedOffer
+                      ? null
+                      : (value) {
+                          line.imageDisplayMode = value ?? 'carousel';
+                          onChanged();
+                        },
                 ),
                 FilterChip(
                   label: const Text('Featured'),
@@ -1023,17 +1150,46 @@ class _OfferLineCard extends StatelessWidget {
   }
 }
 
-String? _singleMatchingValue(String? value, Iterable<String> options) {
-  if (value == null) {
-    return null;
+List<app_category.Category> categoriesForBrand({
+  required Brand? brand,
+  required List<app_category.Category> allCategories,
+}) {
+  if (brand == null || brand.categoryIds.isEmpty) {
+    return allCategories;
   }
-  var matches = 0;
-  for (final option in options) {
-    if (option == value) {
-      matches++;
-    }
+  final allowed = brand.categoryIds.toSet();
+  return allCategories
+      .where((category) => allowed.contains(category.id))
+      .toList();
+}
+
+List<app_category.Category> resolveDraftCategories({
+  required OfferLineDraft draft,
+  required Brand? brand,
+  required List<app_category.Category> allCategories,
+}) {
+  if (draft.categoryScope == OfferCategoryScope.wholeBrand) {
+    return categoriesForBrand(brand: brand, allCategories: allCategories);
   }
-  return matches == 1 ? value : null;
+  return allCategories
+      .where((category) => draft.selectedCategoryIds.contains(category.id))
+      .toList();
+}
+
+String offerCategoryLabel({
+  required OfferCategoryScope scope,
+  required List<app_category.Category> categories,
+}) {
+  if (scope == OfferCategoryScope.wholeBrand) {
+    return kWholeBrandCategoryLabel;
+  }
+  if (categories.isEmpty) {
+    return '';
+  }
+  if (categories.length == 1) {
+    return categories.first.name;
+  }
+  return '${categories.length} categories';
 }
 
 Offer? buildOfferFromDraft({
@@ -1049,26 +1205,27 @@ Offer? buildOfferFromDraft({
 }) {
   final brandId = isBrandScopedUser ? user?.brandId : draft.brandId;
   final brand = brands.where((item) => item.id == brandId).firstOrNull;
-  final categoryId = draft.categoryId;
-  if (brand == null || categoryId == null || categoryId.isEmpty) {
+  if (brand == null) {
     return null;
   }
-  final category = categories
-      .where((item) => item.id == categoryId)
-      .firstOrNull;
-  if (category == null) {
+  final resolvedCategories = resolveDraftCategories(
+    draft: draft,
+    brand: brand,
+    allCategories: categories,
+  );
+  if (resolvedCategories.isEmpty) {
     return null;
   }
   final selectedCities = cities
       .where((city) => draft.selectedCityIds.contains(city.id))
       .toList();
-  if (selectedCities.isEmpty ||
-      draft.startDate == null ||
-      draft.endDate == null) {
+  if (selectedCities.isEmpty || draft.startDate == null) {
     return null;
   }
-  if (!draft.endDate!.isAfter(draft.startDate!)) {
-    return null;
+  if (draft.endDateMode == OfferEndDateModes.fixed) {
+    if (draft.endDate == null || !draft.endDate!.isAfter(draft.startDate!)) {
+      return null;
+    }
   }
   final sources = BrandUrlSourceUtils.withStableIds(draft.linkSources);
   final images = draft.imageUrls
@@ -1087,16 +1244,20 @@ Offer? buildOfferFromDraft({
     selectedPublished = false;
   }
   final city = selectedCities.first;
+  final primaryCategory = resolvedCategories.first;
   return Offer(
     id: forcedId ?? baseOffer?.id ?? '',
     title: draft.title.trim(),
     description: draft.description.trim(),
     brandId: brand.id,
     brandName: brand.name,
-    categoryId: category.id,
-    categoryName: category.name,
-    categoryIds: [category.id],
-    categoryNames: [category.name],
+    categoryId: primaryCategory.id,
+    categoryName: offerCategoryLabel(
+      scope: draft.categoryScope,
+      categories: resolvedCategories,
+    ),
+    categoryIds: resolvedCategories.map((item) => item.id).toList(),
+    categoryNames: resolvedCategories.map((item) => item.name).toList(),
     cityId: city.id,
     cityName: city.name,
     cityIds: selectedCities.map((item) => item.id).toList(),
@@ -1112,7 +1273,8 @@ Offer? buildOfferFromDraft({
     onlineUrl: BrandUrlSourceUtils.legacyOnlineUrl(sources),
     linkSources: sources,
     startDate: draft.startDate!,
-    endDate: draft.endDate!,
+    endDate: draft.endDate,
+    endDateMode: draft.endDateMode,
     isVerified: selectedPublished ? true : draft.isVerified,
     isPublished: selectedPublished,
     isFeatured: draft.isFeatured,
@@ -1126,19 +1288,21 @@ Offer? buildOfferFromDraft({
         ? selectedStatus
         : (baseOffer?.status ?? selectedStatus),
     approvalStatus: isBrandScopedUser
-        ? selectedStatus == 'published'
+        ? selectedPublished
               ? 'approved'
-              : 'pending'
+              : (baseOffer?.approvalStatus ?? 'pending')
         : (baseOffer?.approvalStatus ?? 'pending'),
     approvedBy: isBrandScopedUser
-        ? selectedStatus == 'published'
-              ? user?.id ?? ''
-              : ''
+        ? selectedPublished
+              ? (baseOffer?.approvedBy.isNotEmpty == true
+                    ? baseOffer!.approvedBy
+                    : user?.id ?? '')
+              : (baseOffer?.approvedBy ?? '')
         : (baseOffer?.approvedBy ?? ''),
     approvedAt: isBrandScopedUser
-        ? selectedStatus == 'published'
-              ? now
-              : null
+        ? selectedPublished
+              ? (baseOffer?.approvedAt ?? now)
+              : baseOffer?.approvedAt
         : baseOffer?.approvedAt,
     offerLines: const [],
   );
@@ -1164,14 +1328,24 @@ String? validateOfferDrafts(
     if (draft.selectedCityIds.isEmpty) {
       return 'Select at least one city for $label.';
     }
-    if (draft.startDate == null || draft.endDate == null) {
-      return 'Select start and end dates for $label.';
+    if (draft.startDate == null) {
+      return 'Select a start date for $label.';
     }
-    if (!draft.endDate!.isAfter(draft.startDate!)) {
-      return 'End date must be after start date for $label.';
+    if (draft.endDateMode == OfferEndDateModes.fixed) {
+      if (draft.endDate == null) {
+        return 'Select an end date for $label.';
+      }
+      if (!draft.endDate!.isAfter(draft.startDate!)) {
+        return 'End date must be after start date for $label.';
+      }
     }
-    if (draft.categoryId == null || draft.categoryId!.isEmpty) {
-      return 'Select a category for $label.';
+    if (draft.categoryScope == OfferCategoryScope.wholeBrand) {
+      if (!isBrandScopedUser &&
+          (draft.brandId == null || draft.brandId!.isEmpty)) {
+        return 'Select a brand for whole-brand $label.';
+      }
+    } else if (draft.selectedCategoryIds.isEmpty) {
+      return 'Select at least one category for $label.';
     }
     if (draft.discountText.trim().isEmpty) {
       return 'Enter discount text for $label.';
