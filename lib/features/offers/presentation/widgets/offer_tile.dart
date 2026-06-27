@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/utils/delete_action_utils.dart';
 import '../../../../core/extensions/date_time_extensions.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/display_label_utils.dart';
@@ -10,10 +11,12 @@ import '../../../../core/widgets/app_network_image.dart';
 import '../../../../core/widgets/app_text_view.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/offer.dart';
 import '../providers/offer_providers.dart';
 import '../../../notifications/presentation/widgets/offer_publish_notification_flow.dart';
 import '../../../settings/presentation/providers/alert_settings_ui.dart';
+import 'offer_lines_editor.dart';
 
 class OfferTile extends ConsumerWidget {
   const OfferTile({required this.offer, super.key});
@@ -23,6 +26,7 @@ class OfferTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final actionState = ref.watch(offerActionsProvider);
+    final cities = ref.watch(visibleCitiesProvider);
     final isOwner = ref.watch(isOwnerProvider);
     final isManager = ref.watch(isManagerProvider);
     final canDeleteOffer = isOwner || isManager || !offer.isPublished;
@@ -39,6 +43,7 @@ class OfferTile extends ConsumerWidget {
               height: 74,
               child: AppNetworkImage(
                 imageUrl: offer.imageUrl,
+                fit: BoxFit.cover,
                 icon: Icons.local_offer_outlined,
               ),
             ),
@@ -62,9 +67,7 @@ class OfferTile extends ConsumerWidget {
                   children: [
                     AppTextView.body(offer.discountText),
                     AppTextView.label(
-                      offer.cityNames.isEmpty
-                          ? offer.cityName
-                          : offer.cityNames.join(', '),
+                      offerCitiesDisplayLabel(offer, allCities: cities.value),
                       color: AppColors.textMuted(
                         Theme.of(context).colorScheme.brightness,
                       ),
@@ -113,13 +116,13 @@ class OfferTile extends ConsumerWidget {
                   onPressed: actionState.isLoading
                       ? null
                       : () async {
-                          final alertOptions = readAlertNotificationOptions(ref);
+                          final alertOptions = readAlertNotificationOptions(
+                            ref,
+                          );
                           final drafts = await confirmOfferNotificationDrafts(
                             context,
                             offer,
                             enabledSlugs: alertOptions.enabledSlugs,
-                            selectableAlertTypes:
-                                alertOptions.selectableAlertTypes,
                             alertTypeLabels: alertOptions.alertTypeLabels,
                           );
                           if (drafts == null || !context.mounted) {
@@ -154,6 +157,14 @@ class OfferTile extends ConsumerWidget {
                           await ref
                               .read(offerActionsProvider.notifier)
                               .delete(offer.id);
+                          if (!context.mounted) {
+                            return;
+                          }
+                          await completeDeleteAction(
+                            context,
+                            ref.read(offerActionsProvider),
+                            errorTitle: 'Could Not Delete Offer',
+                          );
                         },
                   icon: const Icon(Icons.delete_outline),
                 ),

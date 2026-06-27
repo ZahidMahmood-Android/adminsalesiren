@@ -113,10 +113,24 @@ FIREBASE_FUNCTIONS_SERVICE_ACCOUNT=firebase-adminsdk-XXXX@salesiren-5539c.iam.gs
 
 **2026-06-24 fix:** Push dispatch also scans token-bearing mobile user documents after role-based recipient queries. This covers older mobile users whose `fcmTokens` exist but whose role fields are missing or stale, while still excluding privileged admin roles.
 
+### Function: `onOfferExpiredNotificationCleanup`
+
+- **Trigger:** Firestore `offers/{offerId}` document write.
+- **Purpose:** When an offer’s `status` becomes `expired`, immediately deletes linked `notification_requests`, `offer_push_jobs`, and all `users/{uid}/alerts` documents with that `offerId` (collection group query).
+- **Deploy:**
+  ```bash
+  firebase deploy --only functions:onOfferExpiredNotificationCleanup,firestore:indexes --project salesiren-5539c
+  ```
+- **Index:** Requires a collection group field override on `alerts.offerId` (see `firestore.indexes.json`). Deploy indexes with the function or separately via `firestore:indexes`.
+- **Note:** If a previous deploy created `cleanupNotificationRequestsOnOfferExpire` as an HTTPS function, delete it once (Firebase cannot change trigger type in place):
+  ```bash
+  firebase functions:delete cleanupNotificationRequestsOnOfferExpire --region us-central1 --project salesiren-5539c --force
+  ```
+
 ### Function: `cleanupExpiredOffers`
 
 - **Trigger:** Scheduled daily at 03:30 Asia/Karachi.
-- **Purpose:** Deletes offers that have been expired for more than 10 days, removes related Storage images under `offers/{offerId}/`, and deletes linked `notification_requests` / `offer_push_jobs`.
+- **Purpose:** Deletes offers that have been expired for more than 10 days, removes related Storage images under `offers/{offerId}/`, and deletes linked `notification_requests`, `offer_push_jobs`, and user `alerts`.
 - **IAM:** Runtime service account needs Firestore access and Storage object delete access, e.g. **Cloud Datastore User** (`roles/datastore.user`) and **Storage Object Admin** (`roles/storage.objectAdmin`) on the Firebase Storage bucket/project.
 
 ---

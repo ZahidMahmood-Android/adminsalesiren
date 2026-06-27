@@ -52,6 +52,8 @@ class Offer {
     this.clickCount = 0,
     this.reportCount = 0,
     this.offerLines = const [],
+    this.alertType = '',
+    this.notificationSnapshot,
   });
 
   final String id;
@@ -101,6 +103,8 @@ class Offer {
   final int clickCount;
   final int reportCount;
   final List<OfferLine> offerLines;
+  final String alertType;
+  final Map<String, dynamic>? notificationSnapshot;
 
   bool get isGroupOffer => resolvedLines.length > 1;
 
@@ -208,6 +212,8 @@ class Offer {
     int? clickCount,
     int? reportCount,
     List<OfferLine>? offerLines,
+    String? alertType,
+    Map<String, dynamic>? notificationSnapshot,
   }) {
     return Offer(
       id: id ?? this.id,
@@ -257,6 +263,8 @@ class Offer {
       clickCount: clickCount ?? this.clickCount,
       reportCount: reportCount ?? this.reportCount,
       offerLines: offerLines ?? this.offerLines,
+      alertType: alertType ?? this.alertType,
+      notificationSnapshot: notificationSnapshot ?? this.notificationSnapshot,
     );
   }
 }

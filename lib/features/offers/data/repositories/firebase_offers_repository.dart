@@ -239,6 +239,9 @@ class FirebaseOffersRepository implements OffersRepository {
     final data = model.toFirestore(includeCreatedAt: false)
       ..['updatedAt'] = FieldValue.serverTimestamp();
     await _offers.doc(pendingOffer.id).update(data);
+    if (normalizedOffer.isExpired) {
+      await _cleanupOfferNotificationArtifacts(pendingOffer.id);
+    }
     if (sendNotification && pendingOffer.isPublished) {
       await _scheduleOfferPush(pendingOffer.id);
     }
@@ -314,10 +317,10 @@ class FirebaseOffersRepository implements OffersRepository {
     }
 
     try {
-      await _deletePushJobsForOffer(id);
+      await _cleanupOfferNotificationArtifacts(id);
     } catch (error, stackTrace) {
       _log.warning(
-        'Offer push job cleanup failed for id=$id; continuing delete',
+        'Offer notification cleanup failed for id=$id; continuing delete',
         error,
         stackTrace,
       );
@@ -325,6 +328,32 @@ class FirebaseOffersRepository implements OffersRepository {
 
     await _offers.doc(id).delete();
     _log.info('Deleted offer id=$id');
+  }
+
+  Future<void> _cleanupOfferNotificationArtifacts(String offerId) async {
+    if (offerId.isEmpty) {
+      return;
+    }
+    await _deletePushJobsForOffer(offerId);
+    await _deleteNotificationRequestsForOffer(offerId);
+  }
+
+  Future<void> _deleteNotificationRequestsForOffer(String offerId) async {
+    final snapshot = await _firestore
+        .collection('notification_requests')
+        .where('offerId', isEqualTo: offerId)
+        .get();
+    if (snapshot.docs.isEmpty) {
+      return;
+    }
+    final batch = _firestore.batch();
+    for (final doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+    _log.info(
+      'Deleted ${snapshot.docs.length} notification requests for offerId=$offerId',
+    );
   }
 
   Future<void> _deletePushJobsForOffer(String offerId) async {
@@ -414,9 +443,9 @@ class FirebaseOffersRepository implements OffersRepository {
   }
 
   @override
-  Future<void> expireOffer(String id) {
+  Future<void> expireOffer(String id) async {
     _log.info('Expiring offer id=$id');
-    return _offers.doc(id).update({
+    await _offers.doc(id).update({
       'isPublished': false,
       'isVerified': false,
       'isFeatured': false,
@@ -424,6 +453,7 @@ class FirebaseOffersRepository implements OffersRepository {
       'approvalStatus': 'expired',
       'updatedAt': Timestamp.now(),
     });
+    await _cleanupOfferNotificationArtifacts(id);
   }
 
   @override
@@ -506,6 +536,22 @@ class FirebaseOffersRepository implements OffersRepository {
       lineId: offerLineId.isEmpty ? null : offerLineId,
       requestId: requestId.isEmpty ? null : requestId,
     );
+  }
+
+  @override
+  Future<void> updateOfferNotificationState({
+    required String offerId,
+    required String alertType,
+    required Map<String, dynamic> notificationSnapshot,
+  }) {
+    if (offerId.isEmpty) {
+      return Future<void>.value();
+    }
+    return _offers.doc(offerId).update({
+      'alertType': alertType,
+      'notificationSnapshot': notificationSnapshot,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   bool _canReadOffer(Offer offer) {

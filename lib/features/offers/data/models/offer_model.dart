@@ -55,6 +55,8 @@ class OfferModel extends Offer {
     super.clickCount,
     super.reportCount,
     super.offerLines,
+    super.alertType = '',
+    super.notificationSnapshot,
   });
 
   factory OfferModel.fromEntity(Offer offer) {
@@ -106,6 +108,8 @@ class OfferModel extends Offer {
       clickCount: offer.clickCount,
       reportCount: offer.reportCount,
       offerLines: offer.offerLines,
+      alertType: offer.alertType,
+      notificationSnapshot: offer.notificationSnapshot,
     );
   }
 
@@ -198,6 +202,8 @@ class OfferModel extends Offer {
       clickCount: data['clickCount'] as int? ?? 0,
       reportCount: data['reportCount'] as int? ?? 0,
       offerLines: _readOfferLines(data),
+      alertType: data['alertType'] as String? ?? data['type'] as String? ?? '',
+      notificationSnapshot: _readNotificationSnapshot(data['notificationSnapshot']),
     );
   }
 
@@ -255,6 +261,9 @@ class OfferModel extends Offer {
       'offerLines': offerLines.map((line) => line.toMap()).toList(),
       if (includeCreatedAt) 'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      if (alertType.trim().isNotEmpty) 'alertType': alertType.trim(),
+      if (notificationSnapshot != null && notificationSnapshot!.isNotEmpty)
+        'notificationSnapshot': notificationSnapshot,
     };
   }
 
@@ -270,6 +279,13 @@ class OfferModel extends Offer {
           (line) => line.categoryId.isNotEmpty || line.discountText.isNotEmpty,
         )
         .toList();
+  }
+
+  static Map<String, dynamic>? _readNotificationSnapshot(Object? raw) {
+    if (raw is! Map) {
+      return null;
+    }
+    return Map<String, dynamic>.from(raw);
   }
 
   static List<String> _readImageUrls(Map<String, dynamic> data) {

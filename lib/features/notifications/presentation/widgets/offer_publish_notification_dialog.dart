@@ -9,18 +9,13 @@ Future<List<OfferNotificationDraft>?> showOfferPublishNotificationDialog(
   required List<OfferNotificationDraft> drafts,
   String title = 'Notification preview',
   String subtitle =
-      'Review and edit the push notification before publishing this offer.',
+      'Review the push notification before publishing. Alert category is calculated automatically from the offer.',
   String confirmLabel = 'Publish',
-  List<String>? selectableAlertTypes,
   Map<String, String>? alertTypeLabels,
 }) {
   if (drafts.isEmpty) {
     return Future.value(const []);
   }
-
-  final types = (selectableAlertTypes ?? AlertTypeSlugs.selectable)
-      .where((slug) => slug.trim().isNotEmpty)
-      .toList();
 
   return showDialog<List<OfferNotificationDraft>>(
     context: context,
@@ -30,7 +25,6 @@ Future<List<OfferNotificationDraft>?> showOfferPublishNotificationDialog(
       title: title,
       subtitle: subtitle,
       confirmLabel: confirmLabel,
-      selectableAlertTypes: types.isEmpty ? AlertTypeSlugs.selectable : types,
       alertTypeLabels: alertTypeLabels ?? const {},
     ),
   );
@@ -42,7 +36,6 @@ class _OfferPublishNotificationDialog extends StatefulWidget {
     required this.title,
     required this.subtitle,
     required this.confirmLabel,
-    required this.selectableAlertTypes,
     required this.alertTypeLabels,
   });
 
@@ -50,7 +43,6 @@ class _OfferPublishNotificationDialog extends StatefulWidget {
   final String title;
   final String subtitle;
   final String confirmLabel;
-  final List<String> selectableAlertTypes;
   final Map<String, String> alertTypeLabels;
 
   @override
@@ -65,18 +57,12 @@ class _OfferPublishNotificationDialogState
   @override
   void initState() {
     super.initState();
-    final types = widget.selectableAlertTypes.isEmpty
-        ? AlertTypeSlugs.selectable
-        : widget.selectableAlertTypes;
     _editors = widget.drafts
         .map(
           (draft) => _DraftEditorState(
             titleController: TextEditingController(text: draft.title),
             bodyController: TextEditingController(text: draft.body),
             includeImage: draft.includeImage && draft.imageUrl.isNotEmpty,
-            alertType: types.contains(draft.alertType)
-                ? draft.alertType
-                : types.first,
             draft: draft,
           ),
         )
@@ -122,7 +108,6 @@ class _OfferPublishNotificationDialogState
                   child: _NotificationDraftEditor(
                     editor: editor,
                     showLineLabel: widget.drafts.length > 1,
-                    selectableAlertTypes: widget.selectableAlertTypes,
                     alertTypeLabels: widget.alertTypeLabels,
                     onChanged: () => setState(() {}),
                   ),
@@ -141,9 +126,7 @@ class _OfferPublishNotificationDialogState
           onPressed: _submit,
           icon: const Icon(Icons.campaign_outlined),
           label: Text(widget.confirmLabel),
-          style: FilledButton.styleFrom(
-            backgroundColor: primary,
-          ),
+          style: FilledButton.styleFrom(backgroundColor: primary),
         ),
       ],
     );
@@ -167,7 +150,6 @@ class _OfferPublishNotificationDialogState
           title: title,
           body: body,
           includeImage: editor.includeImage,
-          alertType: editor.alertType,
         ),
       );
     }
@@ -180,14 +162,12 @@ class _DraftEditorState {
     required this.titleController,
     required this.bodyController,
     required this.includeImage,
-    required this.alertType,
     required this.draft,
   });
 
   final TextEditingController titleController;
   final TextEditingController bodyController;
   bool includeImage;
-  String alertType;
   final OfferNotificationDraft draft;
 }
 
@@ -195,14 +175,12 @@ class _NotificationDraftEditor extends StatelessWidget {
   const _NotificationDraftEditor({
     required this.editor,
     required this.showLineLabel,
-    required this.selectableAlertTypes,
     required this.alertTypeLabels,
     required this.onChanged,
   });
 
   final _DraftEditorState editor;
   final bool showLineLabel;
-  final List<String> selectableAlertTypes;
   final Map<String, String> alertTypeLabels;
   final VoidCallback onChanged;
 
@@ -223,12 +201,7 @@ class _NotificationDraftEditor extends StatelessWidget {
         : editor.bodyController.text.trim();
     final showImage =
         editor.includeImage && editor.draft.imageUrl.trim().isNotEmpty;
-    final types = selectableAlertTypes.isEmpty
-        ? AlertTypeSlugs.selectable
-        : selectableAlertTypes;
-    final selectedType = types.contains(editor.alertType)
-        ? editor.alertType
-        : types.first;
+    final alertType = editor.draft.alertType;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -250,24 +223,17 @@ class _NotificationDraftEditor extends StatelessWidget {
             ),
             const SizedBox(height: 10),
           ],
-          DropdownButtonFormField<String>(
-            value: selectedType,
+          InputDecorator(
             decoration: const InputDecoration(
-              labelText: 'Alert category',
-              prefixIcon: Icon(Icons.category_outlined),
+              labelText: 'Alert category (auto)',
+              prefixIcon: Icon(Icons.auto_awesome_outlined),
             ),
-            items: [
-              for (final slug in types)
-                DropdownMenuItem(
-                  value: slug,
-                  child: Text(_labelFor(slug)),
-                ),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              editor.alertType = value;
-              onChanged();
-            },
+            child: Text(
+              _labelFor(alertType),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
           const SizedBox(height: 14),
           Container(
@@ -291,6 +257,7 @@ class _NotificationDraftEditor extends StatelessWidget {
                       height: 56,
                       child: AppNetworkImage(
                         imageUrl: editor.draft.imageUrl,
+                        fit: BoxFit.cover,
                         icon: Icons.image_outlined,
                       ),
                     ),

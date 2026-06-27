@@ -18,6 +18,16 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "categoryId", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "offers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPublished", "order": "ASCENDING" },
+        { "fieldPath": "isVerified", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "categoryIds", "arrayConfig": "CONTAINS" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -34,6 +44,16 @@
     {
       "collectionGroup": "selected_categories",
       "fieldPath": "categoryId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "alerts",
+      "fieldPath": "offerId",
       "indexes": [
         {
           "order": "ASCENDING",

@@ -27,7 +27,29 @@ final notificationsRepositoryProvider = Provider<NotificationsRepository>((
 
 final notificationRequestsProvider =
     StreamProvider.autoDispose<List<NotificationRequest>>((ref) {
-      return ref.watch(notificationsRepositoryProvider).watchRequests();
+      final offersAsync = ref.watch(offersProvider);
+      return ref.watch(notificationsRepositoryProvider).watchRequests().map((
+        requests,
+      ) {
+        final offers = offersAsync.value;
+        if (offers == null || offers.isEmpty) {
+          return requests;
+        }
+        final expiredOfferIds = offers
+            .where((offer) => offer.isExpired)
+            .map((offer) => offer.id)
+            .toSet();
+        if (expiredOfferIds.isEmpty) {
+          return requests;
+        }
+        return requests
+            .where(
+              (request) =>
+                  request.offerId.isEmpty ||
+                  !expiredOfferIds.contains(request.offerId),
+            )
+            .toList();
+      });
     });
 
 final notificationRequestsListSearchQueryProvider =
@@ -94,14 +116,18 @@ class NotificationRequestActionsController extends AsyncNotifier<void> {
                 : 'Published without push notification.',
           );
       if (offerLineId.isNotEmpty) {
-        await ref.read(offersRepositoryProvider).publishOfferLine(
+        await ref
+            .read(offersRepositoryProvider)
+            .publishOfferLine(
               offerId,
               offerLineId,
               requestId: requestId,
               sendNotification: sendNotification,
             );
       } else {
-        await ref.read(offersRepositoryProvider).publishOffer(
+        await ref
+            .read(offersRepositoryProvider)
+            .publishOffer(
               offerId,
               true,
               requestId: requestId,

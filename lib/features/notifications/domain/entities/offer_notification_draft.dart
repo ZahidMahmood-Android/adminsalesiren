@@ -1,8 +1,10 @@
 import '../../../offers/domain/entities/offer.dart';
 import '../../../offers/domain/entities/offer_line.dart';
 import '../alert_type_utils.dart';
+import '../offer_alert_input_mapper.dart';
 import 'notification_request.dart';
 import 'offer_notification_content_utils.dart';
+import 'package:sale_siren_models/sale_siren_models.dart';
 
 class OfferNotificationDraft {
   const OfferNotificationDraft({
@@ -58,45 +60,41 @@ class OfferNotificationDraftUtils {
     return offer.imageUrl.trim();
   }
 
+  static String primaryImageUrlForLine(Offer offer, OfferLine line) {
+    final lineUrls = line.resolvedImageUrls();
+    if (lineUrls.isNotEmpty) {
+      return lineUrls.first.trim();
+    }
+    return primaryImageUrl(offer);
+  }
+
   static List<OfferNotificationDraft> defaultsForOffer(
     Offer offer, {
     Offer? previousOffer,
     List<String>? enabledSlugs,
+    OfferNotificationSnapshot? storedSnapshot,
   }) {
-    final imageUrl = primaryImageUrl(offer);
-    final hasImage = imageUrl.isNotEmpty;
     return offer.resolvedLines.map((line) {
-      OfferLine? previousLine;
-      if (previousOffer != null) {
-        for (final item in previousOffer.resolvedLines) {
-          if (item.id == line.id) {
-            previousLine = item;
-            break;
-          }
-        }
-        previousLine ??= previousOffer.resolvedLines.isNotEmpty
-            ? previousOffer.resolvedLines.first
-            : null;
-      }
-      final alertType = clampAlertTypeSlug(
-        previousOffer == null
-            ? resolveAlertTypeForOffer(
-                offer.copyWith(discountText: line.discountText),
-                enabledSlugs: enabledSlugs,
-              )
-            : resolveAlertTypeForOfferChange(
-                previous: previousOffer,
-                current: offer,
-                previousLine: previousLine,
-                currentLine: line,
-                enabledSlugs: enabledSlugs,
-              ),
+      final alertType = OfferAlertInputMapper.resolveAlertType(
+        offer: offer,
+        line: line,
+        previousOffer: previousOffer,
+        storedSnapshot: storedSnapshot ?? _storedSnapshot(offer),
         enabledSlugs: enabledSlugs,
       );
+      final imageUrl = primaryImageUrlForLine(offer, line);
+      final hasImage = imageUrl.isNotEmpty;
       return OfferNotificationDraft(
         offerLineId: line.id,
-        title: OfferNotificationContentUtils.suggestedTitle(offer, line),
-        body: OfferNotificationContentUtils.suggestedBody(offer),
+        title: OfferNotificationContentUtils.suggestedTitle(
+          offer,
+          line,
+          alertType: alertType,
+        ),
+        body: OfferNotificationContentUtils.suggestedBody(
+          offer,
+          alertType: alertType,
+        ),
         includeImage: hasImage,
         imageUrl: imageUrl,
         lineLabel: offer.isGroupOffer
@@ -138,18 +136,31 @@ class OfferNotificationDraftUtils {
     final line = lineForRequest(offer, request);
     final imageUrl = request.data['imageUrl']?.trim().isNotEmpty == true
         ? request.data['imageUrl']!.trim()
-        : primaryImageUrl(offer);
-    final suggestedBody = OfferNotificationContentUtils.suggestedBody(offer);
+        : primaryImageUrlForLine(offer, line);
+    final alertType = OfferAlertInputMapper.resolveAlertType(
+      offer: offer,
+      line: line,
+      storedSnapshot: _storedSnapshot(offer),
+    );
     return OfferNotificationDraft(
-      offerLineId: request.offerLineId.isNotEmpty ? request.offerLineId : line.id,
-      title: OfferNotificationContentUtils.suggestedTitle(offer, line),
-      body: suggestedBody.isNotEmpty ? suggestedBody : request.body,
+      offerLineId: request.offerLineId.isNotEmpty
+          ? request.offerLineId
+          : line.id,
+      title: OfferNotificationContentUtils.suggestedTitle(
+        offer,
+        line,
+        alertType: alertType,
+      ),
+      body: OfferNotificationContentUtils.suggestedBody(
+        offer,
+        alertType: alertType,
+      ),
       includeImage: request.includeImage && imageUrl.isNotEmpty,
       imageUrl: imageUrl,
       lineLabel: request.groupTitle.isNotEmpty
           ? request.groupTitle
           : (offer.isGroupOffer ? line.displayTitle(line.categoryName) : ''),
-      alertType: request.type.isNotEmpty ? request.type : request.data['type'] ?? AlertTypeSlugs.newOffer,
+      alertType: alertType,
     );
   }
 
@@ -157,6 +168,9 @@ class OfferNotificationDraftUtils {
     NotificationRequest request,
   ) {
     final imageUrl = request.data['imageUrl']?.trim() ?? '';
+    final alertType = request.type.isNotEmpty
+        ? request.type
+        : request.data['type'] ?? AlertTypeSlugs.newOffer;
     return OfferNotificationDraft(
       offerLineId: request.offerLineId,
       title: request.title,
@@ -164,7 +178,7 @@ class OfferNotificationDraftUtils {
       includeImage: request.includeImage,
       imageUrl: imageUrl,
       lineLabel: request.groupTitle,
-      alertType: request.type.isNotEmpty ? request.type : request.data['type'] ?? AlertTypeSlugs.newOffer,
+      alertType: alertType,
     );
   }
 
@@ -186,5 +200,13 @@ class OfferNotificationDraftUtils {
     }
     return draftsByLineId[line.id] ??
         (draftsByLineId.length == 1 ? draftsByLineId.values.first : null);
+  }
+
+  static OfferNotificationSnapshot? _storedSnapshot(Offer offer) {
+    final raw = offer.notificationSnapshot;
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    return OfferNotificationSnapshot.fromMap(raw);
   }
 }

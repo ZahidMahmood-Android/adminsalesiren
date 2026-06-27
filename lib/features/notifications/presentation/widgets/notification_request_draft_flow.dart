@@ -14,7 +14,9 @@ Future<OfferNotificationDraft> resolveNotificationDraftForRequest(
     return OfferNotificationDraftUtils.fromNotificationRequest(request);
   }
 
-  final offer = await ref.read(offersRepositoryProvider).getOffer(request.offerId);
+  final offer = await ref
+      .read(offersRepositoryProvider)
+      .getOffer(request.offerId);
   if (offer == null) {
     return OfferNotificationDraftUtils.fromNotificationRequest(request);
   }
@@ -35,7 +37,8 @@ Future<List<OfferNotificationDraft>?> confirmNotificationRequestDrafts(
     ref,
     request: request,
     title: title,
-    subtitle: subtitle ??
+    subtitle:
+        subtitle ??
         'Review and edit the push notification before publishing this offer.',
     confirmLabel: confirmLabel,
   );
@@ -51,8 +54,7 @@ Future<NotificationRequest?> editNotificationRequestWithOffer(
     ref,
     request: request,
     title: 'Edit notification request',
-    subtitle:
-        'Update the push notification title, message, and image option.',
+    subtitle: 'Update the push notification title, message, and image option.',
     confirmLabel: 'Save',
   );
   if (drafts == null || drafts.isEmpty) {
@@ -93,14 +95,21 @@ NotificationRequest _notificationRequestFromDraft(
   NotificationRequest request,
   OfferNotificationDraft draft,
 ) {
+  final alertType = draft.alertType.trim().isNotEmpty
+      ? draft.alertType.trim()
+      : request.type;
+
   return NotificationRequest(
     id: request.id,
     title: draft.title,
     body: draft.body,
     topic: request.topic,
-    type: request.type,
+    type: alertType,
     data: {
       ...request.data,
+      'type': alertType,
+      'alertType': alertType,
+      'imageUrl': draft.imageUrl.trim(),
       'includeImage': draft.includeImage ? 'true' : 'false',
     },
     status: request.status,

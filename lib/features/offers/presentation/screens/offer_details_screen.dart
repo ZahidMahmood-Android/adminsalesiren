@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/utils/delete_action_utils.dart';
 import '../../../../core/extensions/date_time_extensions.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -14,11 +15,13 @@ import '../../../../core/widgets/app_loader.dart';
 import '../../../../core/widgets/app_network_image.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/offer.dart';
 import '../providers/offer_providers.dart';
 import '../../../notifications/presentation/widgets/offer_publish_notification_flow.dart';
 import '../../../settings/presentation/providers/alert_settings_ui.dart';
 import '../widgets/info_grid.dart';
+import '../widgets/offer_lines_editor.dart';
 import '../../../../core/widgets/screen_layout.dart';
 
 class OfferDetailsScreen extends ConsumerWidget {
@@ -29,6 +32,7 @@ class OfferDetailsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final offerAsync = ref.watch(offerProvider(offerId));
+    final cities = ref.watch(visibleCitiesProvider);
     final actionState = ref.watch(offerActionsProvider);
     final isBusy = actionState.isLoading;
     final isOwner = ref.watch(isOwnerProvider);
@@ -125,10 +129,17 @@ class OfferDetailsScreen extends ConsumerWidget {
                                                 offerActionsProvider.notifier,
                                               )
                                               .delete(offer.id);
-                                          if (context.mounted &&
-                                              !ref
-                                                  .read(offerActionsProvider)
-                                                  .hasError) {
+                                          if (!context.mounted) {
+                                            return;
+                                          }
+                                          final deleted =
+                                              await completeDeleteAction(
+                                                context,
+                                                ref.read(offerActionsProvider),
+                                                errorTitle:
+                                                    'Could Not Delete Offer',
+                                              );
+                                          if (deleted && context.mounted) {
                                             context.go('/offers');
                                           }
                                         },
@@ -179,9 +190,10 @@ class OfferDetailsScreen extends ConsumerWidget {
                                         entries: {
                                           'Brand': offer.brandName,
                                           'Category': offer.categoryName,
-                                          'Cities': offer.cityNames.isEmpty
-                                              ? offer.cityName
-                                              : offer.cityNames.join(', '),
+                                          'Cities': offerCitiesDisplayLabel(
+                                            offer,
+                                            allCities: cities.value,
+                                          ),
                                           'Discount': offer.discountText,
                                           'Dates':
                                               '${offer.startDate.shortDate} - ${offer.scheduleEndLabel}',
@@ -256,17 +268,15 @@ class OfferDetailsScreen extends ConsumerWidget {
                                                     : () async {
                                                         final alertOptions =
                                                             readAlertNotificationOptions(
-                                                          ref,
-                                                        );
+                                                              ref,
+                                                            );
                                                         final drafts =
                                                             await confirmOfferNotificationDrafts(
                                                               context,
                                                               offer,
-                                                              enabledSlugs: alertOptions
-                                                                  .enabledSlugs,
-                                                              selectableAlertTypes:
+                                                              enabledSlugs:
                                                                   alertOptions
-                                                                      .selectableAlertTypes,
+                                                                      .enabledSlugs,
                                                               alertTypeLabels:
                                                                   alertOptions
                                                                       .alertTypeLabels,
@@ -412,7 +422,10 @@ class _OfferImagePreview extends StatelessWidget {
           ),
           itemBuilder: (context, index) => ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: AppNetworkImage(imageUrl: urls[index]),
+            child: AppNetworkImage(
+              imageUrl: urls[index],
+              fit: BoxFit.cover,
+            ),
           ),
         ),
       );
@@ -424,7 +437,10 @@ class _OfferImagePreview extends StatelessWidget {
         child: PageView.builder(
           itemCount: urls.length,
           itemBuilder: (context, index) =>
-              AppNetworkImage(imageUrl: urls[index]),
+              AppNetworkImage(
+                imageUrl: urls[index],
+                fit: BoxFit.cover,
+              ),
         ),
       ),
     );

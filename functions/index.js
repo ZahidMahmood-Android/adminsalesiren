@@ -123,14 +123,23 @@ function primaryOfferImageUrl(offer) {
   return typeof offer.imageUrl === 'string' ? offer.imageUrl.trim() : '';
 }
 
-function requestImageUrl(request, offer) {
+function requestImageUrl(request, offer, offerLineId = '') {
   const dataImage =
     request &&
     request.data &&
     typeof request.data.imageUrl === 'string'
       ? request.data.imageUrl.trim()
       : '';
-  return dataImage || primaryOfferImageUrl(offer);
+  if (dataImage) {
+    return dataImage;
+  }
+  const lineId =
+    typeof offerLineId === 'string' && offerLineId.trim()
+      ? offerLineId.trim()
+      : request && typeof request.offerLineId === 'string'
+        ? request.offerLineId.trim()
+        : '';
+  return primaryOfferImageUrl(offerForLinePush(offer, lineId));
 }
 
 function offerImagePaths(offerId, offer) {
@@ -951,7 +960,16 @@ function requestAlertType(request) {
  * @param {string} offerId
  * @param {import('firebase-admin/firestore').DocumentData} offer
  */
-async function resolveNotificationContent(db, offerId, offer, requestId = null) {
+async function resolveNotificationContent(
+  db,
+  offerId,
+  offer,
+  requestId = null,
+  offerLineId = '',
+) {
+  const lineId =
+    typeof offerLineId === 'string' && offerLineId.trim() ? offerLineId.trim() : '';
+
   if (requestId) {
     const requestDoc = await db
       .collection('notification_requests')
@@ -959,6 +977,9 @@ async function resolveNotificationContent(db, offerId, offer, requestId = null) 
       .get();
     if (requestDoc.exists) {
       const request = requestDoc.data() || {};
+      const resolvedLineId =
+        lineId ||
+        (typeof request.offerLineId === 'string' ? request.offerLineId.trim() : '');
       return {
         title:
           typeof request.title === 'string' && request.title.trim()
@@ -972,7 +993,7 @@ async function resolveNotificationContent(db, offerId, offer, requestId = null) 
         includeImage: request.includeImage !== false,
         imageUrl: request.includeImage === false
           ? ''
-          : requestImageUrl(request, offer),
+          : requestImageUrl(request, offer, resolvedLineId),
         type: requestAlertType(request),
       };
     }
@@ -991,6 +1012,9 @@ async function resolveNotificationContent(db, offerId, offer, requestId = null) 
     });
     const doc = sorted[0];
     const request = doc.data();
+    const resolvedLineId =
+      lineId ||
+      (typeof request.offerLineId === 'string' ? request.offerLineId.trim() : '');
     return {
       title:
         typeof request.title === 'string' && request.title.trim()
@@ -1004,7 +1028,7 @@ async function resolveNotificationContent(db, offerId, offer, requestId = null) 
       includeImage: request.includeImage !== false,
       imageUrl: request.includeImage === false
         ? ''
-        : requestImageUrl(request, offer),
+        : requestImageUrl(request, offer, resolvedLineId),
       type: requestAlertType(request),
     };
   }
@@ -1014,7 +1038,7 @@ async function resolveNotificationContent(db, offerId, offer, requestId = null) 
     body: defaultBody(offer),
     requestId: null,
     includeImage: true,
-    imageUrl: primaryOfferImageUrl(offer),
+    imageUrl: primaryOfferImageUrl(offerForLinePush(offer, lineId)),
     type: 'new_offer',
   };
 }
@@ -1118,10 +1142,38 @@ async function deleteOfferImages(offerId, offer) {
   }
 }
 
-async function deleteExpiredOffer(db, offerDoc) {
-  const offerId = offerDoc.id;
-  const offer = offerDoc.data() || {};
-  await deleteOfferImages(offerId, offer);
+async function deleteUserAlertsForOffer(db, offerId) {
+  if (!offerId) {
+    return 0;
+  }
+
+  let total = 0;
+  for (;;) {
+    const snapshot = await db
+      .collectionGroup('alerts')
+      .where('offerId', '==', offerId)
+      .limit(500)
+      .get();
+    if (snapshot.empty) {
+      break;
+    }
+
+    const batch = db.batch();
+    for (const doc of snapshot.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+    total += snapshot.docs.length;
+
+    if (snapshot.docs.length < 500) {
+      break;
+    }
+  }
+
+  return total;
+}
+
+async function cleanupOfferNotificationArtifacts(db, offerId) {
   const notificationCount = await deleteQueryBatch(
     db,
     db.collection('notification_requests').where('offerId', '==', offerId),
@@ -1130,11 +1182,22 @@ async function deleteExpiredOffer(db, offerDoc) {
     db,
     db.collection('offer_push_jobs').where('offerId', '==', offerId),
   );
+  const alertCount = await deleteUserAlertsForOffer(db, offerId);
+  return { notificationCount, pushJobCount, alertCount };
+}
+
+async function deleteExpiredOffer(db, offerDoc) {
+  const offerId = offerDoc.id;
+  const offer = offerDoc.data() || {};
+  await deleteOfferImages(offerId, offer);
+  const { notificationCount, pushJobCount, alertCount } =
+    await cleanupOfferNotificationArtifacts(db, offerId);
   await offerDoc.ref.delete();
   logger.info('Expired offer cleanup deleted offer', {
     offerId,
     notificationCount,
     pushJobCount,
+    alertCount,
   });
 }
 
@@ -1181,6 +1244,71 @@ async function markNotificationSent(
  * @param {string} offerId
  * @param {import('firebase-admin/firestore').DocumentData} offer
  */
+async function persistUserAlertsForRecipients(
+  db,
+  recipients,
+  {
+    offerId,
+    alertType,
+    title,
+    body,
+    brandId,
+    brandName,
+  },
+) {
+  if (!offerId || !Array.isArray(recipients) || recipients.length === 0) {
+    return;
+  }
+
+  const safeType =
+    typeof alertType === 'string' && alertType.trim()
+      ? alertType.trim()
+      : 'new_offer';
+  const alertId = `offer_${offerId}`
+    .replace(/\//g, '_')
+    .replace(/\n/g, '_')
+    .trim()
+    .slice(0, 1500);
+  const now = Timestamp.now();
+  const expiresAt = Timestamp.fromDate(
+    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  );
+
+  for (const recipientChunk of chunk(recipients, 400)) {
+    const batch = db.batch();
+    for (const recipient of recipientChunk) {
+      const userId =
+        typeof recipient.userId === 'string' ? recipient.userId.trim() : '';
+      if (!userId) {
+        continue;
+      }
+      const ref = db
+        .collection('users')
+        .doc(userId)
+        .collection('alerts')
+        .doc(alertId);
+      batch.set(
+        ref,
+        {
+          id: alertId,
+          type: safeType,
+          alertType: safeType,
+          title: typeof title === 'string' ? title : '',
+          body: typeof body === 'string' ? body : '',
+          offerId,
+          brandId: typeof brandId === 'string' ? brandId : '',
+          brandName: typeof brandName === 'string' ? brandName : '',
+          read: false,
+          createdAt: now,
+          expiresAt,
+        },
+        { merge: true },
+      );
+    }
+    await batch.commit();
+  }
+}
+
 async function dispatchOfferPush(db, offerId, offer, options = {}) {
   const lineId =
     typeof options.offerLineId === 'string' ? options.offerLineId.trim() : '';
@@ -1210,6 +1338,7 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
     offerId,
     offer,
     requestId,
+    lineId,
   );
   const resolvedRequestId = requestId || content.requestId;
 
@@ -1231,15 +1360,6 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
     };
   }
 
-  logger.info('Sending FCM multicast', {
-    offerId,
-    requestId: resolvedRequestId,
-    title: content.title,
-    body: content.body,
-    tokenCount: allTokens.length,
-    userCount: recipients.length,
-  });
-
   const categoryIds = offerCategoryIds(pushOffer);
   const messaging = getMessaging();
   const invalidTokens = [];
@@ -1252,6 +1372,19 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
       ? content.imageUrl.trim()
       : '';
 
+  const useDataOnlyPayload = Boolean(imageUrl);
+
+  logger.info('Sending FCM multicast', {
+    offerId,
+    requestId: resolvedRequestId,
+    title: content.title,
+    body: content.body,
+    imageUrl: imageUrl || null,
+    useDataOnlyPayload,
+    tokenCount: allTokens.length,
+    userCount: recipients.length,
+  });
+
   const alertType =
     typeof content.type === 'string' && content.type.trim()
       ? content.type.trim()
@@ -1260,14 +1393,19 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
   for (const tokenChunk of chunk(allTokens, 500)) {
     const response = await messaging.sendEachForMulticast({
       tokens: tokenChunk,
-      notification: {
-        title: content.title,
-        body: content.body,
-        ...(imageUrl ? { imageUrl } : {}),
-      },
+      ...(useDataOnlyPayload
+        ? {}
+        : {
+            notification: {
+              title: content.title,
+              body: content.body,
+            },
+          }),
       data: {
-        type: alertType,
         alertType,
+        alert_type: alertType,
+        sale_alert_type: alertType,
+        type: alertType,
         offerId,
         title: content.title,
         body: content.body,
@@ -1280,11 +1418,14 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
       },
       android: {
         priority: 'high',
-        notification: {
-          channelId: 'sale_alerts',
-          priority: 'high',
-          ...(imageUrl ? { imageUrl } : {}),
-        },
+        ...(useDataOnlyPayload
+          ? {}
+          : {
+              notification: {
+                channelId: 'sale_alerts',
+                priority: 'high',
+              },
+            }),
       },
       apns: {
         headers: {
@@ -1331,6 +1472,24 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
     });
   }
 
+  if (successCount > 0) {
+    await persistUserAlertsForRecipients(db, recipients, {
+      offerId,
+      alertType,
+      title: content.title,
+      body: content.body,
+      brandId: offer.brandId || '',
+      brandName: offer.brandName || '',
+    });
+    await db.collection('offers').doc(offerId).set(
+      {
+        alertType,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+  }
+
   // Tokens are only removed on explicit mobile sign out — never pruned here.
   await markNotificationSent(
     db,
@@ -1365,6 +1524,34 @@ exports.dispatchOfferPushOnPublish = onDocumentWritten(
   'offers/{offerId}',
   async () => {
     // Push dispatch is handled by offer_push_jobs (dispatchOfferPushOnJob).
+  },
+);
+
+exports.onOfferExpiredNotificationCleanup = onDocumentWritten(
+  'offers/{offerId}',
+  async (event) => {
+    const after = event.data?.after?.data();
+    if (!after) {
+      return;
+    }
+
+    const before = event.data?.before?.data();
+    const offerId = event.params.offerId;
+    const wasExpired = before?.status === 'expired';
+    const isExpired = after.status === 'expired';
+    if (!isExpired || wasExpired) {
+      return;
+    }
+
+    const db = getFirestore();
+    const { notificationCount, pushJobCount, alertCount } =
+      await cleanupOfferNotificationArtifacts(db, offerId);
+    logger.info('Removed notification artifacts for expired offer', {
+      offerId,
+      notificationCount,
+      pushJobCount,
+      alertCount,
+    });
   },
 );
 

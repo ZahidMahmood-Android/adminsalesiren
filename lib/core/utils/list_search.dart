@@ -70,3 +70,10 @@ bool matchesSearchQuery(
     (token) => searchable.any((field) => field.contains(token)),
   );
 }
+
+int compareNamesAscending(String a, String b) =>
+    a.trim().toLowerCase().compareTo(b.trim().toLowerCase());
+
+void sortByNameAscending<T>(List<T> items, String Function(T item) name) {
+  items.sort((a, b) => compareNamesAscending(name(a), name(b)));
+}

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/widgets/app_avatar.dart';
 import '../../../../core/widgets/app_badge.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_text_view.dart';
 import '../../domain/entities/brand.dart';
+import 'brand_logo_box.dart';
 
 class BrandTile extends StatelessWidget {
   const BrandTile({
@@ -34,27 +34,10 @@ class BrandTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  accent.withValues(alpha: 0.22),
-                  accent.withValues(alpha: 0.08),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Center(
-              child: AppAvatar(
-                name: brand.name,
-                imageUrl: brand.logoUrl,
-                radius: 22,
-              ),
-            ),
+          BrandLogoBox(
+            name: brand.name,
+            logoUrl: brand.logoUrl,
+            accent: accent,
           ),
           const SizedBox(width: 14),
           Expanded(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_theme.dart';
+import 'app_network_image.dart';
 
 /// A circular avatar that shows a network image when [imageUrl] is provided,
 /// or falls back to the first letter of [name] on the brand-green background.
@@ -47,24 +48,20 @@ class AppAvatar extends StatelessWidget {
     final size = radius * 2;
     final fallback = _buildFallback(fg);
 
-    final url = imageUrl;
+    final url = imageUrl?.trim();
     if (url != null && url.isNotEmpty) {
       return CircleAvatar(
         radius: radius,
         backgroundColor: bg,
         child: ClipOval(
-          child: Image.network(
-            url,
+          child: SizedBox(
             width: size,
             height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => _fallbackSurface(bg, size, fallback),
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) {
-                return child;
-              }
-              return _fallbackSurface(bg, size, fallback);
-            },
+            child: AppNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.cover,
+              icon: Icons.storefront_outlined,
+            ),
           ),
         ),
       );
@@ -86,17 +83,6 @@ class AppAvatar extends StatelessWidget {
         color: fg,
         fontWeight: FontWeight.w900,
         fontSize: radius * 0.75,
-      ),
-    );
-  }
-
-  Widget _fallbackSurface(Color bg, double size, Widget child) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: ColoredBox(
-        color: bg,
-        child: Center(child: child),
       ),
     );
   }

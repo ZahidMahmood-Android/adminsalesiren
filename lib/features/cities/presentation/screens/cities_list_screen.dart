@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/list_search.dart';
+import '../../../../core/utils/delete_action_utils.dart';
 import '../../../../core/widgets/animated_content.dart';
 import '../../../../core/widgets/catalog_list_summary.dart';
 import '../../../../core/widgets/empty_state.dart';
@@ -95,6 +96,7 @@ class CitiesListScreen extends ConsumerWidget {
     final filteredItems = items
         .where((city) => _cityMatchesSearch(city, searchQuery))
         .toList();
+    sortByNameAscending(filteredItems, (city) => city.name);
     if (filteredItems.isEmpty) {
       return EmptyState(
         key: const ValueKey('cities-search-empty'),
@@ -177,6 +179,14 @@ class CitiesListScreen extends ConsumerWidget {
       return;
     }
     await ref.read(cityActionsProvider.notifier).delete(city.id);
+    if (!context.mounted) {
+      return;
+    }
+    await completeDeleteAction(
+      context,
+      ref.read(cityActionsProvider),
+      errorTitle: 'Could Not Delete City',
+    );
   }
 }
 

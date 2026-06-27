@@ -152,15 +152,14 @@ class NotificationRequestTile extends ConsumerWidget {
                       onPressed: actionState.isLoading
                           ? null
                           : () async {
-                              final confirmed =
-                                  await showSweetConfirmationDialog(
-                                    context: context,
-                                    title: 'Resend notification?',
-                                    message:
-                                        'Send this notification to all mobile users again.',
-                                    confirmLabel: 'Resend',
-                                    icon: Icons.campaign_outlined,
-                                  );
+                              final confirmed = await showSweetConfirmationDialog(
+                                context: context,
+                                title: 'Resend notification?',
+                                message:
+                                    'Send this notification to all mobile users again.',
+                                confirmLabel: 'Resend',
+                                icon: Icons.campaign_outlined,
+                              );
                               if (!confirmed || !context.mounted) {
                                 return;
                               }
@@ -190,17 +189,19 @@ class NotificationRequestTile extends ConsumerWidget {
                             },
                       icon: const Icon(Icons.campaign_outlined),
                     ),
-                  if ((isBrandScopedUser || canManageRequests) && canEditRequest)
+                  if ((isBrandScopedUser || canManageRequests) &&
+                      canEditRequest)
                     IconButton(
                       tooltip: 'Edit request',
                       onPressed: actionState.isLoading
                           ? null
                           : () async {
-                              final updated = await editNotificationRequestWithOffer(
-                            context,
-                            ref,
-                            request,
-                          );
+                              final updated =
+                                  await editNotificationRequestWithOffer(
+                                    context,
+                                    ref,
+                                    request,
+                                  );
                               if (updated == null) {
                                 return;
                               }
@@ -219,14 +220,13 @@ class NotificationRequestTile extends ConsumerWidget {
                       onPressed: actionState.isLoading
                           ? null
                           : () async {
-                              final confirmed =
-                                  await showSweetConfirmationDialog(
-                                    context: context,
-                                    title: 'Delete request?',
-                                    message:
-                                        'This notification request will be removed.',
-                                    confirmLabel: 'Delete',
-                                  );
+                              final confirmed = await showSweetConfirmationDialog(
+                                context: context,
+                                title: 'Delete request?',
+                                message:
+                                    'This notification request will be removed.',
+                                confirmLabel: 'Delete',
+                              );
                               if (!confirmed || !context.mounted) {
                                 return;
                               }

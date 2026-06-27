@@ -6,11 +6,47 @@ Log all new features, enhancements, and non-bug work here **before** implementin
 
 ---
 
+## 2026-06-27 — Brand logo: image only when URL present
+
+`BrandLogoBox` (admin + mobile): loaded logos sit inside a rounded border only (no fill); gradient + storefront icon when URL is missing or fails to load.
+
+---
+
+## 2026-06-27 — Brand logo listing and edit preview
+
+Brand list tiles (admin + mobile) show the full logo with `BoxFit.contain` inside the rounded tile. Mobile category brand list resolves logos from matched catalog brands (by id/name) so URLs like Breakout appear when set in admin. Brand edit form shows a live logo preview below the Logo URL field.
+
+---
+
+## 2026-06-27 — Admin catalog lists sort A–Z
+
+Brands, categories, and cities admin list screens sort filtered results by name ascending (case-insensitive).
+
+---
+
+## 2026-06-27 — Offer and brand images use BoxFit.cover
+
+Admin and mobile network image widgets enforce `BoxFit.cover` with centered alignment and bounded layout so listing/detail photos and brand logos are not stretched (`fill`).
+
+---
+
+## 2026-06-27 — Brand listing logo and offer brand selector overflow
+
+Brand list tiles use one rounded background: logo image when `logoUrl` loads, otherwise icon on the gradient. `SingleSelectField` brand picker dialog is height-constrained so long brand lists scroll instead of overflowing.
+
+---
+
+## 2026-06-27 — Offer create default all cities
+
+Offer create form pre-selects **All cities** in the city picker (instead of Lahore only). Offer details and list tiles show **All cities** when every visible city is selected.
+
+---
+
 ## 2026-06-26 — Mobile New Offers tab recency rules
 
 **Type:** Mobile UX (shared `sale_siren_models` helper).
 
-Dashboard **New Offers** tab: when more than one offer is visible, only offers posted within the last 24 hours appear there; older offers stay in **All Offers**. When only one offer exists, it appears in both **All Offers** and **New Offers**. Posted time uses `approvedAt`, then `createdAt`, then `startDate`.
+Dashboard **New Offers** tab: when more than one offer is visible, only offers whose **start date** is within the last 24 hours appear there; older offers stay in **All Offers**. **Ending soon** uses a fixed **end date** within 24 hours. **All Offers** shows category and type pills; filtered tabs do not.
 
 Admin panel unchanged (no offer feed tabs).
 

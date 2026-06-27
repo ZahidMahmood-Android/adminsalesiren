@@ -53,6 +53,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
   var _draftReady = false;
   var _draftRestored = false;
   var _draftLoadAttempted = false;
+  var _createCityDefaultsApplied = false;
   Timer? _draftTimer;
   var _isSubmitting = false;
   Offer? _loadedOffer;
@@ -96,13 +97,16 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     }
     _draftLoadAttempted = true;
     final isBrandScoped = ref.read(isBrandScopedUserProvider);
+    final cityItems = ref.read(visibleCitiesProvider).value ?? const <City>[];
     final stored = OfferCreateDraftStorage.load(user.id);
     setState(() {
       if (stored != null && stored.isNotEmpty) {
         _lineDrafts = stored;
         _draftRestored = true;
       } else if (isBrandScoped && user.brandId.isNotEmpty) {
-        _lineDrafts = [OfferLineDraft.empty(brandId: user.brandId)];
+        _lineDrafts = [
+          OfferLineDraft.empty(brandId: user.brandId, cities: cityItems),
+        ];
       }
       _draftReady = true;
     });
@@ -137,10 +141,12 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     if (user != null) {
       OfferCreateDraftStorage.clear(user.id);
     }
+    final cityItems = ref.read(visibleCitiesProvider).value ?? const <City>[];
     setState(() {
       _lineDrafts = [
         OfferLineDraft.empty(
           brandId: user?.brandId.isNotEmpty == true ? user!.brandId : null,
+          cities: cityItems,
         ),
       ];
       _draftRestored = false;
@@ -423,6 +429,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     final draftError = validateOfferDrafts(
       _lineDrafts,
       isBrandScopedUser: isBrandScopedUser,
+      cities: cities,
     );
     if (draftError != null) {
       if (mounted) {
@@ -568,7 +575,8 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
       Map<String, OfferNotificationDraft>? groupedNotificationDrafts;
       final wasPublished = _loadedOffer?.isPublished ?? false;
       final willPublish = groupedOffer.isPublished && !wasPublished;
-      final shouldNotifyEdit = wasPublished &&
+      final shouldNotifyEdit =
+          wasPublished &&
           groupedOffer.isPublished &&
           OfferEditNotificationUtils.hasNotifiableChange(
             previous: _loadedOffer!,
@@ -583,10 +591,9 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
           confirmLabel: willPublish ? 'Save & publish' : 'Save & notify',
           title: willPublish ? 'Notification preview' : 'Update notification',
           subtitle: willPublish
-              ? 'Review and edit the push notification before publishing this offer.'
-              : 'Choose the alert category and message for this offer update.',
+              ? 'Review the push notification before publishing. Alert category is calculated automatically.'
+              : 'Review the update notification. Alert category is calculated automatically.',
           enabledSlugs: alertOptions.enabledSlugs,
-          selectableAlertTypes: alertOptions.selectableAlertTypes,
           alertTypeLabels: alertOptions.alertTypeLabels,
         );
         if (groupedNotificationDrafts == null) {
@@ -605,7 +612,8 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
         Map<String, OfferNotificationDraft>? notificationDrafts;
         final wasPublished = _isEditing && (_loadedOffer?.isPublished ?? false);
         final willPublish = offer.isPublished && !wasPublished;
-        final shouldNotifyEdit = _isEditing &&
+        final shouldNotifyEdit =
+            _isEditing &&
             wasPublished &&
             offer.isPublished &&
             _loadedOffer != null &&
@@ -626,10 +634,9 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                 ? 'Notification preview'
                 : 'Update notification',
             subtitle: willPublish || !_isEditing
-                ? 'Review and edit the push notification before publishing this offer.'
-                : 'Choose the alert category and message for this offer update.',
+                ? 'Review the push notification before publishing. Alert category is calculated automatically.'
+                : 'Review the update notification. Alert category is calculated automatically.',
             enabledSlugs: alertOptions.enabledSlugs,
-            selectableAlertTypes: alertOptions.selectableAlertTypes,
             alertTypeLabels: alertOptions.alertTypeLabels,
           );
           if (notificationDrafts == null) {
@@ -744,6 +751,27 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
           categories.value ?? const <app_category.Category>[],
         );
         final cityItems = cities.value ?? const <City>[];
+        if (!_isEditing &&
+            !_createCityDefaultsApplied &&
+            cityItems.isNotEmpty &&
+            _draftReady) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _createCityDefaultsApplied) {
+              return;
+            }
+            var changed = false;
+            for (final draft in _lineDrafts) {
+              if (draft.selectedCityIds.isEmpty) {
+                draft.selectedCityIds = allCityIds(cityItems);
+                changed = true;
+              }
+            }
+            _createCityDefaultsApplied = true;
+            if (changed) {
+              setState(() {});
+            }
+          });
+        }
         if (!_isEditing && user != null && !_draftLoadAttempted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _tryLoadCreateDraft();

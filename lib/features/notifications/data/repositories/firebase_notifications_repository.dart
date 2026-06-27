@@ -85,6 +85,8 @@ class FirebaseNotificationsRepository implements NotificationsRepository {
     return _requests.doc(request.id).update({
       'title': request.title,
       'body': request.body,
+      'type': request.type,
+      'data': request.data,
       'targetCityIds': request.targetCityIds,
       'targetCategoryIds': request.targetCategoryIds,
       'targetTopics': request.targetTopics,

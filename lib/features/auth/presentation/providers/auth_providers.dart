@@ -139,6 +139,13 @@ final isBrandScopedUserProvider = Provider<bool>((ref) {
   return ref.watch(currentUserProvider)?.hasRole(UserRoles.brandAdmin) ?? false;
 });
 
+final canDeleteBrandProvider = Provider<bool>((ref) {
+  if (ref.watch(isBrandScopedUserProvider)) {
+    return false;
+  }
+  return ref.watch(isOwnerProvider) || ref.watch(isManagerProvider);
+});
+
 final passwordChangeSkippedProvider = StateProvider<bool>((ref) => false);
 
 final loginControllerProvider =

@@ -80,35 +80,41 @@ class SingleSelectField<T> extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                     ],
-                    ListView(
-                      shrinkWrap: true,
-                      children: [
-                        if (allowAny)
-                          AppListTileMaterial(
-                            child: RadioListTile<T?>(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(emptyLabel),
-                              value: null,
-                              groupValue: draft,
-                              onChanged: (selected) {
-                                setDialogState(() => draft = selected);
-                              },
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: (MediaQuery.sizeOf(context).height * 0.5)
+                            .clamp(240.0, 420.0),
+                      ),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          if (allowAny)
+                            AppListTileMaterial(
+                              child: RadioListTile<T?>(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(emptyLabel),
+                                value: null,
+                                groupValue: draft,
+                                onChanged: (selected) {
+                                  setDialogState(() => draft = selected);
+                                },
+                              ),
+                            ),
+                          ...filtered.map(
+                            (option) => AppListTileMaterial(
+                              child: RadioListTile<T>(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(option.label),
+                                value: option.value,
+                                groupValue: draft,
+                                onChanged: (selected) {
+                                  setDialogState(() => draft = selected);
+                                },
+                              ),
                             ),
                           ),
-                        ...filtered.map(
-                          (option) => AppListTileMaterial(
-                            child: RadioListTile<T>(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(option.label),
-                              value: option.value,
-                              groupValue: draft,
-                              onChanged: (selected) {
-                                setDialogState(() => draft = selected);
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),

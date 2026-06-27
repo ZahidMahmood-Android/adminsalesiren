@@ -11,6 +11,7 @@ import '../../../../core/widgets/list_screen_body.dart';
 import '../../../../core/widgets/list_search_field.dart';
 import '../../../../core/widgets/screen_layout.dart';
 import '../../../../core/widgets/sweet_confirmation_dialog.dart';
+import '../../../../core/utils/delete_action_utils.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/brand.dart';
 import '../providers/brand_providers.dart';
@@ -26,7 +27,7 @@ class BrandsListScreen extends ConsumerWidget {
     final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
     final isManager = ref.watch(isManagerProvider);
     final canRegisterBrand = !isBrandScopedUser && !isManager;
-    final canDeleteBrand = !isBrandScopedUser && !isManager;
+    final canDeleteBrand = ref.watch(canDeleteBrandProvider);
     final actionState = ref.watch(brandActionsProvider);
 
     return ScreenScaffold(
@@ -93,6 +94,14 @@ class BrandsListScreen extends ConsumerWidget {
       return;
     }
     await ref.read(brandActionsProvider.notifier).delete(brand.id);
+    if (!context.mounted) {
+      return;
+    }
+    await completeDeleteAction(
+      context,
+      ref.read(brandActionsProvider),
+      errorTitle: 'Could Not Delete Brand',
+    );
   }
 
   Widget _buildBrandsContent(
@@ -124,6 +133,7 @@ class BrandsListScreen extends ConsumerWidget {
     final filteredItems = items
         .where((brand) => _brandMatchesSearch(brand, searchQuery))
         .toList();
+    sortByNameAscending(filteredItems, (brand) => brand.name);
     if (filteredItems.isEmpty) {
       return EmptyState(
         key: const ValueKey('brands-search-empty'),

@@ -10,21 +10,26 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../categories/presentation/providers/category_providers.dart';
 import '../../data/repositories/firebase_offer_image_repository.dart';
 import '../../data/repositories/firebase_offers_repository.dart';
-import '../../domain/entities/offer_line.dart';
+import '../../presentation/widgets/offer_lines_editor.dart'
+    show kWholeBrandCategoryLabel;
 import '../../domain/entities/offer.dart';
+import '../../domain/entities/offer_line.dart';
 import '../../domain/entities/offer_filters.dart';
 import '../../domain/repositories/offer_image_repository.dart';
 import '../../domain/repositories/offers_repository.dart';
 import '../../domain/usecases/create_offer.dart';
 import '../../domain/usecases/delete_offer.dart';
 import '../../domain/usecases/update_offer.dart';
-import '../../../notifications/domain/alert_type_utils.dart';
+import '../../../notifications/domain/offer_alert_input_mapper.dart';
 import '../../../notifications/domain/entities/notification_request.dart';
 import '../../../notifications/domain/entities/offer_notification_draft.dart';
 import '../../../notifications/domain/entities/offer_notification_content_utils.dart';
 import '../../../notifications/presentation/providers/notification_providers.dart';
 import '../../../subscriptions/presentation/providers/subscription_providers.dart';
 import '../../../settings/presentation/providers/app_settings_providers.dart';
+
+import 'package:sale_siren_models/sale_siren_models.dart'
+    show OfferNotificationSnapshot;
 
 final offersRepositoryProvider = Provider<OffersRepository>((ref) {
   final user = ref.watch(currentUserProvider);
@@ -159,6 +164,9 @@ class OfferActionsController extends AsyncNotifier<void> {
     state = await AsyncValue.guard(() async {
       final dispatchAfterSave = notificationDrafts != null && offer.isPublished;
       await ref.read(updateOfferProvider).call(offer, sendNotification: false);
+      if (offer.isExpired) {
+        ref.invalidate(notificationRequestsProvider);
+      }
       if (dispatchAfterSave) {
         await ref
             .read(notificationsRepositoryProvider)
@@ -254,6 +262,7 @@ class OfferActionsController extends AsyncNotifier<void> {
     state = await AsyncValue.guard(
       () => ref.read(offersRepositoryProvider).expireOffer(id),
     );
+    ref.invalidate(notificationRequestsProvider);
     _refreshOffers(id: id);
     _logActionResult('Expire offer action', id: id);
   }
@@ -426,37 +435,49 @@ class OfferActionsController extends AsyncNotifier<void> {
         line,
         notificationDrafts,
       );
+      final storedOffer = offer.id.isNotEmpty
+          ? await ref.read(offersRepositoryProvider).getOffer(offer.id)
+          : null;
+      final storedSnapshot = OfferNotificationSnapshot.fromMap(
+        storedOffer?.notificationSnapshot,
+      );
+      final enabledSlugs = ref.read(selectableAlertTypeSlugsProvider);
+      final alertType =
+          draft?.alertType ??
+          OfferAlertInputMapper.resolveAlertType(
+            offer: offer,
+            line: line,
+            previousOffer: storedOffer,
+            storedSnapshot: storedSnapshot,
+            enabledSlugs: enabledSlugs,
+          );
       final title = draft?.title.trim().isNotEmpty == true
           ? draft!.title.trim()
-          : OfferNotificationContentUtils.suggestedTitle(offer, line);
+          : OfferNotificationContentUtils.suggestedTitle(
+              offer,
+              line,
+              alertType: alertType,
+            );
       final body = draft?.body.trim().isNotEmpty == true
           ? draft!.body.trim()
-          : OfferNotificationContentUtils.suggestedBody(offer);
+          : OfferNotificationContentUtils.suggestedBody(
+              offer,
+              alertType: alertType,
+            );
       final includeImage =
           draft?.includeImage ??
-          OfferNotificationDraftUtils.primaryImageUrl(offer).isNotEmpty;
-      final categoryIds = [line.categoryId];
+          OfferNotificationDraftUtils.primaryImageUrlForLine(
+            offer,
+            line,
+          ).isNotEmpty;
+      final categoryIds = _notificationCategoryIds(offer: offer, line: line);
       final categoryTopics = await _topicsForCategoryIds(categoryIds);
-      final offerImages = offer.imageUrls
-          .map((url) => url.trim())
-          .where((url) => url.isNotEmpty)
-          .toList();
-      final imageUrl = offerImages.isNotEmpty
-          ? offerImages.first
-          : offer.imageUrl.trim();
-      final enabledSlugs = ref.read(selectableAlertTypeSlugsProvider);
-      final alertType = clampAlertTypeSlug(
-        draft?.alertType ??
-            resolveAlertTypeForOffer(
-              offer.copyWith(
-                discountText: line.discountText,
-                categoryId: line.categoryId,
-              ),
-              enabledSlugs: enabledSlugs,
-            ),
-        enabledSlugs: enabledSlugs,
-      );
-      return await ref
+      final imageUrl = draft?.imageUrl.trim().isNotEmpty == true
+          ? draft!.imageUrl.trim()
+          : OfferNotificationDraftUtils.primaryImageUrlForLine(offer, line);
+      final primaryCategoryId =
+          categoryIds.isNotEmpty ? categoryIds.first : line.categoryId;
+      final requestId = await ref
           .read(createNotificationRequestProvider)
           .call(
             NotificationRequest(
@@ -470,8 +491,8 @@ class OfferActionsController extends AsyncNotifier<void> {
                 'offerLineId': line.id,
                 'brandId': offer.brandId,
                 'brandName': offer.brandName,
-                'categoryId': line.categoryId,
-                'categoryIds': line.categoryId,
+                'categoryId': primaryCategoryId,
+                'categoryIds': categoryIds.join(','),
                 'categoryTopics': categoryTopics.join(','),
                 'cityId': offer.cityId,
                 'cityIds': offer.cityIds.join(','),
@@ -496,6 +517,18 @@ class OfferActionsController extends AsyncNotifier<void> {
               createdAt: DateTime.now(),
             ),
           );
+      if (offer.id.isNotEmpty) {
+        await ref
+            .read(offersRepositoryProvider)
+            .updateOfferNotificationState(
+              offerId: offer.id,
+              alertType: alertType,
+              notificationSnapshot: OfferAlertInputMapper.snapshotFromOffer(
+                offer,
+              ).toMap(),
+            );
+      }
+      return requestId;
     } catch (error, stackTrace) {
       _log.warning(
         'Notification request skipped for offer id=${offer.id} line=${line.id}',
@@ -519,4 +552,32 @@ class OfferActionsController extends AsyncNotifier<void> {
         .toSet()
         .toList();
   }
+}
+
+List<String> _notificationCategoryIds({
+  required Offer offer,
+  required OfferLine line,
+}) {
+  final isWholeBrand =
+      line.categoryName.trim().toLowerCase() ==
+          kWholeBrandCategoryLabel.toLowerCase() ||
+      offer.categoryName.trim().toLowerCase() ==
+          kWholeBrandCategoryLabel.toLowerCase();
+  if (isWholeBrand) {
+    final fromOffer = offer.categoryIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (fromOffer.isNotEmpty) {
+      return fromOffer;
+    }
+  }
+  final lineId = line.categoryId.trim();
+  if (lineId.isNotEmpty) {
+    return [lineId];
+  }
+  return offer.categoryIds
+      .map((id) => id.trim())
+      .where((id) => id.isNotEmpty)
+      .toList();
 }

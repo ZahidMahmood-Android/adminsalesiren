@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sale_siren_models/sale_siren_models.dart';
 
 import '../../../offers/domain/entities/offer.dart';
 import '../../domain/entities/offer_notification_draft.dart';
@@ -10,9 +11,7 @@ Future<Map<String, OfferNotificationDraft>?> confirmOfferNotificationDrafts(
   Offer? previousOffer,
   String confirmLabel = 'Publish',
   String title = 'Notification preview',
-  String subtitle =
-      'Review and edit the push notification before publishing this offer.',
-  List<String>? selectableAlertTypes,
+  String? subtitle,
   Map<String, String>? alertTypeLabels,
   List<String>? enabledSlugs,
 }) async {
@@ -22,11 +21,15 @@ Future<Map<String, OfferNotificationDraft>?> confirmOfferNotificationDrafts(
       offer,
       previousOffer: previousOffer,
       enabledSlugs: enabledSlugs,
+      storedSnapshot: OfferNotificationSnapshot.fromMap(
+        offer.notificationSnapshot,
+      ),
     ),
     title: title,
-    subtitle: subtitle,
+    subtitle:
+        subtitle ??
+        'Review the push notification before publishing. Alert category is calculated automatically from the offer.',
     confirmLabel: confirmLabel,
-    selectableAlertTypes: selectableAlertTypes,
     alertTypeLabels: alertTypeLabels,
   );
   if (drafts == null) {

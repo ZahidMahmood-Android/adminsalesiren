@@ -17,22 +17,38 @@ class AppNetworkImage extends StatelessWidget {
     if (imageUrl.trim().isEmpty) {
       return _ImageFallback(icon: icon);
     }
-    return Image.network(
-      imageUrl,
-      fit: fit,
-      webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-      errorBuilder: (context, error, stackTrace) => _ImageFallback(icon: icon),
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return _ImageFallback(
-          icon: icon,
-          child: const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : double.infinity;
+        final height = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : double.infinity;
+
+        return Image.network(
+          imageUrl,
+          fit: fit,
+          alignment: Alignment.center,
+          width: width,
+          height: height,
+          webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+          errorBuilder: (context, error, stackTrace) =>
+              _ImageFallback(icon: icon),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+            return _ImageFallback(
+              icon: icon,
+              child: const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            );
+          },
         );
       },
     );

@@ -6,6 +6,88 @@ Log all bug fixes here **before** implementing. For new features use `docs/updat
 
 ---
 
+## 2026-06-27 — Cloud Functions deploy ERESOLVE (firebase-admin 14)
+
+**Symptom:** `firebase deploy --only functions` failed with `ERESOLVE` — `firebase-functions@7.2.5` peer dependency does not allow `firebase-admin@14.x`.
+
+**Fix:** Pin `firebase-admin` to `^13.10.0` in `functions/package.json` (latest 13.x supported by `firebase-functions` 7.2.5). Regenerate `package-lock.json`.
+
+---
+
+## 2026-06-27 — Functions deploy blocked (HTTPS → Firestore trigger rename)
+
+**Symptom:** Deploy failed: `Changing from an HTTPS function to a background triggered function is not allowed` for `cleanupNotificationRequestsOnOfferExpire`.
+
+**Fix:** Renamed export to `onOfferExpiredNotificationCleanup` (new Firestore trigger). Delete the old HTTPS function name in Firebase if it still exists.
+
+---
+
+## 2026-06-27 — Mobile alerts remain after offer expires
+
+**Symptom:** Expiring an offer removed admin notification requests, but the push still appeared in the mobile **Alerts** tab.
+
+**Cause:** Cleanup deleted `notification_requests` / `offer_push_jobs` only. In-app alerts live in `users/{uid}/alerts` and device-local cache; local merge kept alerts when Firestore copies were removed.
+
+**Fix:** Cloud Function + admin expire cleanup delete all user alerts with matching `offerId` (collection group). Mobile drops local alert cache when Firestore no longer returns that offer’s alert, or when the linked offer is expired/deleted.
+
+---
+
+## 2026-06-27 — Notification requests remain for expired offers
+
+**Symptom:** Expired offers still showed linked notification requests in the admin **Notification Requests** screen.
+
+**Cause:** Expiring an offer only updated the offer document; `notification_requests` and pending `offer_push_jobs` were left until the 10-day cleanup job (or never removed when status changed).
+
+**Fix:** Delete notification requests and push jobs when an offer is expired (admin action or save with expired status). Filter the admin list to hide any remaining requests tied to expired offers. Cloud Function removes artifacts when offer `status` becomes `expired`.
+
+---
+
+## 2026-06-27 — Push notification images missing on mobile
+
+**Symptom:** Admin publish with **Send with image** enabled showed text-only notifications on mobile.
+
+**Cause:** Notification requests often stored an empty `data.imageUrl` (offer-level images only, not line images). FCM notification payload prevented the mobile app from rendering BigPicture locally.
+
+**Fix:** Resolve and persist line/offer image URLs in admin notification requests and Cloud Functions. Send data-only FCM when an image is present; mobile downloads and shows BigPicture in foreground and background.
+
+---
+
+## 2026-06-27 — Admin brand list hides logo URLs on web
+
+**Symptom:** Brand logos from **Logo URL** did not appear in the admin brands list (initials shown instead).
+
+**Cause:** `AppAvatar` used `Image.network` without `WebHtmlElementStrategy.prefer`, so CORS-blocked hosts (e.g. Google favicons) failed on Flutter web.
+
+**Fix:** `AppAvatar` now uses web-safe `AppNetworkImage`. Mobile trusts `google.com` favicon hosts for brand logos.
+
+---
+
+## 2026-06-27 — Mobile home offer tabs strict date filters
+
+**Symptom:** **Ending soon** offers appeared under **New Offers**; filters used alert type and a single-offer bypass.
+
+**Fix:** Shared `OfferPostedRecency`: **New Offers** = `startDate` within 24h; **Ending soon** = fixed `endDate` within 24h. Mobile **All Offers** tab shows category + type pills; filtered tabs hide them.
+
+---
+
+## 2026-06-27 — New Offers tab uses start date not created date
+
+**Symptom:** Offers with an older start date (e.g. 24 Jun) still appear under **New Offers** when created/published recently (e.g. on 27 Jun).
+
+**Fix:** Mobile **New Offers** tab recency uses offer `startDate` only (24-hour window + single-offer exception). Removed `alertType == new_offer` and “published today” bypasses that ignored start date.
+
+---
+
+## 2026-06-27 — Catalog delete actions fail silently
+
+**Symptom:** Deleting a brand (or other catalog item) shows a loading refresh but the record stays; no error is shown.
+
+**Cause:** Delete handlers did not check `AsyncValue.hasError` after the action, and brand form navigated away even when Firestore denied the write (e.g. manager role blocked by rules). Brand delete button was visible to managers on the edit form but hidden on the list.
+
+**Fix:** Shared delete-result error dialog helper; all brand/city/category/offer delete flows show permission errors and only navigate after success. Brand Firestore delete now allows manager/admin/owner (`isManagerOrAdminOrOwner`). Brand list/form delete buttons use the same permission gate.
+
+---
+
 ## 2026-06-26 — Owner / manager / brand admin offer save still denied
 
 **Symptom:** Edited offers still fail with `permission-denied` after the first rules fix.

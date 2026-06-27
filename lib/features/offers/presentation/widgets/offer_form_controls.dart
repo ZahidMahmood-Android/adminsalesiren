@@ -261,7 +261,10 @@ class _UploadedImageTile extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: AppNetworkImage(imageUrl: imageUrl),
+            child: AppNetworkImage(
+              imageUrl: imageUrl,
+              fit: BoxFit.cover,
+            ),
           ),
           Positioned(
             top: 6,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/utils/delete_action_utils.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_error_view.dart';
 import '../../../../core/widgets/app_loader.dart';
@@ -15,6 +16,7 @@ import '../../../cities/presentation/providers/city_providers.dart';
 import '../../domain/entities/brand.dart';
 import '../../domain/entities/brand_url_source.dart';
 import '../providers/brand_providers.dart';
+import '../widgets/brand_logo_box.dart';
 import '../widgets/selection_block.dart';
 import '../widgets/url_sources_field.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
@@ -164,7 +166,15 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
       return;
     }
     await ref.read(brandActionsProvider.notifier).delete(id);
-    if (mounted) {
+    if (!mounted) {
+      return;
+    }
+    final deleted = await completeDeleteAction(
+      context,
+      ref.read(brandActionsProvider),
+      errorTitle: 'Could Not Delete Brand',
+    );
+    if (deleted && mounted) {
       context.go('/brands');
     }
   }
@@ -178,6 +188,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
     final cities = ref.watch(citiesProvider);
     final actionState = ref.watch(brandActionsProvider);
     final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
+    final canDeleteBrand = ref.watch(canDeleteBrandProvider);
 
     return brandAsync.when(
       data: (brand) {
@@ -209,7 +220,7 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                                     ?.copyWith(fontWeight: FontWeight.w900),
                               ),
                             ),
-                            if (_isEditing && !isBrandScopedUser)
+                            if (_isEditing && canDeleteBrand)
                               IconButton(
                                 tooltip: 'Delete brand',
                                 onPressed: actionState.isLoading
@@ -240,6 +251,19 @@ class _BrandFormScreenState extends ConsumerState<BrandFormScreen> {
                           decoration: const InputDecoration(
                             labelText: 'Logo URL',
                             prefixIcon: Icon(Icons.image_outlined),
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: BrandLogoBox(
+                            name: _nameController.text.trim().isEmpty
+                                ? 'Brand'
+                                : _nameController.text.trim(),
+                            logoUrl: _logoController.text,
+                            size: 72,
+                            borderRadius: 16,
                           ),
                         ),
                         const SizedBox(height: 16),

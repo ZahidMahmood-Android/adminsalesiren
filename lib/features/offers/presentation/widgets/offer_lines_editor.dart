@@ -20,8 +20,40 @@ import '../../domain/entities/offer_image_upload_task.dart';
 import '../../domain/entities/offer_line.dart';
 import 'offer_form_controls.dart';
 
-const kDefaultOfferCityId = 'lahore';
+const kAllCitiesLabel = 'All cities';
 const kWholeBrandCategoryLabel = 'Whole brand';
+
+Set<String> allCityIds(List<City> cities) =>
+    cities.map((city) => city.id).toSet();
+
+bool offerCoversAllCities({
+  required Offer offer,
+  required List<City> allCities,
+}) {
+  if (allCities.isEmpty) {
+    return false;
+  }
+  final selected = offer.cityIds.isEmpty
+      ? {if (offer.cityId.isNotEmpty) offer.cityId}
+      : offer.cityIds.toSet();
+  if (selected.isEmpty) {
+    return false;
+  }
+  final visibleIds = allCityIds(allCities);
+  return selected.length == visibleIds.length &&
+      visibleIds.every(selected.contains);
+}
+
+String offerCitiesDisplayLabel(Offer offer, {List<City>? allCities}) {
+  if (allCities != null &&
+      offerCoversAllCities(offer: offer, allCities: allCities)) {
+    return kAllCitiesLabel;
+  }
+  if (offer.cityNames.isNotEmpty) {
+    return offer.cityNames.join(', ');
+  }
+  return offer.cityName;
+}
 
 enum OfferCategoryScope { selected, wholeBrand }
 
@@ -50,7 +82,7 @@ class OfferLineDraft {
     List<XFile>? pickedImages,
     List<OfferImageUploadTask>? imageUploads,
     List<BrandUrlSource>? linkSources,
-  }) : selectedCityIds = selectedCityIds ?? {kDefaultOfferCityId},
+  }) : selectedCityIds = selectedCityIds ?? const {},
        selectedCategoryIds = selectedCategoryIds ?? <String>{},
        startDate = startDate ?? _defaultStartDate(),
        endDate = OfferEndDateModes.hasOpenEndedEnd(endDateMode)
@@ -99,12 +131,15 @@ class OfferLineDraft {
   factory OfferLineDraft.empty({
     String? brandId,
     Set<String>? selectedCityIds,
+    List<City>? cities,
     List<BrandUrlSource>? linkSources,
   }) {
     return OfferLineDraft(
       id: const Uuid().v4(),
       brandId: brandId,
-      selectedCityIds: selectedCityIds,
+      selectedCityIds:
+          selectedCityIds ??
+          (cities != null && cities.isNotEmpty ? allCityIds(cities) : null),
       linkSources: linkSources == null
           ? null
           : BrandUrlSourceUtils.copyList(linkSources),
@@ -427,6 +462,7 @@ class OfferLinesEditor extends StatelessWidget {
                   ...lines,
                   OfferLineDraft.empty(
                     brandId: isBrandScopedUser ? scopedBrandId : null,
+                    cities: cities,
                   ),
                 ]);
               },
@@ -471,6 +507,7 @@ class OfferLinesEditor extends StatelessWidget {
                       ? [
                           OfferLineDraft.empty(
                             brandId: isBrandScopedUser ? scopedBrandId : null,
+                            cities: cities,
                           ),
                         ]
                       : next,
@@ -1216,8 +1253,11 @@ Offer? buildOfferFromDraft({
   if (resolvedCategories.isEmpty) {
     return null;
   }
+  final resolvedCityIds = draft.selectedCityIds.isNotEmpty
+      ? draft.selectedCityIds
+      : allCityIds(cities);
   final selectedCities = cities
-      .where((city) => draft.selectedCityIds.contains(city.id))
+      .where((city) => resolvedCityIds.contains(city.id))
       .toList();
   if (selectedCities.isEmpty || draft.startDate == null) {
     return null;
@@ -1311,6 +1351,7 @@ Offer? buildOfferFromDraft({
 String? validateOfferDrafts(
   List<OfferLineDraft> drafts, {
   required bool isBrandScopedUser,
+  List<City> cities = const [],
 }) {
   if (drafts.isEmpty) {
     return 'Add at least one offer.';
@@ -1325,7 +1366,10 @@ String? validateOfferDrafts(
         (draft.brandId == null || draft.brandId!.isEmpty)) {
       return 'Select a brand for $label.';
     }
-    if (draft.selectedCityIds.isEmpty) {
+    final resolvedCityIds = draft.selectedCityIds.isNotEmpty
+        ? draft.selectedCityIds
+        : allCityIds(cities);
+    if (resolvedCityIds.isEmpty) {
       return 'Select at least one city for $label.';
     }
     if (draft.startDate == null) {

@@ -376,7 +376,7 @@ service cloud.firestore {
     match /brands/{targetBrandId} {
       allow read: if true;
       allow create: if isAdminOrOwner() || isManager();
-      allow delete: if isAdminOrOwner();
+      allow delete: if isManagerOrAdminOrOwner();
       allow update: if isAdminOrOwner() || isManager()
         || (ownsBrand(targetBrandId)
           && request.resource.data.id == resource.data.id

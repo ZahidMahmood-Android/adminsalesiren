@@ -11,6 +11,7 @@ import '../../../../core/widgets/sweet_confirmation_dialog.dart';
 import '../../domain/entities/city.dart';
 import '../providers/city_providers.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
+import '../../../../core/utils/delete_action_utils.dart';
 import '../../../../core/widgets/screen_layout.dart';
 
 class CityFormScreen extends ConsumerStatefulWidget {
@@ -95,7 +96,15 @@ class _CityFormScreenState extends ConsumerState<CityFormScreen> {
       return;
     }
     await ref.read(cityActionsProvider.notifier).delete(id);
-    if (mounted) {
+    if (!mounted) {
+      return;
+    }
+    final deleted = await completeDeleteAction(
+      context,
+      ref.read(cityActionsProvider),
+      errorTitle: 'Could Not Delete City',
+    );
+    if (deleted && mounted) {
       context.go('/cities');
     }
   }

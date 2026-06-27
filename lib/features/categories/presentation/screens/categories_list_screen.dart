@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/list_search.dart';
+import '../../../../core/utils/delete_action_utils.dart';
 import '../../../../core/widgets/animated_content.dart';
 import '../../../../core/widgets/catalog_list_summary.dart';
 import '../../../../core/widgets/empty_state.dart';
@@ -93,6 +94,7 @@ class CategoriesListScreen extends ConsumerWidget {
     final filteredItems = items
         .where((category) => _categoryMatchesSearch(category, searchQuery))
         .toList();
+    sortByNameAscending(filteredItems, (category) => category.name);
     if (filteredItems.isEmpty) {
       return EmptyState(
         key: const ValueKey('cats-search-empty'),
@@ -181,6 +183,14 @@ class CategoriesListScreen extends ConsumerWidget {
       return;
     }
     await ref.read(categoryActionsProvider.notifier).delete(category.id);
+    if (!context.mounted) {
+      return;
+    }
+    await completeDeleteAction(
+      context,
+      ref.read(categoryActionsProvider),
+      errorTitle: 'Could Not Delete Category',
+    );
   }
 }
 

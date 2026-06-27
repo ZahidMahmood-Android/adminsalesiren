@@ -31,4 +31,9 @@ abstract class OffersRepository {
     String offerLineId = '',
     String requestId = '',
   });
+  Future<void> updateOfferNotificationState({
+    required String offerId,
+    required String alertType,
+    required Map<String, dynamic> notificationSnapshot,
+  });
 }

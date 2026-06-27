@@ -212,7 +212,9 @@ Future<void> publishSingleNotificationRequest(
         .read(notificationRequestActionsProvider.notifier)
         .saveRequest(updatedRequest);
     if (request.offerId.isNotEmpty) {
-      await ref.read(notificationRequestActionsProvider.notifier).publishRequest(
+      await ref
+          .read(notificationRequestActionsProvider.notifier)
+          .publishRequest(
             requestId: request.id,
             offerId: request.offerId,
             offerLineId: request.offerLineId,
@@ -244,7 +246,8 @@ Widget notificationPublishModeButtons({
   required bool enabled,
   required bool hasPending,
   required void Function(NotificationPublishMode mode) onPublish,
-  NotificationPublishButtonStyle style = NotificationPublishButtonStyle.publishAll,
+  NotificationPublishButtonStyle style =
+      NotificationPublishButtonStyle.publishAll,
 }) {
   if (!hasPending) {
     return const SizedBox.shrink();

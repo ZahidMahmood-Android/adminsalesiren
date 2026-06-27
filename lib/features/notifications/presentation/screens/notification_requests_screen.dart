@@ -41,7 +41,8 @@ class NotificationRequestsScreen extends ConsumerWidget {
           notificationPublishModeButtons(
             enabled: !actionState.isLoading,
             hasPending: hasPendingRequests,
-            onPublish: (mode) => publishAllPendingRequests(context, ref, mode: mode),
+            onPublish: (mode) =>
+                publishAllPendingRequests(context, ref, mode: mode),
           ),
       ],
       child: ListScreenBody<List<NotificationRequest>>(

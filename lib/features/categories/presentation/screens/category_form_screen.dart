@@ -12,6 +12,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../domain/entities/category.dart';
 import '../providers/category_providers.dart';
 import '../../../../core/widgets/app_error_dialog.dart';
+import '../../../../core/utils/delete_action_utils.dart';
 import '../../../../core/widgets/screen_layout.dart';
 
 class CategoryFormScreen extends ConsumerStatefulWidget {
@@ -100,7 +101,15 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
       return;
     }
     await ref.read(categoryActionsProvider.notifier).delete(id);
-    if (mounted) {
+    if (!mounted) {
+      return;
+    }
+    final deleted = await completeDeleteAction(
+      context,
+      ref.read(categoryActionsProvider),
+      errorTitle: 'Could Not Delete Category',
+    );
+    if (deleted && mounted) {
       context.go('/categories');
     }
   }
