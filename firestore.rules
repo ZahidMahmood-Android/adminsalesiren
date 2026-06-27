@@ -151,31 +151,13 @@ service cloud.firestore {
       return resource.data.isPublished == true;
     }
 
-    function updatesOwnOffer() {
+    function canAdminPanelUpdateOffer() {
       let d = request.resource.data;
-      return isBrandScopedUser()
-        && offerCreatedByUserId(resource.data) == request.auth.uid
-        && preservesCreatedByUserId()
+      return isSignedIn()
         && d.brandId == resource.data.brandId
         && (
-          isManager()
-          || d.brandId == brandId()
-        )
-        && (
-          (
-            !resource.data.isPublished
-            && d.isPublished == false
-          )
-          || canEditPublishedOfferContent()
-          || canExpirePublishedOffer()
-          || (
-            isBrandAdmin()
-            && offerStatus(resource.data) in ['pending', 'pending_review']
-            && d.isPublished == true
-            && isPublishedLikeStatus(d.status)
-            && d.approvalStatus == 'approved'
-            && d.approvedBy == request.auth.uid
-          )
+          isManagerOrAdminOrOwner()
+          || (isBrandAdmin() && resource.data.brandId == brandId())
         );
     }
 
@@ -420,15 +402,7 @@ service cloud.firestore {
           && resource.data.isVerified == true
           && resource.data.status != 'expired');
       allow create: if isManagerOrAdminOrOwner() || createsOwnOffer();
-      allow update: if (
-          isManagerOrAdminOrOwner()
-          && (
-            (resource.data.status != 'published' && resource.data.isPublished != true)
-            || canEditPublishedOfferContent()
-            || canExpirePublishedOffer()
-          )
-        )
-        || updatesOwnOffer()
+      allow update: if canAdminPanelUpdateOffer()
         || (
           isMobileUser()
           && resource.data.isPublished == true

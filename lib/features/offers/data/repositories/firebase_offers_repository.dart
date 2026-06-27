@@ -98,7 +98,10 @@ class FirebaseOffersRepository implements OffersRepository {
   }
 
   @override
-  Future<String> createOffer(Offer offer, {bool sendNotification = true}) async {
+  Future<String> createOffer(
+    Offer offer, {
+    bool sendNotification = true,
+  }) async {
     final pendingOffer = _enforcePendingForManager(offer);
     final doc = pendingOffer.id.isEmpty
         ? _offers.doc()
@@ -209,7 +212,24 @@ class FirebaseOffersRepository implements OffersRepository {
   @override
   Future<void> updateOffer(Offer offer, {bool sendNotification = false}) async {
     final pendingOffer = _enforcePendingForManager(offer);
-    final normalizedOffer = _normalizeOfferForWrite(pendingOffer);
+    final existingSnapshot = await _offers.doc(pendingOffer.id).get();
+    if (!existingSnapshot.exists) {
+      throw StateError('Offer not found.');
+    }
+    final existing = OfferModel.fromSnapshot(existingSnapshot);
+    final createdByUserId = existing.createdByUserId.isNotEmpty
+        ? existing.createdByUserId
+        : existing.createdBy;
+    final identityLocked = pendingOffer.copyWith(
+      brandId: existing.brandId,
+      createdBy: existing.createdBy.isNotEmpty
+          ? existing.createdBy
+          : createdByUserId,
+      createdByUserId: createdByUserId,
+      createdByRole: existing.createdByRole,
+      createdAt: existing.createdAt,
+    );
+    final normalizedOffer = _normalizeOfferForWrite(identityLocked);
     final model = OfferModel.fromEntity(
       normalizedOffer.copyWith(updatedAt: DateTime.now()),
     );

@@ -6,6 +6,16 @@ Log all bug fixes here **before** implementing. For new features use `docs/updat
 
 ---
 
+## 2026-06-26 — Owner / manager / brand admin offer save still denied
+
+**Symptom:** Edited offers still fail with `permission-denied` after the first rules fix.
+
+**Cause:** Offer `update` rules still gated saves on published-state checks (`canEditPublishedOfferContent`, creator-only `updatesOwnOffer`) that the edit form can change (status, approval fields). Any mismatch denied the write even for owner/manager/brand admin.
+
+**Fix:** Replace offer update rules with a single admin-panel path: owner, manager, admin, or brand admin (own brand) may update when `brandId` is unchanged. Lock `createdBy*` / `brandId` / `createdAt` from the existing Firestore doc before each update write.
+
+---
+
 ## 2026-06-26 — Brand admin / manager cannot update own offers
 
 **Symptom:** `OfferActionsController` logs `permission-denied` on update; create works for the same user and offer id.

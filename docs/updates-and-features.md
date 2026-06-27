@@ -6,6 +6,16 @@ Log all new features, enhancements, and non-bug work here **before** implementin
 
 ---
 
+## 2026-06-26 — Mobile New Offers tab recency rules
+
+**Type:** Mobile UX (shared `sale_siren_models` helper).
+
+Dashboard **New Offers** tab: when more than one offer is visible, only offers posted within the last 24 hours appear there; older offers stay in **All Offers**. When only one offer exists, it appears in both **All Offers** and **New Offers**. Posted time uses `approvedAt`, then `createdAt`, then `startDate`.
+
+Admin panel unchanged (no offer feed tabs).
+
+---
+
 ## 2026-06-19 — Unified selectors and shimmer loading
 
 Shared `AppFieldSelector`, `SingleSelectField`, and updated `MultiSelectField` for consistent dropdown-style fields; shimmer placeholders replace spinners on data fetch loading states.
