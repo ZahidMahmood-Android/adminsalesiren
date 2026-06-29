@@ -19,7 +19,6 @@ import '../../../access/domain/feature_access_utils.dart';
 import '../../../access/presentation/widgets/user_features_field.dart';
 import '../providers/user_management_providers.dart';
 import '../widgets/user_access_toggles.dart';
-import '../widgets/user_catalog_preferences_field.dart';
 import '../widgets/user_roles_field.dart';
 
 class UserEditScreen extends ConsumerStatefulWidget {
@@ -39,9 +38,6 @@ class _UserEditScreenState extends ConsumerState<UserEditScreen> {
   final _selectedRoleIds = <String>{};
   final _selectedFeatureIds = <String>{};
   String _brandId = '';
-  final _categoryIds = <String>{};
-  final _cityIds = <String>{};
-  final _brandIds = <String>{};
   var _isActive = true;
   var _notificationEnabled = true;
   var _isAdminEnabled = false;
@@ -109,20 +105,9 @@ class _UserEditScreenState extends ConsumerState<UserEditScreen> {
       ..addAll(
         UserRoleUtils.isMobileUserOnly(user.roles)
             ? AppFeatureIds.allMobile
-            : user.featureIds.isNotEmpty
-            ? user.featureIds
-            : FeatureAccessUtils.defaultFeatureIdsForRoles(user.roles),
+            : FeatureAccessUtils.resolveFeatureIds(user),
       );
     _brandId = user.brandId;
-    _categoryIds
-      ..clear()
-      ..addAll(user.categoryIds);
-    _cityIds
-      ..clear()
-      ..addAll(user.cityIds);
-    _brandIds
-      ..clear()
-      ..addAll(user.brandIds);
     _isActive = user.isActive;
     _notificationEnabled = user.notificationEnabled;
     _isAdminEnabled = user.isAdminEnabled;
@@ -169,9 +154,9 @@ class _UserEditScreenState extends ConsumerState<UserEditScreen> {
                 brandId: UserRoleUtils.requiresBrand(_selectedRoleIds.toList())
                     ? _brandId
                     : '',
-                categoryIds: _categoryIds.toList(),
-                cityIds: _cityIds.toList(),
-                brandIds: _resolvedBrandIds(),
+                categoryIds: const [],
+                cityIds: const [],
+                brandIds: const [],
                 isActive: _isActive,
                 notificationEnabled: _notificationEnabled,
                 isAdminEnabled: _isAdminEnabled,
@@ -192,14 +177,6 @@ class _UserEditScreenState extends ConsumerState<UserEditScreen> {
     if (mounted) {
       context.go('/users');
     }
-  }
-
-  List<String> _resolvedBrandIds() {
-    final ids = {..._brandIds};
-    if (_brandId.isNotEmpty) {
-      ids.add(_brandId);
-    }
-    return ids.toList();
   }
 
   @override
@@ -235,7 +212,15 @@ class _UserEditScreenState extends ConsumerState<UserEditScreen> {
           );
         }
 
-        _hydrate(user);
+        if (!_hydrated) {
+          _hydrate(user);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {});
+            }
+          });
+          return const AppLoader();
+        }
 
         return AppLoadingOverlay(
           isLoading: actionState.isLoading,
@@ -343,13 +328,6 @@ class _UserEditScreenState extends ConsumerState<UserEditScreen> {
                             ),
                           ),
                         const SizedBox(height: 16),
-                        UserCatalogPreferencesField(
-                          selectedCategoryIds: _categoryIds,
-                          selectedCityIds: _cityIds,
-                          selectedBrandIds: _brandIds,
-                          onChanged: () => setState(() {}),
-                        ),
-                        const SizedBox(height: 8),
                         UserAccessToggles(
                           selectedRoleIds: _selectedRoleIds,
                           isAdminEnabled: _isAdminEnabled,

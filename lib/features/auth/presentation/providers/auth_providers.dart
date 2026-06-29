@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
-import '../../../../core/data/firebase/selected_categories_sync.dart';
+import '../../../../core/data/firebase/user_preferences_sync.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/firebase_providers.dart';
 import '../../../../core/services/app_logger.dart';
@@ -58,18 +58,21 @@ final currentUserProfileProvider = FutureProvider<AppUser?>((ref) async {
     }
     if (profile != null && profile.exists) {
       final data = profile.data() ?? <String, dynamic>{};
-      var categoryIds = _readStringList(data['categoryIds']);
-      if (categoryIds.isEmpty) {
-        try {
-          categoryIds = await SelectedCategoriesSync.fetch(firestore, user.id);
-        } on FirebaseException catch (error) {
-          if (error.code != 'permission-denied') {
-            rethrow;
-          }
-          log.fine(
-            'Selected categories read denied for uid=${user.id}; using profile categories only',
-          );
+      var categoryIds = const <String>[];
+      var cityIds = const <String>[];
+      var brandIds = const <String>[];
+      try {
+        final preferences = await UserPreferencesSync.fetch(firestore, user.id);
+        categoryIds = preferences.categoryIds;
+        cityIds = preferences.cityIds;
+        brandIds = preferences.brandIds;
+      } on FirebaseException catch (error) {
+        if (error.code != 'permission-denied') {
+          rethrow;
         }
+        log.fine(
+          'User preference subcollections read denied for uid=${user.id}',
+        );
       }
       return user.copyWith(
         fullName: data['fullName'] as String? ?? user.displayName,
@@ -77,8 +80,8 @@ final currentUserProfileProvider = FutureProvider<AppUser?>((ref) async {
         roles: UserRoleUtils.readRoles(data),
         brandId: data['brandId'] as String? ?? '',
         categoryIds: categoryIds,
-        cityIds: _readStringList(data['cityIds']),
-        brandIds: _readStringList(data['brandIds']),
+        cityIds: cityIds,
+        brandIds: brandIds,
         isActive: data['isActive'] as bool? ?? true,
         notificationEnabled: data['notificationEnabled'] as bool? ?? true,
         isAdminEnabled: _readAdminEnabled(data),
@@ -300,11 +303,4 @@ bool _readMobileAppEnabled(Map<String, dynamic> data) {
     return UserRoleUtils.resolvesMobileAppEnabled(roles, stored);
   }
   return UserRoleUtils.defaultIsMobileAppEnabled(roles);
-}
-
-List<String> _readStringList(dynamic raw) {
-  if (raw is! Iterable) {
-    return const [];
-  }
-  return raw.whereType<String>().where((value) => value.isNotEmpty).toList();
 }

@@ -335,6 +335,10 @@ service cloud.firestore {
         allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
 
+      match /selected_cities/{cityId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
       // Mobile app: in-app notification history for the signed-in user.
       match /alerts/{alertId} {
         allow read, update: if isSignedIn() && request.auth.uid == userId;
@@ -360,7 +364,9 @@ service cloud.firestore {
 
     match /app_settings/{settingId} {
       allow read: if true;
-      allow write: if isAdminOrOwner();
+      allow write: if isAdminOrOwner()
+        || (settingId == 'offer_discovery'
+          && (isManagerOrAdminOrOwner() || isBrandAdmin()));
     }
 
     match /categories/{categoryId} {
@@ -386,6 +392,11 @@ service cloud.firestore {
           && request.resource.data.isVerified == resource.data.isVerified
           && request.resource.data.isFeatured == resource.data.isFeatured
           && request.resource.data.ownerUserIds == resource.data.ownerUserIds);
+    }
+
+    match /discovered_offers/{discoveredOfferId} {
+      allow read, create, update, delete: if isManagerOrAdminOrOwner()
+        || isBrandAdmin();
     }
 
     match /offers/{offerId} {
@@ -478,6 +489,15 @@ service cloud.firestore {
       allow read: if isManagerOrAdminOrOwner();
       allow create, update: if isManagerOrAdminOrOwner() || isBrandScopedUser();
       allow delete: if isManagerOrAdminOrOwner();
+    }
+
+    match /offer_discovery_jobs/{jobId} {
+      allow read: if (isManagerOrAdminOrOwner() || isBrandAdmin())
+        && resource.data.requestedByUid == request.auth.uid;
+      allow create: if (isManagerOrAdminOrOwner() || isBrandAdmin())
+        && request.resource.data.requestedByUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update, delete: if false;
     }
 
     match /registration_email_verification_jobs/{jobId} {

@@ -6,7 +6,23 @@ Log all bug fixes here **before** implementing. For new features use `docs/updat
 
 ---
 
-## 2026-06-27 — Cloud Functions deploy ERESOLVE (firebase-admin 14)
+## 2026-06-27 — Offer Discovery manual run CORS on Flutter Web
+
+**Symptom:** `runDiscoverBrandOffers` blocked from `http://localhost:*` with CORS preflight failure.
+
+**Cause:** Flutter Web cannot reliably call Gen 2 HTTPS callables when Cloud Run invoker/CORS headers are missing on preflight (same class of issue as registration email verification).
+
+**Fix:** On web, write `offer_discovery_jobs` and process via `dispatchOfferDiscoveryJob` Firestore trigger. Callable remains for non-web.
+
+---
+
+**Symptom:** Owner account missing Offers and Notification Requests in sidebar; navigating to those routes redirected to dashboard.
+
+**Cause:** Legacy router redirect blocked `/offers` and `/notifications` for owner role; owner nav list omitted those items.
+
+**Fix:** Remove redirect; add Offers and Notification Requests to owner sidebar items.
+
+---
 
 **Symptom:** `firebase deploy --only functions` failed with `ERESOLVE` — `firebase-functions@7.2.5` peer dependency does not allow `firebase-admin@14.x`.
 

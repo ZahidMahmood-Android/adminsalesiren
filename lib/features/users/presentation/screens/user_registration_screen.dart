@@ -214,7 +214,7 @@ class _UserRegistrationScreenState
           brandId: _brandId,
           categoryIds: const [],
           cityIds: const [],
-          brandIds: _brandId.isEmpty ? const [] : [_brandId],
+          brandIds: const [],
           notificationEnabled: _notificationEnabled,
           isAdminEnabled: !UserRoleUtils.isMobileUserOnly(
             _selectedRoleIds.toList(),

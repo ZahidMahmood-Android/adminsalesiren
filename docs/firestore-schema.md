@@ -26,9 +26,11 @@ Rules that keep schema changes backwards-compatible and non-breaking for existin
 - `categories`
 - `brands`
 - `offers`
+- `discovered_offers`
 - `offer_reports`
 - `offer_push_jobs`
 - `registration_email_verification_jobs`
+- `offer_discovery_jobs`
 - `notification_requests`
 - `notification_campaigns` (future broadcast tooling)
 - `app_settings`
@@ -309,6 +311,63 @@ Written by the admin panel when an offer (or a single grouped line) is published
   "createdAt": "Timestamp"
 }
 ```
+
+## Discovered Offers
+
+Suggestions from automated brand URL discovery. **Not** shown in the mobile app until converted to an official draft offer and later published through the normal offer workflow.
+
+```json
+{
+  "brandId": "",
+  "brandName": "",
+  "sourceType": "website",
+  "sourceUrl": "",
+  "rawText": "",
+  "suggestedTitle": "",
+  "suggestedDescription": "",
+  "suggestedDiscountText": "",
+  "suggestedDiscountType": "percentage",
+  "suggestedDiscountValue": 46,
+  "suggestedCategoryCodes": [],
+  "suggestedCityCodes": [],
+  "imageUrl": "",
+  "confidenceScore": 0.0,
+  "status": "pending_review",
+  "convertedOfferId": "",
+  "rejectionReason": "",
+  "duplicateOfOfferId": "",
+  "createdAt": "Timestamp",
+  "updatedAt": "Timestamp",
+  "checkedAt": "Timestamp"
+}
+```
+
+Statuses: `pending_review`, `converted`, `rejected`, `duplicate`, `source_error`.
+
+## Offer Discovery Settings (`app_settings/offer_discovery`)
+
+```json
+{
+  "timeZone": "Asia/Karachi",
+  "scheduledTimes": ["00:00", "12:00"],
+  "autoDiscoveryEnabled": true,
+  "lastAutoRunSlot": "2026-06-27_12:00",
+  "updatedAt": "Timestamp"
+}
+```
+
+## Offer Discovery Flow
+
+1. **Discovery** — Cloud Function `discoverBrandOffersScheduled` checks `app_settings/offer_discovery` every 15 minutes and runs when a configured time slot matches (default 00:00 and 12:00 Asia/Karachi).
+2. **Suggestions only** — Results are stored in `discovered_offers` with `status: pending_review`. Nothing is auto-published.
+3. **Admin review** — Super Admin uses **Offer Discovery** in the admin panel (separate from **Offers**).
+4. **Convert** — **Create Official Offer** writes a draft to `offers` (`status: draft`, `isPublished: false`, `isVerified: false`, `sourceType: discovered_offer`, `discoveredOfferId`) and marks the suggestion `converted`.
+5. **Reactivate** — Deleting the converted official offer, or running discovery again after reject/duplicate, moves the suggestion back to `pending_review` with refreshed scrape data.
+6. **Publish** — Admin edits/verifies/publishes through the existing offer form and approval flow.
+
+Manual trigger: callable `runDiscoverBrandOffers` (owner, manager, or brand admin with feature access) from **Run Discovery Now**. Use **Clear All** to remove every suggestion in `discovered_offers` before a fresh run; official offers in `offers` are not deleted.
+
+Schedule settings live in `app_settings/offer_discovery` (`scheduledTimes`, `autoDiscoveryEnabled`, `timeZone`). The scheduler runs every 15 minutes and executes when the current slot matches a saved time (defaults: 00:00 and 12:00 Asia/Karachi).
 
 ## Notification Campaigns
 

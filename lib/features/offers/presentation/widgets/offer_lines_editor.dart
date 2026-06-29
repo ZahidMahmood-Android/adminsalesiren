@@ -18,6 +18,7 @@ import '../../../cities/domain/entities/city.dart';
 import '../../domain/entities/offer.dart';
 import '../../domain/entities/offer_image_upload_task.dart';
 import '../../domain/entities/offer_line.dart';
+import '../../domain/utils/offer_discount_parse_utils.dart';
 import 'offer_form_controls.dart';
 
 const kAllCitiesLabel = 'All cities';
@@ -165,6 +166,11 @@ class OfferLineDraft {
         status != 'approved') {
       status = 'pending_review';
     }
+    final discount = OfferDiscountParseUtils.resolve(
+      discountText: offer.discountText,
+      discountType: offer.discountType,
+      discountValue: offer.discountValue,
+    );
     return OfferLineDraft(
       id: offer.id,
       brandId: offer.brandId,
@@ -179,9 +185,9 @@ class OfferLineDraft {
       categoryScope: offer.categoryName == kWholeBrandCategoryLabel
           ? OfferCategoryScope.wholeBrand
           : OfferCategoryScope.selected,
-      discountText: offer.discountText,
-      discountType: offer.discountType,
-      discountValue: offer.discountValue?.toString() ?? '',
+      discountText: discount.discountText,
+      discountType: discount.discountType,
+      discountValue: discount.discountValue?.toString() ?? '',
       status: status,
       lifecycleStatus: lifecycleForDate(offer.endDate, offer.endDateMode),
       startDate: offer.startDate,
@@ -413,6 +419,7 @@ class OfferLinesEditor extends StatelessWidget {
     required this.onPickDate,
     required this.onRetryUpload,
     required this.onRemoveUpload,
+    this.onRemoveUploaded,
     this.allowMultiple = true,
     this.isBrandScopedUser = false,
     this.scopedBrandId,
@@ -431,6 +438,7 @@ class OfferLinesEditor extends StatelessWidget {
   final Future<void> Function(int index, {required bool start}) onPickDate;
   final void Function(int index, String taskId) onRetryUpload;
   final void Function(int index, String taskId) onRemoveUpload;
+  final void Function(int index, String imageUrl)? onRemoveUploaded;
   final bool allowMultiple;
   final bool isBrandScopedUser;
   final String? scopedBrandId;
@@ -517,6 +525,9 @@ class OfferLinesEditor extends StatelessWidget {
               onPickDate: (start) => onPickDate(index, start: start),
               onRetryUpload: (taskId) => onRetryUpload(index, taskId),
               onRemoveUpload: (taskId) => onRemoveUpload(index, taskId),
+              onRemoveUploaded: onRemoveUploaded == null
+                  ? null
+                  : (imageUrl) => onRemoveUploaded!(index, imageUrl),
             ),
           );
         }),
@@ -639,6 +650,7 @@ class _OfferLineCard extends StatelessWidget {
     required this.onPickDate,
     required this.onRetryUpload,
     required this.onRemoveUpload,
+    this.onRemoveUploaded,
   });
 
   final int index;
@@ -658,6 +670,7 @@ class _OfferLineCard extends StatelessWidget {
   final Future<void> Function(bool start) onPickDate;
   final void Function(String taskId) onRetryUpload;
   final void Function(String taskId) onRemoveUpload;
+  final void Function(String imageUrl)? onRemoveUploaded;
 
   Brand? _brandById(String? id) {
     if (id == null || id.isEmpty) {
@@ -1126,6 +1139,7 @@ class _OfferLineCard extends StatelessWidget {
               onPick: lockedOffer ? () {} : onPickImages,
               onRetryUpload: lockedOffer ? null : onRetryUpload,
               onRemoveUpload: lockedOffer ? null : onRemoveUpload,
+              onRemoveUploaded: lockedOffer ? null : onRemoveUploaded,
             ),
             const SizedBox(height: 12),
             Wrap(

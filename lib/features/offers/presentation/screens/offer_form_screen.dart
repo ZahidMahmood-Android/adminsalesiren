@@ -231,6 +231,27 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
     _scheduleDraftSave();
   }
 
+  Future<void> _removeLineImageUrl(int index, String imageUrl) async {
+    if (index < 0 || index >= _lineDrafts.length) {
+      return;
+    }
+    final draft = _lineDrafts[index];
+    setState(() {
+      draft.imageUrls.remove(imageUrl);
+    });
+    _scheduleDraftSave();
+    final offerId = _storageOfferIdForDraft(draft);
+    if (offerId.isEmpty) {
+      return;
+    }
+    try {
+      await ref.read(offerImageRepositoryProvider).deleteImagesForOffer(
+        offerId: offerId,
+        imageUrls: [imageUrl],
+      );
+    } catch (_) {}
+  }
+
   String _storageOfferIdForDraft(OfferLineDraft draft) {
     if (_isEditing) {
       if (_allowsMultipleOffers && _loadedOffer != null) {
@@ -910,6 +931,7 @@ class _OfferFormScreenState extends ConsumerState<OfferFormScreen> {
                             onPickDate: _pickLineDate,
                             onRetryUpload: _retryLineImageUpload,
                             onRemoveUpload: _removeLineImageUpload,
+                            onRemoveUploaded: _removeLineImageUrl,
                             onChanged: _onDraftsChanged,
                           ),
                         const SizedBox(height: 28),

@@ -1207,6 +1207,13 @@ const _items = [
   _NavItem('Cities', '/cities', Icons.location_city_outlined),
   _NavItem('Categories', '/categories', Icons.category_outlined),
   _NavItem('Brands', '/brands', Icons.storefront_outlined),
+  _NavItem('Offers', '/offers', Icons.local_offer_outlined),
+  _NavItem('Offer Discovery', '/offer-discovery', Icons.travel_explore_outlined),
+  _NavItem(
+    'Notification Requests',
+    '/notifications',
+    Icons.notifications_outlined,
+  ),
   _NavItem('Users', '/users', Icons.people_outline),
   _NavItem('Reports', '/reports', Icons.flag_outlined),
   _NavItem('Bug Reports', '/bug-reports', Icons.bug_report_outlined),
@@ -1278,6 +1285,11 @@ List<_NavItem> _visibleItems(WidgetRef ref) {
     for (final item in [..._items, ..._managerItems, ..._brandAdminItems])
       item.route: item,
     '/offers': const _NavItem('Offers', '/offers', Icons.local_offer_outlined),
+    '/offer-discovery': const _NavItem(
+      'Offer Discovery',
+      '/offer-discovery',
+      Icons.travel_explore_outlined,
+    ),
     '/notifications': const _NavItem(
       'Notification Requests',
       '/notifications',

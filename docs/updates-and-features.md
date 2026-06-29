@@ -6,6 +6,40 @@ Log all new features, enhancements, and non-bug work here **before** implementin
 
 ---
 
+## 2026-06-27 — Offer discovery clear all
+
+Clear-all button removes every `discovered_offers` suggestion (all statuses) before a fresh run; official offers in `offers` are untouched.
+
+---
+
+## 2026-06-27 — Offer discovery reactivation
+
+Rejected or converted-deleted suggestions return to pending review on the next discovery run; deleting a converted official offer reactivates its suggestion immediately.
+
+---
+
+Discovery classifies flat % (`46% off`), up-to % (`Up to 46% off`), and flat amount (`Rs. 500 off`) when scraping; stores type/value on suggestions and uses them on convert.
+
+---
+
+Offer images can be removed after upload. Discovery convert parses discount text into type/value. Offer published/draft filter fixed; city filter hidden on offers list.
+
+---
+
+User register/edit screens hide cities, categories, and brands pickers; access is controlled by feature chips only. Edit screen pre-selects stored/resolved feature IDs on load.
+
+---
+
+Offer Discovery: branded loader during manual run, result summary dialog, configurable auto-run times in admin (owner/manager/brand admin), callable access for roles with the feature. Scheduler reads `app_settings/offer_discovery` every 15 minutes.
+
+---
+
+## 2026-06-27 — Offer Discovery (admin)
+
+Super Admin **Offer Discovery** screen reads `discovered_offers` suggestions (from brand website URLs via Cloud Functions). Admins can convert to draft official offers, reject, or mark duplicate. No auto-publish; mobile app unchanged.
+
+---
+
 ## 2026-06-27 — Brand logo: image only when URL present
 
 `BrandLogoBox` (admin + mobile): loaded logos sit inside a rounded border only (no fill); gradient + storefront icon when URL is missing or fails to load.

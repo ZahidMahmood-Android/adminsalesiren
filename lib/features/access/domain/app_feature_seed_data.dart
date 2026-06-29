@@ -11,6 +11,7 @@ class AppFeatureIds {
   static const adminUsers = 'admin_users';
   static const adminReports = 'admin_reports';
   static const adminOffers = 'admin_offers';
+  static const adminOfferDiscovery = 'admin_offer_discovery';
   static const adminNotifications = 'admin_notifications';
   static const adminPricingPlans = 'admin_pricing_plans';
   static const adminBrandSubscriptions = 'admin_brand_subscriptions';
@@ -28,6 +29,7 @@ class AppFeatureIds {
   static const mobileHome = 'mobile_home';
   static const mobileCategories = 'mobile_categories';
   static const mobileFavorites = 'mobile_favorites';
+  static const mobileBrands = 'mobile_brands';
   static const mobileAlerts = 'mobile_alerts';
   static const mobileSettings = 'mobile_settings';
   static const mobileSpotlight = 'mobile_spotlight';
@@ -42,6 +44,7 @@ class AppFeatureIds {
     adminUsers,
     adminReports,
     adminOffers,
+    adminOfferDiscovery,
     adminNotifications,
     adminPricingPlans,
     adminBrandSubscriptions,
@@ -61,7 +64,7 @@ class AppFeatureIds {
     mobileHome,
     mobileCategories,
     mobileFavorites,
-    mobileAlerts,
+    mobileBrands,
     mobileSettings,
     mobileSpotlight,
     mobileReportOffer,
@@ -123,94 +126,101 @@ class AppFeatureSeedData {
       'Create, edit, publish, and verify offers.',
     ),
     _admin(
+      AppFeatureIds.adminOfferDiscovery,
+      'Offer Discovery',
+      '/offer-discovery',
+      8,
+      'Review discovered offer suggestions from brand source URLs.',
+    ),
+    _admin(
       AppFeatureIds.adminNotifications,
       'Notification Requests',
       '/notifications',
-      8,
+      9,
       'Review push notification requests.',
     ),
     _admin(
       AppFeatureIds.adminPricingPlans,
       'Pricing Plans',
       '/subscriptions/plans',
-      9,
+      10,
       'Manage subscription pricing plans.',
     ),
     _admin(
       AppFeatureIds.adminBrandSubscriptions,
       'Brand Subscriptions',
       '/subscriptions/brand-subscriptions',
-      10,
+      11,
       'Assign plans to registered brands.',
     ),
     _admin(
       AppFeatureIds.adminPayments,
       'Payments',
       '/subscriptions/payments',
-      11,
+      12,
       'Record and verify brand payments.',
     ),
     _admin(
       AppFeatureIds.adminUsage,
       'Usage',
       '/subscriptions/usage',
-      12,
+      13,
       'Platform-wide subscription usage metrics.',
     ),
     _admin(
       AppFeatureIds.adminPlanRequests,
       'Plan Requests',
       '/subscriptions/requests',
-      13,
+      14,
       'Review brand upgrade and renewal requests.',
     ),
     _admin(
       AppFeatureIds.adminMySubscription,
       'My Subscription',
       '/subscriptions/my',
-      14,
+      15,
       'Brand admin subscription overview and billing.',
     ),
     _admin(
       AppFeatureIds.adminMyUsage,
       'My Usage',
       '/subscriptions/my-usage',
-      15,
+      16,
       'Brand admin usage against plan limits.',
     ),
     _admin(
       AppFeatureIds.adminSubscriptionRequest,
       'Request Upgrade',
       '/subscriptions/request',
-      16,
+      17,
       'Submit a subscription upgrade or renewal request.',
     ),
     _admin(
       AppFeatureIds.adminSettings,
       'Settings',
       '/settings',
-      17,
+      18,
       'Seed master data and platform settings.',
     ),
     _admin(
       AppFeatureIds.adminProfile,
       'My Profile',
       '/profile',
-      18,
+      19,
       'View and edit the signed-in admin profile.',
     ),
     _admin(
       AppFeatureIds.adminBugReportSubmit,
       'Report Bug',
       '/bug-reports/submit',
-      19,
+      20,
       'Submit bugs found in the admin panel.',
     ),
     _admin(
       AppFeatureIds.adminBugReports,
       'Bug Reports',
       '/bug-reports',
-      20,
+      21,
       'Review and resolve bugs reported from admin and mobile.',
     ),
     _mobile(
@@ -235,11 +245,11 @@ class AppFeatureSeedData {
       'Saved offers and wishlist.',
     ),
     _mobile(
-      AppFeatureIds.mobileAlerts,
-      'Alerts',
+      AppFeatureIds.mobileBrands,
+      'Brands',
       '/home',
       4,
-      'Price-drop and offer notifications.',
+      'Browse, search, and follow brands.',
     ),
     _mobile(
       AppFeatureIds.mobileSettings,
@@ -278,6 +288,7 @@ class AppFeatureSeedData {
       AppFeatureIds.adminCities,
       AppFeatureIds.adminCategories,
       AppFeatureIds.adminOffers,
+      AppFeatureIds.adminOfferDiscovery,
       AppFeatureIds.adminNotifications,
       AppFeatureIds.adminUsers,
       AppFeatureIds.adminMySubscription,
@@ -293,6 +304,7 @@ class AppFeatureSeedData {
       AppFeatureIds.adminCategories,
       AppFeatureIds.adminBrands,
       AppFeatureIds.adminOffers,
+      AppFeatureIds.adminOfferDiscovery,
       AppFeatureIds.adminNotifications,
       AppFeatureIds.adminUsers,
       AppFeatureIds.adminProfile,

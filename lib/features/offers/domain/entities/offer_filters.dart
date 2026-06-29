@@ -59,7 +59,8 @@ class OfferFilters {
     if (brandFilters.isNotEmpty && !brandFilters.contains(offer.brandId)) {
       return false;
     }
-    if (isPublished != null && offer.isPublished != isPublished) {
+    if (isPublished != null &&
+        offer.isPublishedForListing != isPublished) {
       return false;
     }
     if (isVerified != null && offer.isVerified != isVerified) {

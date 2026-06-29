@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/data/firebase/selected_categories_sync.dart';
+import '../../../../core/data/firebase/user_preferences_sync.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
@@ -122,9 +122,6 @@ class UserRegistrationController extends AsyncNotifier<String?> {
         'roles': normalizedRoles,
         'role': primaryRole,
         'brandId': needsBrand ? normalizedBrandId : '',
-        'categoryIds': categoryIds,
-        'cityIds': cityIds,
-        'brandIds': brandIds,
         'isActive': true,
         'notificationEnabled': notificationEnabled,
         'isAdminEnabled': resolvedAdminEnabled,
@@ -136,7 +133,13 @@ class UserRegistrationController extends AsyncNotifier<String?> {
         'updatedAt': now,
       }, SetOptions(merge: true));
 
-      await SelectedCategoriesSync.sync(firestore, userId, categoryIds);
+      await UserPreferencesSync.sync(
+        firestore,
+        userId,
+        categoryIds: categoryIds,
+        cityIds: cityIds,
+        brandIds: brandIds,
+      );
 
       await AdminReferenceSync.syncForRoles(firestore, userId, normalizedRoles);
 

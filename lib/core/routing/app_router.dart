@@ -20,6 +20,7 @@ import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/offers/presentation/screens/offer_details_screen.dart';
 import '../../features/offers/presentation/screens/offer_form_screen.dart';
 import '../../features/offers/presentation/screens/offers_list_screen.dart';
+import '../../features/offer_discovery/presentation/screens/offer_discovery_screen.dart';
 import '../../features/notifications/presentation/screens/notification_requests_screen.dart';
 import '../../features/bug_reports/presentation/screens/bug_reports_dashboard_screen.dart';
 import '../../features/bug_reports/presentation/screens/submit_bug_report_screen.dart';
@@ -75,14 +76,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return '/settings';
         }
         if (!FeatureAccessUtils.canAccessAdminRoute(profile, location)) {
-          return '/dashboard';
-        }
-      }
-      if (profile?.hasRole(UserRoles.superAdmin) ?? false) {
-        final location = state.matchedLocation;
-        if (location == '/offers' ||
-            location.startsWith('/offers/') ||
-            location == '/notifications') {
           return '/dashboard';
         }
       }
@@ -214,6 +207,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ),
               ),
             ],
+          ),
+          GoRoute(
+            path: '/offer-discovery',
+            pageBuilder: (context, state) =>
+                _fadePage(state, const OfferDiscoveryScreen()),
           ),
           GoRoute(
             path: '/reports',

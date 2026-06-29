@@ -55,6 +55,7 @@ class ImagePickerPanel extends StatelessWidget {
     required this.onPick,
     this.onRetryUpload,
     this.onRemoveUpload,
+    this.onRemoveUploaded,
     super.key,
   });
 
@@ -63,6 +64,7 @@ class ImagePickerPanel extends StatelessWidget {
   final VoidCallback onPick;
   final void Function(String taskId)? onRetryUpload;
   final void Function(String taskId)? onRemoveUpload;
+  final void Function(String imageUrl)? onRemoveUploaded;
 
   bool get _isUploading => imageUploads.any(
     (task) => task.status == OfferImageUploadStatus.uploading,
@@ -165,7 +167,14 @@ class ImagePickerPanel extends StatelessWidget {
                 spacing: 12,
                 runSpacing: 12,
                 children: [
-                  ...imageUrls.map((url) => _UploadedImageTile(imageUrl: url)),
+                  ...imageUrls.map(
+                    (url) => _UploadedImageTile(
+                      imageUrl: url,
+                      onRemove: onRemoveUploaded == null
+                          ? null
+                          : () => onRemoveUploaded!(url),
+                    ),
+                  ),
                   ...imageUploads.map(
                     (task) => _UploadingImageTile(
                       task: task,
@@ -246,9 +255,10 @@ class ImagePickerPanel extends StatelessWidget {
 }
 
 class _UploadedImageTile extends StatelessWidget {
-  const _UploadedImageTile({required this.imageUrl});
+  const _UploadedImageTile({required this.imageUrl, this.onRemove});
 
   final String imageUrl;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -266,20 +276,42 @@ class _UploadedImageTile extends StatelessWidget {
               fit: BoxFit.cover,
             ),
           ),
-          Positioned(
-            top: 6,
-            right: 6,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colorScheme.tertiary,
-                shape: BoxShape.circle,
+          if (onRemove != null)
+            Positioned(
+              top: 4,
+              right: 4,
+              child: Material(
+                color: Colors.black54,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onRemove,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ),
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.check_rounded, size: 14, color: Colors.white),
+            )
+          else
+            Positioned(
+              top: 6,
+              right: 6,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colorScheme.tertiary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.all(4),
+                  child: Icon(Icons.check_rounded, size: 14, color: Colors.white),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

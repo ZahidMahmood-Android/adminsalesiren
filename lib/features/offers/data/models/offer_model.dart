@@ -57,6 +57,8 @@ class OfferModel extends Offer {
     super.offerLines,
     super.alertType = '',
     super.notificationSnapshot,
+    super.sourceType = '',
+    super.discoveredOfferId = '',
   });
 
   factory OfferModel.fromEntity(Offer offer) {
@@ -110,6 +112,8 @@ class OfferModel extends Offer {
       offerLines: offer.offerLines,
       alertType: offer.alertType,
       notificationSnapshot: offer.notificationSnapshot,
+      sourceType: offer.sourceType,
+      discoveredOfferId: offer.discoveredOfferId,
     );
   }
 
@@ -204,6 +208,8 @@ class OfferModel extends Offer {
       offerLines: _readOfferLines(data),
       alertType: data['alertType'] as String? ?? data['type'] as String? ?? '',
       notificationSnapshot: _readNotificationSnapshot(data['notificationSnapshot']),
+      sourceType: data['sourceType'] as String? ?? '',
+      discoveredOfferId: data['discoveredOfferId'] as String? ?? '',
     );
   }
 
@@ -264,6 +270,9 @@ class OfferModel extends Offer {
       if (alertType.trim().isNotEmpty) 'alertType': alertType.trim(),
       if (notificationSnapshot != null && notificationSnapshot!.isNotEmpty)
         'notificationSnapshot': notificationSnapshot,
+      if (sourceType.trim().isNotEmpty) 'sourceType': sourceType.trim(),
+      if (discoveredOfferId.trim().isNotEmpty)
+        'discoveredOfferId': discoveredOfferId.trim(),
     };
   }
 

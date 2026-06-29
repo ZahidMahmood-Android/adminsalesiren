@@ -25,6 +25,7 @@ import '../../../notifications/domain/entities/notification_request.dart';
 import '../../../notifications/domain/entities/offer_notification_draft.dart';
 import '../../../notifications/domain/entities/offer_notification_content_utils.dart';
 import '../../../notifications/presentation/providers/notification_providers.dart';
+import '../../../offer_discovery/presentation/providers/discovered_offer_providers.dart';
 import '../../../subscriptions/presentation/providers/subscription_providers.dart';
 import '../../../settings/presentation/providers/app_settings_providers.dart';
 
@@ -86,13 +87,11 @@ class OfferFiltersController extends Notifier<OfferFilters> {
 }
 
 final offersStreamProvider = StreamProvider.autoDispose<List<Offer>>((ref) {
-  return ref.watch(offersRepositoryProvider).watchOffers(const OfferFilters());
+  final filters = ref.watch(offerFiltersProvider);
+  return ref.watch(offersRepositoryProvider).watchOffers(filters);
 });
 
-final offersProvider = Provider.autoDispose<AsyncValue<List<Offer>>>((ref) {
-  final filters = ref.watch(offerFiltersProvider);
-  return ref.watch(offersStreamProvider).whenData(filters.applyTo);
-});
+final offersProvider = offersStreamProvider;
 
 final offerProvider = FutureProvider.autoDispose.family<Offer?, String>(
   (ref, id) => ref.watch(offersRepositoryProvider).getOffer(id),
@@ -220,8 +219,22 @@ class OfferActionsController extends AsyncNotifier<void> {
           );
         }
       } catch (e) {
-        // Usage decrement is best-effort; don't block the delete.
         _log.warning('Could not decrement usage before delete: $e');
+      }
+      try {
+        final offer = await ref.read(offersRepositoryProvider).getOffer(id);
+        if (offer != null) {
+          final discoveredRepo = ref.read(discoveredOffersRepositoryProvider);
+          if (offer.discoveredOfferId.trim().isNotEmpty) {
+            await discoveredRepo.reactivateForPendingReview(
+              offer.discoveredOfferId,
+            );
+          } else {
+            await discoveredRepo.reactivateByConvertedOfferId(id);
+          }
+        }
+      } catch (e) {
+        _log.warning('Could not reactivate discovered offer after delete: $e');
       }
       await ref
           .read(notificationsRepositoryProvider)
@@ -229,6 +242,7 @@ class OfferActionsController extends AsyncNotifier<void> {
       await ref.read(deleteOfferProvider).call(id);
     });
     ref.invalidate(notificationRequestsProvider);
+    ref.invalidate(discoveredOffersStreamProvider);
     _refreshOffers(id: id);
     _logActionResult('Delete offer action', id: id);
   }

@@ -8,6 +8,9 @@ import 'offer_push_dispatch_service.dart';
 class PushDispatchUserMessages {
   const PushDispatchUserMessages._();
 
+  static const noMatchingAudienceCode = 'push-dispatch-no-audience';
+  static const noFcmTokensCode = 'push-dispatch-no-fcm-tokens';
+
   static void ensureDelivered(OfferPushDispatchResult? result) {
     if (result == null) {
       throw const AppException(
@@ -25,7 +28,25 @@ class PushDispatchUserMessages {
     if (result.successCount > 0) {
       return;
     }
-    throw AppException(failureMessage(result), code: 'push-dispatch-failed');
+    throw AppException(
+      failureMessage(result),
+      code: failureCode(result),
+    );
+  }
+
+  static String failureCode(OfferPushDispatchResult result) {
+    if (result.dispatchReason == 'no_matching_audience') {
+      return noMatchingAudienceCode;
+    }
+    if (result.dispatchReason == 'no_fcm_tokens') {
+      return noFcmTokensCode;
+    }
+    if (result.matchedUserCount == 0 &&
+        result.recipientCount == 0 &&
+        result.tokenCount == 0) {
+      return noMatchingAudienceCode;
+    }
+    return 'push-dispatch-failed';
   }
 
   static String successMessage(OfferPushDispatchResult result) {
@@ -37,13 +58,38 @@ class PushDispatchUserMessages {
   }
 
   static String failureMessage(OfferPushDispatchResult result) {
+    final reason = result.reason?.trim();
+    if (reason != null && reason.isNotEmpty) {
+      if (result.dispatchReason == 'no_matching_audience' ||
+          result.dispatchReason == 'no_fcm_tokens') {
+        return reason;
+      }
+    }
+
+    if (result.dispatchReason == 'no_matching_audience' ||
+        (result.matchedUserCount == 0 &&
+            result.recipientCount == 0 &&
+            result.tokenCount == 0)) {
+      return reason ??
+          'No notification was sent because no mobile users follow this category or brand. '
+              'Users must select matching categories or save the brand in the app first.';
+    }
+
+    if (result.dispatchReason == 'no_fcm_tokens' ||
+        (result.matchedUserCount > 0 && result.tokenCount == 0)) {
+      return reason ??
+          'Matching mobile users were found, but none have a notification token yet. '
+              'Ask them to sign in on the mobile app, turn notifications on, '
+              'and open the app once before you resend.';
+    }
+
     if (result.tokenCount == 0) {
       return 'No mobile users have a notification token yet. '
           'Ask users to sign in on the mobile app, turn notifications on, '
           'and open the app once before you resend.';
     }
 
-    final technical = result.reason?.trim();
+    final technical = reason;
     if (technical != null && technical.isNotEmpty) {
       return friendlyTechnicalError(technical);
     }
@@ -135,6 +181,11 @@ Future<void> showNotificationDispatchError(
   BuildContext context,
   Object? error,
 ) {
+  if (error is AppException &&
+      error.code == PushDispatchUserMessages.noMatchingAudienceCode) {
+    showAppSuccess(context, error.message);
+    return Future.value();
+  }
   return showAppError(context, error, title: 'Notification not sent');
 }
 

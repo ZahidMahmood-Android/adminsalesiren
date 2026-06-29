@@ -54,6 +54,8 @@ class Offer {
     this.offerLines = const [],
     this.alertType = '',
     this.notificationSnapshot,
+    this.sourceType = '',
+    this.discoveredOfferId = '',
   });
 
   final String id;
@@ -105,6 +107,10 @@ class Offer {
   final List<OfferLine> offerLines;
   final String alertType;
   final Map<String, dynamic>? notificationSnapshot;
+  final String sourceType;
+  final String discoveredOfferId;
+
+  bool get isPublishedForListing => isPublished || status == 'published';
 
   bool get isGroupOffer => resolvedLines.length > 1;
 
@@ -214,6 +220,8 @@ class Offer {
     List<OfferLine>? offerLines,
     String? alertType,
     Map<String, dynamic>? notificationSnapshot,
+    String? sourceType,
+    String? discoveredOfferId,
   }) {
     return Offer(
       id: id ?? this.id,
@@ -265,6 +273,8 @@ class Offer {
       offerLines: offerLines ?? this.offerLines,
       alertType: alertType ?? this.alertType,
       notificationSnapshot: notificationSnapshot ?? this.notificationSnapshot,
+      sourceType: sourceType ?? this.sourceType,
+      discoveredOfferId: discoveredOfferId ?? this.discoveredOfferId,
     );
   }
 }

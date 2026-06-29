@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/data/firebase/selected_categories_sync.dart';
+import '../../../../core/data/firebase/user_preferences_sync.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
@@ -34,16 +34,15 @@ class ProfileUpdateController extends AsyncNotifier<void> {
         'fullName': user.fullName.trim(),
         'displayName': user.fullName.trim(),
         'phoneNumber': user.phoneNumber.trim(),
-        'categoryIds': user.categoryIds,
-        'cityIds': user.cityIds,
-        'brandIds': user.brandIds,
         'notificationEnabled': user.notificationEnabled,
         'updatedAt': Timestamp.now(),
       });
-      await SelectedCategoriesSync.sync(
+      await UserPreferencesSync.sync(
         ref.read(firestoreProvider),
         uid,
-        user.categoryIds,
+        categoryIds: user.categoryIds,
+        cityIds: user.cityIds,
+        brandIds: user.brandIds,
       );
       ref.invalidate(currentUserProfileProvider);
     });

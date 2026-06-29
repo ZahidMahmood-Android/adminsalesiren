@@ -7,7 +7,6 @@ import '../../../../core/widgets/single_select_field.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../brands/presentation/providers/brand_providers.dart';
 import '../../../categories/presentation/providers/category_providers.dart';
-import '../../../cities/presentation/providers/city_providers.dart';
 import '../providers/offer_providers.dart';
 
 class OfferFiltersBar extends ConsumerWidget {
@@ -16,7 +15,6 @@ class OfferFiltersBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final filters = ref.watch(offerFiltersProvider);
-    final cities = ref.watch(visibleCitiesProvider).value ?? const [];
     final categories = ref.watch(visibleCategoriesProvider).value ?? const [];
     final brands = ref.watch(activeBrandsProvider).value ?? const [];
     final isBrandScopedUser = ref.watch(isBrandScopedUserProvider);
@@ -29,18 +27,6 @@ class OfferFiltersBar extends ConsumerWidget {
         runSpacing: 12,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          MultiSelectField(
-            label: 'Cities',
-            prefixIcon: Icons.location_city_outlined,
-            emptyLabel: 'Any city',
-            options: cities
-                .map((city) => MultiSelectOption(id: city.id, label: city.name))
-                .toList(),
-            selectedIds: filters.cityIds,
-            onChanged: (ids) => controller.update(
-              filters.copyWith(cityIds: ids, clearCity: true),
-            ),
-          ),
           MultiSelectField(
             label: 'Categories',
             prefixIcon: Icons.category_outlined,

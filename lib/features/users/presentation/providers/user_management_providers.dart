@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 
-import '../../../../core/data/firebase/selected_categories_sync.dart';
+import '../../../../core/data/firebase/user_preferences_sync.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/services/app_logger.dart';
 import '../../../../core/services/firebase_providers.dart';
@@ -76,10 +76,12 @@ final managedUserByIdProvider = FutureProvider.autoDispose
         return null;
       }
       var user = _appUserFromSnapshot(doc);
-      if (user.categoryIds.isEmpty) {
-        final fromSub = await SelectedCategoriesSync.fetch(firestore, userId);
-        user = user.copyWith(categoryIds: fromSub);
-      }
+      final preferences = await UserPreferencesSync.fetch(firestore, userId);
+      user = user.copyWith(
+        categoryIds: preferences.categoryIds,
+        cityIds: preferences.cityIds,
+        brandIds: preferences.brandIds,
+      );
       return user;
     });
 
@@ -150,9 +152,6 @@ class UserManagementActionsController extends AsyncNotifier<void> {
         'roles': UserRoleUtils.normalizeRoles(user.roles),
         'role': UserRoleUtils.primaryRole(user.roles),
         'brandId': user.brandId,
-        'categoryIds': user.categoryIds,
-        'cityIds': user.cityIds,
-        'brandIds': user.brandIds,
         'isActive': user.isActive,
         'notificationEnabled': user.notificationEnabled,
         'isAdminEnabled': user.effectiveIsAdminEnabled,
@@ -160,7 +159,13 @@ class UserManagementActionsController extends AsyncNotifier<void> {
         'featureIds': resolvedFeatureIds,
         'updatedAt': Timestamp.now(),
       });
-      await SelectedCategoriesSync.sync(firestore, user.id, user.categoryIds);
+      await UserPreferencesSync.sync(
+        firestore,
+        user.id,
+        categoryIds: user.categoryIds,
+        cityIds: user.cityIds,
+        brandIds: user.brandIds,
+      );
       await AdminReferenceSync.syncForRoles(firestore, user.id, user.roles);
     });
     _logResult('Update user profile', user.id);
@@ -205,9 +210,9 @@ AppUser _appUserFromSnapshot(DocumentSnapshot<Map<String, dynamic>> doc) {
     phoneNumber: data['phoneNumber'] as String? ?? '',
     roles: UserRoleUtils.readRoles(data),
     brandId: data['brandId'] as String? ?? '',
-    categoryIds: _readCategoryIds(data),
-    cityIds: _readStringList(data['cityIds']),
-    brandIds: _readStringList(data['brandIds']),
+    categoryIds: const [],
+    cityIds: const [],
+    brandIds: const [],
     isActive: data['isActive'] as bool? ?? true,
     notificationEnabled: _readNotificationEnabled(data),
     isAdminEnabled: _readAdminEnabled(data),
@@ -240,15 +245,4 @@ bool _readNotificationEnabled(Map<String, dynamic> data) {
     return value;
   }
   return true;
-}
-
-List<String> _readStringList(dynamic raw) {
-  if (raw is! Iterable) {
-    return const [];
-  }
-  return raw.whereType<String>().where((value) => value.isNotEmpty).toList();
-}
-
-List<String> _readCategoryIds(Map<String, dynamic> data) {
-  return _readStringList(data['categoryIds']);
 }

@@ -16,6 +16,20 @@ See also: [`firebase-setup.md`](./firebase-setup.md), [`firestore-schema.md`](./
 | Runtime | Node.js 20 (Gen 2) |
 | Region | `us-central1` |
 
+### Offer Discovery functions
+
+| Function | Type | Purpose |
+|----------|------|---------|
+| `discoverBrandOffersScheduled` | Scheduler (`*/15 * * * *`, Asia/Karachi) | Reads `app_settings/offer_discovery` and runs when a configured time slot matches |
+| `runDiscoverBrandOffers` | Callable (owner / manager / brand admin) | Manual **Run Discovery Now** from admin panel (non-web) |
+| `dispatchOfferDiscoveryJob` | Firestore `offer_discovery_jobs/{jobId}` create | **Primary path on Flutter Web.** Writes a job doc; avoids callable CORS from localhost and production web hosts. |
+
+Deploy:
+
+```bash
+firebase deploy --only functions:discoverBrandOffersScheduled,functions:runDiscoverBrandOffers,functions:dispatchOfferDiscoveryJob,firestore:rules,firestore:indexes --project salesiren-5539c
+```
+
 ### Function: `dispatchOfferPushOnPublish`
 
 - **Trigger:** Firestore `offers/{offerId}` document write (no-op).

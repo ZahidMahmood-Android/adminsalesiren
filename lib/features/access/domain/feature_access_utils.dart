@@ -95,6 +95,9 @@ class FeatureAccessUtils {
     if (location.startsWith('/offers')) {
       return AppFeatureIds.adminOffers;
     }
+    if (location.startsWith('/offer-discovery')) {
+      return AppFeatureIds.adminOfferDiscovery;
+    }
     if (location.startsWith('/subscriptions/plans')) {
       return AppFeatureIds.adminPricingPlans;
     }
@@ -126,7 +129,7 @@ class FeatureAccessUtils {
     AppFeatureIds.mobileHome,
     AppFeatureIds.mobileCategories,
     AppFeatureIds.mobileFavorites,
-    AppFeatureIds.mobileAlerts,
+    AppFeatureIds.mobileBrands,
     AppFeatureIds.mobileSettings,
   ];
 }

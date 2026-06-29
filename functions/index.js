@@ -15,6 +15,10 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const { logger } = require('firebase-functions');
 
+const {
+  registerOfferDiscoveryFunctions,
+} = require('./offer_discovery');
+
 const PROJECT_ID =
   process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || 'salesiren-5539c';
 
@@ -192,25 +196,16 @@ function userCategoryIds(user) {
   if (!user) {
     return [];
   }
-  if (!Array.isArray(user.categoryIds)) {
-    return [];
+  if (Array.isArray(user.selectedCategories)) {
+    return [
+      ...new Set(
+        user.selectedCategories.filter(
+          (id) => typeof id === 'string' && id.trim(),
+        ),
+      ),
+    ];
   }
-  return [
-    ...new Set(
-      user.categoryIds.filter((id) => typeof id === 'string' && id.trim()),
-    ),
-  ];
-}
-
-/**
- * @param {import('firebase-admin/firestore').DocumentData | undefined} user
- * @returns {string[]}
- */
-function userBrandIds(user) {
-  if (!user || !Array.isArray(user.brandIds)) {
-    return [];
-  }
-  return user.brandIds.filter((id) => typeof id === 'string' && id.trim());
+  return [];
 }
 
 /**
@@ -496,13 +491,23 @@ async function completeOfferPushJob(db, jobId, result) {
     dispatchCompletedAt: FieldValue.serverTimestamp(),
     sentCount: result.successCount,
     recipientCount: result.recipientCount,
+    matchedUserCount:
+      typeof result.matchedUserCount === 'number' ? result.matchedUserCount : 0,
     tokenCount: result.tokenCount,
     invalidTokenCount: result.invalidTokenCount,
     updatedAt: FieldValue.serverTimestamp(),
   };
+  if (typeof result.dispatchReason === 'string' && result.dispatchReason.trim()) {
+    update.dispatchReason = result.dispatchReason.trim();
+  } else {
+    update.dispatchReason = FieldValue.delete();
+  }
   if (result.lastFcmError) {
     update.lastError = result.lastFcmError;
     update.lastFcmError = result.lastFcmError;
+  } else if (result.lastError) {
+    update.lastError = result.lastError;
+    update.lastFcmError = FieldValue.delete();
   } else {
     update.lastError = FieldValue.delete();
     update.lastFcmError = FieldValue.delete();
@@ -613,11 +618,7 @@ function brandMatches(user, brandId, brandName, savedBrandUserIds) {
   if (!brandId && !brandName) {
     return true;
   }
-  const brandIds = userBrandIds(user);
-  if (brandId && brandIds.includes(brandId)) {
-    return true;
-  }
-  const uid = user.id;
+  const uid = user?.id;
   if (uid && savedBrandUserIds.has(uid)) {
     return true;
   }
@@ -625,37 +626,114 @@ function brandMatches(user, brandId, brandName, savedBrandUserIds) {
 }
 
 /**
- * User is notified when their selected categories OR brand interests match.
- * @param {string[]} userCategories
- * @param {string[]} offerCategories
- * @param {import('firebase-admin/firestore').DocumentData | undefined} user
- * @param {string} brandId
- * @param {string} brandName
- * @param {Set<string>} savedBrandUserIds
+ * @param {unknown} value
+ * @returns {string[]}
  */
-function userWantsOffer(
-  userCategories,
-  offerCategories,
-  user,
-  brandId,
-  brandName,
-  savedBrandUserIds,
-) {
-  const categoryOk = categoriesMatch(userCategories, offerCategories);
-  const brandOk = brandMatches(user, brandId, brandName, savedBrandUserIds);
-  const hasCategories = offerCategories.length > 0;
-  const hasBrand = Boolean(brandId || brandName);
+function readStringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item) => typeof item === 'string' && item.trim())
+    .map((item) => item.trim());
+}
 
-  if (!hasCategories && !hasBrand) {
+/**
+ * User is notified when selected categories or followed-brand category preferences match.
+ */
+async function userBrandPreferredCategoryIds(db, userId, brandId) {
+  if (!brandId) {
+    return [];
+  }
+  try {
+    const directDoc = await db
+      .collection('users')
+      .doc(userId)
+      .collection('saved_brands')
+      .doc(brandId)
+      .get();
+    if (directDoc.exists) {
+      return readStringList(directDoc.data()?.preferredCategoryIds);
+    }
+
+    const byField = await db
+      .collection('users')
+      .doc(userId)
+      .collection('saved_brands')
+      .where('brandId', '==', brandId)
+      .limit(1)
+      .get();
+    if (!byField.empty) {
+      return readStringList(byField.docs[0].data()?.preferredCategoryIds);
+    }
+  } catch (error) {
+    logger.warn('saved_brands preference read failed', { userId, brandId, error });
+  }
+  return [];
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} brandId
+ */
+async function brandCatalogCategoryIds(db, brandId) {
+  if (!brandId) {
+    return [];
+  }
+  try {
+    const snapshot = await db.collection('brands').doc(brandId).get();
+    if (!snapshot.exists) {
+      return [];
+    }
+    return readStringList(snapshot.data()?.categoryIds);
+  } catch (error) {
+    logger.warn('brand catalog category read failed', { brandId, error });
+    return [];
+  }
+}
+
+/**
+ * @param {string[]} offerCategories
+ * @param {string[]} preferredCategories
+ */
+function offerMatchesBrandCategoryPreferences(offerCategories, preferredCategories) {
+  if (!preferredCategories || preferredCategories.length === 0) {
     return true;
   }
-  if (hasCategories && !hasBrand) {
-    return categoryOk;
+  if (!offerCategories || offerCategories.length === 0) {
+    return true;
   }
-  if (!hasCategories && hasBrand) {
-    return brandOk;
+  return categoriesMatch(preferredCategories, offerCategories);
+}
+
+/**
+ * @param {FirebaseFirestore.Firestore} db
+ * @param {string} userId
+ * @param {string[]} userCategories
+ * @param {string[]} offerCategories
+ * @param {string} brandId
+ * @param {Set<string>} savedBrandUserIds
+ */
+async function userWantsOffer(
+  db,
+  userId,
+  userCategories,
+  offerCategories,
+  brandId,
+  savedBrandUserIds,
+) {
+  if (categoriesMatch(userCategories, offerCategories)) {
+    return true;
   }
-  return categoryOk || brandOk;
+  if (!savedBrandUserIds.has(userId)) {
+    return false;
+  }
+
+  let preferred = await userBrandPreferredCategoryIds(db, userId, brandId);
+  if (preferred.length === 0) {
+    preferred = await brandCatalogCategoryIds(db, brandId);
+  }
+  return offerMatchesBrandCategoryPreferences(offerCategories, preferred);
 }
 
 /**
@@ -709,16 +787,6 @@ async function collectCandidateUserIds(db, offer) {
     typeof offer.brandName === 'string' ? offer.brandName.trim() : '';
   const categoryIds = offerCategoryIds(offer);
 
-  if (brandId) {
-    const byBrandIds = await db
-      .collection('users')
-      .where('brandIds', 'array-contains', brandId)
-      .get();
-    for (const doc of byBrandIds.docs) {
-      ids.add(doc.id);
-    }
-  }
-
   for (const categoryChunk of chunk(categoryIds, 10)) {
     if (categoryChunk.length === 0) {
       continue;
@@ -737,16 +805,26 @@ async function collectCandidateUserIds(db, offer) {
     } catch (error) {
       logger.warn('selected_categories collection group query failed', error);
     }
-    const byCategoryIds = await db
-      .collection('users')
-      .where('categoryIds', 'array-contains-any', categoryChunk)
-      .get();
-    for (const doc of byCategoryIds.docs) {
-      ids.add(doc.id);
-    }
   }
 
   const savedBrandUserIds = new Set();
+  if (brandId) {
+    try {
+      const savedByBrandId = await db
+        .collectionGroup('saved_brands')
+        .where('brandId', '==', brandId)
+        .get();
+      for (const doc of savedByBrandId.docs) {
+        const userRef = doc.ref.parent.parent;
+        if (userRef) {
+          ids.add(userRef.id);
+          savedBrandUserIds.add(userRef.id);
+        }
+      }
+    } catch (error) {
+      logger.warn('saved_brands brandId collection group query failed', error);
+    }
+  }
   if (brandName) {
     try {
       const savedBrands = await db
@@ -892,17 +970,12 @@ async function addTokenBearingMobileRecipients(db, recipients, seenUserIds) {
  * @param {import('firebase-admin/firestore').DocumentData} offer
  */
 async function resolveRecipients(db, offerId, offer) {
-  let { ids, savedBrandUserIds, brandId, brandName, categoryIds } =
+  const { ids, savedBrandUserIds, brandId, brandName, categoryIds } =
     await collectCandidateUserIds(db, offer);
 
-  if (ids.size === 0) {
-    const fallback = await fallbackMobileUserIds(db);
-    for (const userId of fallback) {
-      ids.add(userId);
-    }
-  }
-
   const recipients = [];
+  let matchedUserCount = 0;
+  let usersWithoutTokensCount = 0;
   for (const userId of ids) {
     const snapshot = await db.collection('users').doc(userId).get();
     if (!snapshot.exists) {
@@ -915,25 +988,118 @@ async function resolveRecipients(db, offerId, offer) {
     }
     const userCategories = await userCategoryIdsForUser(db, userId, data);
     if (
-      !userWantsOffer(
+      !(await userWantsOffer(
+        db,
+        userId,
         userCategories,
         categoryIds,
-        data,
         brandId,
-        brandName,
         savedBrandUserIds,
-      )
+      ))
     ) {
       continue;
     }
+    matchedUserCount++;
     const tokens = readFcmTokens(data);
     if (tokens.length === 0) {
+      usersWithoutTokensCount++;
       continue;
     }
     recipients.push({ userId, tokens, data });
   }
 
-  return recipients;
+  return {
+    recipients,
+    matchedUserCount,
+    usersWithoutTokensCount,
+    categoryIds,
+    brandId,
+    brandName,
+  };
+}
+
+/**
+ * @param {object} params
+ * @param {string[]} params.categoryIds
+ * @param {string} params.brandId
+ * @param {string} params.brandName
+ */
+function buildNoMatchingAudienceMessage({ categoryIds, brandId, brandName }) {
+  const hasCategories = Array.isArray(categoryIds) && categoryIds.length > 0;
+  const brandLabel =
+    typeof brandName === 'string' && brandName.trim()
+      ? brandName.trim()
+      : typeof brandId === 'string' && brandId.trim()
+        ? brandId.trim()
+        : '';
+
+  if (hasCategories && brandLabel) {
+    return (
+      'No notification was sent because no mobile users follow ' +
+      `${brandLabel} or have selected the offer categories. ` +
+      'Users must choose matching categories or save the brand in the app first.'
+    );
+  }
+  if (hasCategories) {
+    return (
+      'No notification was sent because no mobile users have selected the offer categories. ' +
+      'Users must pick matching categories in the app before they can receive this alert.'
+    );
+  }
+  if (brandLabel) {
+    return (
+      `No notification was sent because no mobile users follow ${brandLabel}. ` +
+      'Users must save the brand in the app before they can receive this alert.'
+    );
+  }
+  return 'No notification was sent because no mobile users match this offer.';
+}
+
+function buildNoFcmTokensMessage(matchedUserCount) {
+  if (matchedUserCount === 1) {
+    return (
+      'One mobile user matches this category or brand, but they do not have a ' +
+      'notification token yet. Ask them to sign in on the mobile app, turn ' +
+      'notifications on, and open the app once before you resend.'
+    );
+  }
+  if (matchedUserCount > 1) {
+    return (
+      `${matchedUserCount} mobile users match this category or brand, but none have a ` +
+      'notification token yet. Ask them to sign in on the mobile app, turn ' +
+      'notifications on, and open the app once before you resend.'
+    );
+  }
+  return (
+    'No mobile users have a notification token yet. Ask users to sign in on ' +
+    'the mobile app, turn notifications on, and open the app once before you resend.'
+  );
+}
+
+/**
+ * @param {object} resolution
+ * @param {number} resolution.matchedUserCount
+ * @param {string[]} resolution.categoryIds
+ * @param {string} resolution.brandId
+ * @param {string} resolution.brandName
+ */
+function resolveEmptyPushOutcome(resolution) {
+  const matchedUserCount =
+    typeof resolution.matchedUserCount === 'number'
+      ? resolution.matchedUserCount
+      : 0;
+  if (matchedUserCount === 0) {
+    return {
+      dispatchReason: 'no_matching_audience',
+      lastError: buildNoMatchingAudienceMessage(resolution),
+      matchedUserCount: 0,
+    };
+  }
+  return {
+    dispatchReason: 'no_fcm_tokens',
+    lastError: buildNoFcmTokensMessage(matchedUserCount),
+    matchedUserCount,
+  };
 }
 
 /**
@@ -1254,6 +1420,7 @@ async function persistUserAlertsForRecipients(
     body,
     brandId,
     brandName,
+    categoryIds = [],
   },
 ) {
   if (!offerId || !Array.isArray(recipients) || recipients.length === 0) {
@@ -1298,6 +1465,9 @@ async function persistUserAlertsForRecipients(
           offerId,
           brandId: typeof brandId === 'string' ? brandId : '',
           brandName: typeof brandName === 'string' ? brandName : '',
+          categoryIds: Array.isArray(categoryIds)
+            ? categoryIds.filter((id) => typeof id === 'string' && id.trim())
+            : [],
           read: false,
           createdAt: now,
           expiresAt,
@@ -1325,9 +1495,18 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
     isPublished: offer.isPublished === true,
   });
 
-  const recipients = broadcastAll
-    ? await resolveAllMobileRecipients(db)
+  const recipientResolution = broadcastAll
+    ? {
+        recipients: await resolveAllMobileRecipients(db),
+        matchedUserCount: 0,
+        usersWithoutTokensCount: 0,
+        categoryIds: offerCategoryIds(pushOffer),
+        brandId: typeof pushOffer.brandId === 'string' ? pushOffer.brandId.trim() : '',
+        brandName:
+          typeof pushOffer.brandName === 'string' ? pushOffer.brandName.trim() : '',
+      }
     : await resolveRecipients(db, offerId, pushOffer);
+  const recipients = recipientResolution.recipients;
   logPushRecipients(recipients);
   const allTokens = [
     ...new Set(recipients.flatMap((recipient) => recipient.tokens)),
@@ -1343,19 +1522,31 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
   const resolvedRequestId = requestId || content.requestId;
 
   if (allTokens.length === 0) {
-    logger.warn('No FCM recipients for published offer', {
+    const emptyOutcome = broadcastAll
+      ? {
+          dispatchReason: 'no_fcm_tokens',
+          lastError: buildNoFcmTokensMessage(0),
+          matchedUserCount: 0,
+        }
+      : resolveEmptyPushOutcome(recipientResolution);
+    logger.warn('No push recipients for published offer', {
       offerId,
       offerLineId: lineId,
       requestId: resolvedRequestId,
       broadcastAll,
+      dispatchReason: emptyOutcome.dispatchReason,
+      matchedUserCount: emptyOutcome.matchedUserCount,
     });
     await markNotificationSent(db, offerId, resolvedRequestId, 0, 0);
     return {
       skipped: false,
       successCount: 0,
       recipientCount: 0,
+      matchedUserCount: emptyOutcome.matchedUserCount,
       tokenCount: 0,
       invalidTokenCount: 0,
+      dispatchReason: emptyOutcome.dispatchReason,
+      lastError: emptyOutcome.lastError,
       requestId: resolvedRequestId,
     };
   }
@@ -1480,6 +1671,7 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
       body: content.body,
       brandId: offer.brandId || '',
       brandName: offer.brandName || '',
+      categoryIds,
     });
     await db.collection('offers').doc(offerId).set(
       {
@@ -1513,6 +1705,9 @@ async function dispatchOfferPush(db, offerId, offer, options = {}) {
     skipped: false,
     successCount,
     recipientCount: recipients.length,
+    matchedUserCount: broadcastAll
+      ? recipients.length
+      : recipientResolution.matchedUserCount,
     tokenCount: allTokens.length,
     invalidTokenCount: invalidTokens.length,
     requestId: resolvedRequestId,
@@ -1652,7 +1847,7 @@ exports.dispatchOfferPushOnJob = onDocumentWritten(
       const result = await runOfferPushDispatch(db, offerId, offer, {
         offerLineId,
         requestId,
-        broadcastAll: true,
+        broadcastAll: false,
         jobId,
       });
       logger.info('offer_push_jobs dispatch result', {
@@ -1715,7 +1910,7 @@ exports.sendOfferPush = onCall(
   const result = await runOfferPushDispatch(db, offerId, offer, {
     offerLineId,
     requestId: requestId || null,
-    broadcastAll: true,
+    broadcastAll: false,
     jobId: jobId || null,
   });
 
@@ -1890,4 +2085,10 @@ exports.dispatchRegistrationEmailVerificationJob = onDocumentCreated(
       });
     }
   },
+);
+
+const db = getFirestore();
+Object.assign(
+  exports,
+  registerOfferDiscoveryFunctions(db, adminCallableOptions),
 );

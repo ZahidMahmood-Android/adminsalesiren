@@ -9,8 +9,10 @@ class OfferPushDispatchResult {
     required this.skipped,
     required this.successCount,
     required this.recipientCount,
+    required this.matchedUserCount,
     required this.tokenCount,
     required this.invalidTokenCount,
+    this.dispatchReason,
     this.reason,
     this.requestId,
   });
@@ -18,8 +20,10 @@ class OfferPushDispatchResult {
   final bool skipped;
   final int successCount;
   final int recipientCount;
+  final int matchedUserCount;
   final int tokenCount;
   final int invalidTokenCount;
+  final String? dispatchReason;
   final String? reason;
   final String? requestId;
 
@@ -28,8 +32,10 @@ class OfferPushDispatchResult {
       skipped: data['skipped'] == true || data['skipped'] == 'true',
       successCount: _readInt(data['successCount']),
       recipientCount: _readInt(data['recipientCount']),
+      matchedUserCount: _readInt(data['matchedUserCount']),
       tokenCount: _readInt(data['tokenCount']),
       invalidTokenCount: _readInt(data['invalidTokenCount']),
+      dispatchReason: data['dispatchReason']?.toString(),
       reason: data['reason']?.toString(),
       requestId: data['requestId']?.toString(),
     );
@@ -207,8 +213,10 @@ class OfferPushDispatchService {
           'skipped': false,
           'successCount': data['sentCount'],
           'recipientCount': data['recipientCount'],
+          'matchedUserCount': data['matchedUserCount'],
           'tokenCount': data['tokenCount'],
           'invalidTokenCount': data['invalidTokenCount'],
+          'dispatchReason': data['dispatchReason'],
           'reason': data['lastFcmError'] ?? data['lastError'],
         });
       }
@@ -243,20 +251,34 @@ class OfferPushDispatchService {
       'FCM dispatch finished offerId=$offerId jobId=$jobId '
       'successCount=${result.successCount} '
       'recipientCount=${result.recipientCount} '
+      'matchedUserCount=${result.matchedUserCount} '
       'tokenCount=${result.tokenCount} '
-      'invalidTokenCount=${result.invalidTokenCount}',
+      'invalidTokenCount=${result.invalidTokenCount} '
+      'dispatchReason=${result.dispatchReason ?? ''}',
     );
     if (result.successCount == 0) {
-      final fcmDetail = result.reason?.trim();
+      final detail = result.reason?.trim();
+      if (result.dispatchReason == 'no_matching_audience') {
+        _log.info(
+          'FCM dispatch sent 0 notifications: ${detail ?? 'no matching audience'}',
+        );
+        return;
+      }
+      if (result.dispatchReason == 'no_fcm_tokens') {
+        _log.warning(
+          'FCM dispatch sent 0 notifications: ${detail ?? 'matching users without tokens'}',
+        );
+        return;
+      }
       if (result.tokenCount == 0) {
         _log.warning(
-          'FCM dispatch sent 0 notifications: no mobile users with FCM tokens. '
+          'FCM dispatch sent 0 notifications: ${detail ?? 'no delivery tokens found'}. '
           'Sign in on the mobile app, enable notifications, then resend.',
         );
-      } else if (fcmDetail != null && fcmDetail.isNotEmpty) {
+      } else if (detail != null && detail.isNotEmpty) {
         _log.warning(
           'FCM dispatch sent 0 notifications (${result.tokenCount} token(s) tried). '
-          'FCM error: $fcmDetail',
+          'FCM error: $detail',
         );
       } else if (result.invalidTokenCount >= result.tokenCount) {
         _log.warning(
